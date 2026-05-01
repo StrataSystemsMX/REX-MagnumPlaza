@@ -1,0 +1,11 @@
+node_modules
+.next
+out
+build
+coverage
+dist
+public
+pnpm-lock.yaml
+*.lock
+src/generated
+prisma/migrations

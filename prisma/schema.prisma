@@ -1,0 +1,959 @@
+// ============================================================================
+// STRATA SYSTEMS MX — Database Schema
+// ============================================================================
+// Diseñado para multi-tenancy con shared schema (columna tenant_id)
+// Basado en el modelo operativo real de CRT/TSR/QHS extraído del Excel
+// del cliente y la junta del 27 Abril 2026.
+// ============================================================================
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ============================================================================
+// MULTI-TENANCY
+// ============================================================================
+// Cada cliente del SaaS = un Tenant.
+// CRT/TSR/QHS son LegalEntities dentro del mismo Tenant (porque pertenecen
+// al mismo grupo empresarial y se administran juntas).
+// ============================================================================
+
+model Tenant {
+  id        String   @id @default(cuid())
+  slug      String   @unique // ej. "crt-plazas-magnum"
+  name      String   // "Plazas Magnum"
+  plan      Plan     @default(STARTER)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Configuración por cliente
+  brandPrimaryColor String? // hex sin #
+  brandLogoUrl      String?
+  timezone          String  @default("America/Hermosillo")
+  currency          String  @default("MXN")
+
+  // Notificaciones automáticas (Prompt 9 — WhatsApp)
+  // OVERDUE_3M nunca se envía automáticamente aunque este flag esté en true:
+  // requiere intervención humana siempre. Ver lib/services/notifications.ts.
+  autoSendOverdueNotifications Boolean @default(false)
+  autoSendPaymentConfirmations Boolean @default(false)
+
+  // Relaciones
+  users             User[]
+  legalEntities     LegalEntity[]
+  properties        Property[]
+  units             Unit[]
+  tenants_lessee    Lessee[]
+  contracts         Contract[]
+  rents             Rent[]
+  payments          Payment[]
+  expenses          Expense[]
+  expenseCategories ExpenseCategory[]
+  maintenances      Maintenance[]
+  promoters         Promoter[]
+  promoterLinks     PromoterLink[]
+  budgets           Budget[]
+  notifications     NotificationLog[]
+  documents         Document[]
+  guarantees        Guarantee[]
+  auditLogs         AuditLog[]
+  morositySnapshots MorosityDailySnapshot[]
+
+  @@map("tenants")
+}
+
+enum Plan {
+  STARTER // Hasta 30 unidades
+  GROWTH // Hasta 100 unidades
+  ENTERPRISE // Ilimitado
+}
+
+// ============================================================================
+// USUARIOS Y PERMISOS
+// ============================================================================
+// Roles por usuario. Las acciones específicas (borrar contrato, ver finanzas)
+// se controlan mediante Permission asociado al rol.
+// ============================================================================
+
+model User {
+  id        String   @id @default(cuid())
+  tenantId  String
+  email     String
+  name      String
+  phone     String?
+  clerkId   String?  @unique // Si usamos Clerk
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant    Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  roles     UserRole[]
+  auditLogs AuditLog[]
+
+  @@unique([tenantId, email])
+  @@index([tenantId])
+  @@map("users")
+}
+
+model Role {
+  id          String   @id @default(cuid())
+  code        RoleCode @unique
+  name        String
+  description String?
+
+  permissions RolePermission[]
+  users       UserRole[]
+
+  @@map("roles")
+}
+
+enum RoleCode {
+  MASTER // Juan Carlos. Ve todo, autoriza decisiones críticas.
+  ADMIN // Eli, Leonardo. Operación completa con permisos granulares.
+  ACCOUNTANT // Solo lectura financiera, exporta para despacho contable.
+  PROMOTER // Externo, ve solo inmuebles asignados.
+  LESSEE // Inquilino, ve su estado de cuenta (futuro).
+}
+
+model UserRole {
+  userId String
+  roleId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role   Role   @relation(fields: [roleId], references: [id])
+
+  @@id([userId, roleId])
+  @@map("user_roles")
+}
+
+model Permission {
+  id   String @id @default(cuid())
+  code String @unique // ej. "contract.delete", "finance.view", "tenant.export"
+  name String
+
+  roles RolePermission[]
+
+  @@map("permissions")
+}
+
+model RolePermission {
+  roleId       String
+  permissionId String
+  role         Role       @relation(fields: [roleId], references: [id])
+  permission   Permission @relation(fields: [permissionId], references: [id])
+
+  @@id([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+// ============================================================================
+// ENTIDADES LEGALES (las "razones sociales" del cliente)
+// ============================================================================
+// CRT, TSR, QHS son ejemplos. Cada Tenant puede tener múltiples LegalEntity.
+// Es CRÍTICO para la lógica fiscal: una propiedad puede ser de QHS pero
+// administrada y facturada por CRT mediante un contrato interno.
+// ============================================================================
+
+model LegalEntity {
+  id         String   @id @default(cuid())
+  tenantId   String
+  code       String // "CRT", "TSR", "QHS"
+  legalName  String // razón social completa
+  rfc        String?
+  address    String?
+  isOperator Boolean  @default(false) // ¿es la que opera/factura?
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  tenant            Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  ownedProperties   Property[] @relation("OwnerEntity")
+  managedProperties Property[] @relation("ManagerEntity")
+  expenses          Expense[]
+  rents             Rent[]
+  budgets           Budget[]
+  payrolls          Payroll[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId])
+  @@map("legal_entities")
+}
+
+// ============================================================================
+// PROPIEDADES Y UNIDADES
+// ============================================================================
+// Property = inmueble completo (ej. "Plaza Magnum Progreso")
+// Unit = local individual rentable dentro de la propiedad (ej. "L1 - Goyoma")
+//
+// Esta separación es importante: en Plaza Progreso hay 9 locales que se
+// rentan por separado a diferentes inquilinos.
+// ============================================================================
+
+model Property {
+  id              String       @id @default(cuid())
+  tenantId        String
+  ownerEntityId   String // dueña legal (puede ser QHS)
+  managerEntityId String // quién factura/administra (puede ser CRT)
+  name            String // "Plaza Magnum Progreso"
+  type            PropertyType
+  address         String
+  cadastralKey    String? // clave catastral
+  latitude        Float?
+  longitude       Float?
+  totalArea       Float? // m²
+  notes           String?
+  isActive        Boolean      @default(true)
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  tenant            Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  ownerEntity       LegalEntity        @relation("OwnerEntity", fields: [ownerEntityId], references: [id])
+  managerEntity     LegalEntity        @relation("ManagerEntity", fields: [managerEntityId], references: [id])
+  units             Unit[]
+  cadastralPayments CadastralPayment[]
+  maintenances      Maintenance[]
+  documents         Document[]
+
+  @@index([tenantId])
+  @@index([ownerEntityId])
+  @@map("properties")
+}
+
+enum PropertyType {
+  PLAZA_COMERCIAL // Plaza Progreso, Olivares, Quiroga
+  TERRENO_RENTADO // Inbursa Blvd Kino
+  EDIFICIO // La Chila Garmendia
+  OFICINA // Capilla del Carmen, Oficina Elias
+  CASA // Para clientes con Airbnb o casas individuales
+  BODEGA // Bodega CRT
+  ESPECTACULAR // Renta de espacio para anuncio
+  OTRO
+}
+
+model Unit {
+  id            String     @id @default(cuid())
+  tenantId      String
+  propertyId    String
+  code          String // "L1", "L2", "LP" (local principal), "OF", "E" (espectacular)
+  name          String? // alias amigable opcional
+  area          Float? // m²
+  estimatedRent Decimal?   @db.Decimal(12, 2)
+  status        UnitStatus @default(DISPONIBLE)
+  features      Json? // baños, recámaras, A/C, etc. (flexible)
+  notes         String?
+  isActive      Boolean    @default(true)
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  tenant        Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  property      Property       @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  contracts     Contract[]
+  documents     Document[]
+  maintenances  Maintenance[]
+  promoterLinks PromoterLink[]
+
+  @@unique([propertyId, code])
+  @@index([tenantId])
+  @@index([propertyId])
+  @@map("units")
+}
+
+enum UnitStatus {
+  DISPONIBLE
+  APARTADA // alguien la apartó pero no firma todavía
+  RENTADA
+  EN_REMODELACION
+  NO_DISPONIBLE
+}
+
+// ============================================================================
+// INQUILINOS (LESSEES)
+// ============================================================================
+// Tabla separada de Users porque inquilinos pueden no tener acceso al sistema.
+// Datos fiscales y de contacto independientes.
+// ============================================================================
+
+model Lessee {
+  id               String               @id @default(cuid())
+  tenantId         String
+  legalName        String // ej. "Farmacias Benavides S.A.B de C.V."
+  contactName      String? // ej. "Juan Pablo Martinez"
+  rfc              String?
+  email            String?
+  phone            String?
+  whatsapp         String? // canal preferido del cliente
+  preferredChannel CommunicationChannel @default(WHATSAPP)
+  notes            String?
+  isActive         Boolean              @default(true)
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+
+  tenant    Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  contracts Contract[]
+
+  @@index([tenantId])
+  @@map("lessees")
+}
+
+enum CommunicationChannel {
+  WHATSAPP
+  EMAIL
+  SMS
+  PHONE_CALL
+  IN_PERSON
+}
+
+// ============================================================================
+// CONTRATOS
+// ============================================================================
+// Contrato vincula Unit + Lessee con fechas, monto y estado.
+// Genera automáticamente un Rent mensual mientras esté activo.
+// ============================================================================
+
+model Contract {
+  id                String         @id @default(cuid())
+  tenantId          String
+  unitId            String
+  lesseeId          String
+  type              ContractType
+  status            ContractStatus @default(DRAFT)
+
+  startDate         DateTime
+  endDate           DateTime
+  monthlyAmount     Decimal        @db.Decimal(12, 2)
+  guaranteeAmount   Decimal        @db.Decimal(12, 2)
+  paymentDay        Int            @default(1) // día del mes en que se cobra
+  lateFeePercentage Decimal?       @db.Decimal(5, 2) // interés moratorio
+  autoRenew         Boolean        @default(false)
+
+  // Casos especiales que detectamos en el Excel:
+  paidInAdvance     Boolean        @default(false) // tipo Bluecell que pagó 6 meses
+  advancePaidUntil  DateTime?
+
+  signedDate        DateTime?
+  notes             String?
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+
+  tenant     Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  unit       Unit        @relation(fields: [unitId], references: [id])
+  lessee     Lessee      @relation(fields: [lesseeId], references: [id])
+  rents      Rent[]
+  guarantees Guarantee[]
+  documents  Document[]
+
+  @@index([tenantId])
+  @@index([unitId])
+  @@index([endDate]) // para alertas de vencimiento
+  @@map("contracts")
+}
+
+enum ContractType {
+  ARRENDAMIENTO
+  COMODATO
+  ADMINISTRACION_INTERNA // ej. CRT administra propiedad de QHS
+  COMPRAVENTA
+}
+
+enum ContractStatus {
+  DRAFT
+  ACTIVE
+  EXPIRED
+  TERMINATED // terminó antes de tiempo
+  CANCELLED
+  PENDING_RENEWAL
+}
+
+// ============================================================================
+// RENTAS (cargos mensuales generados desde contratos)
+// ============================================================================
+// Una Rent es el "cargo del mes" para un contrato específico. Se genera
+// automáticamente cada mes y se va saldando con uno o más Payment.
+//
+// Esto permite manejar pagos parciales (caso Sushi: pagó 10mil de 13mil).
+// ============================================================================
+
+model Rent {
+  id            String     @id @default(cuid())
+  tenantId      String
+  contractId    String
+  legalEntityId String // quién factura este cargo (CRT/TSR/QHS)
+  period        DateTime // primer día del mes que cubre (ej. 2026-04-01)
+  amountDue     Decimal    @db.Decimal(12, 2)
+  amountPaid    Decimal    @default(0) @db.Decimal(12, 2)
+  status        RentStatus @default(PENDING)
+  dueDate       DateTime
+  notes         String?
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  tenant      Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  contract    Contract    @relation(fields: [contractId], references: [id])
+  legalEntity LegalEntity @relation(fields: [legalEntityId], references: [id])
+  payments    Payment[]
+
+  @@unique([contractId, period])
+  @@index([tenantId])
+  @@index([dueDate])
+  @@index([status])
+  @@map("rents")
+}
+
+enum RentStatus {
+  PENDING // aún no vence
+  DUE // ya venció, no pagado
+  PARTIAL // pago parcial recibido
+  PAID // saldado
+  OVERDUE_1M // 1 mes vencido (dispara aviso 1)
+  OVERDUE_2M // 2 meses vencidos (dispara aviso 2)
+  OVERDUE_3M // 3 meses vencidos (dispara aviso 3 - desalojo)
+  WAIVED // condonado
+}
+
+// ============================================================================
+// PAGOS
+// ============================================================================
+// Un Payment es un movimiento de dinero del inquilino hacia la entidad legal.
+// Se asocia a uno o más Rent (un pago puede saldar varios meses).
+// ============================================================================
+
+model Payment {
+  id          String        @id @default(cuid())
+  tenantId    String
+  rentId      String
+  amount      Decimal       @db.Decimal(12, 2)
+  paymentDate DateTime
+  method      PaymentMethod
+  reference   String? // número de transferencia, cheque, etc.
+  notes       String?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  rent   Rent   @relation(fields: [rentId], references: [id])
+
+  @@index([tenantId])
+  @@index([rentId])
+  @@index([paymentDate])
+  @@map("payments")
+}
+
+enum PaymentMethod {
+  CASH
+  TRANSFER
+  CHECK
+  DEPOSIT
+  CARD
+  OTHER
+}
+
+// ============================================================================
+// DEPÓSITOS EN GARANTÍA
+// ============================================================================
+// Dinero del inquilino que el dueño guarda. Se devuelve al cierre del contrato
+// menos deducciones por daños. Requiere evidencia fotográfica al inicio y fin.
+// ============================================================================
+
+model Guarantee {
+  id             String          @id @default(cuid())
+  tenantId       String
+  contractId     String
+  amount         Decimal         @db.Decimal(12, 2)
+  status         GuaranteeStatus @default(HELD)
+  receivedDate   DateTime
+  returnedDate   DateTime?
+  returnedAmount Decimal?        @db.Decimal(12, 2)
+  deductions     Json? // [{concept, amount, evidenceDocId}]
+  notes          String?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  tenant   Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  contract Contract @relation(fields: [contractId], references: [id])
+
+  @@index([tenantId])
+  @@map("guarantees")
+}
+
+enum GuaranteeStatus {
+  HELD // en custodia
+  PARTIALLY_RETURNED
+  RETURNED // devuelto
+  APPLIED_TO_DEBT // aplicado a saldo pendiente
+}
+
+// ============================================================================
+// EGRESOS / GASTOS
+// ============================================================================
+// Reemplaza la sección de egresos del Excel: nómina, prediales, mantenimiento,
+// servicios (CFE, agua, telmex), seguros, financiamientos, comisiones, etc.
+// ============================================================================
+
+model ExpenseCategory {
+  id          String      @id @default(cuid())
+  tenantId    String
+  code        String // "PREDIAL", "NOMINA_DIRECCION", "CFE", etc.
+  name        String
+  type        ExpenseType
+  isRecurring Boolean     @default(false)
+  parentId    String? // permite jerarquía (Servicios > CFE)
+
+  tenant      Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  parent      ExpenseCategory?  @relation("ExpenseCategoryHierarchy", fields: [parentId], references: [id])
+  children    ExpenseCategory[] @relation("ExpenseCategoryHierarchy")
+  expenses    Expense[]
+  budgetLines BudgetLine[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId])
+  @@map("expense_categories")
+}
+
+enum ExpenseType {
+  PAYROLL // Nóminas
+  TAX // SAT, IMSS, Predial, ISRTP
+  UTILITY // CFE, Agua, Telmex, Telcel
+  MAINTENANCE // Mantenimiento de plazas
+  INSURANCE // Seguros
+  FINANCING // Financiamiento Toyota, Expedition
+  PROFESSIONAL_FEE // Honorarios, despacho contable
+  BANK_FEE // Comisiones bancarias
+  OFFICE // Papelería, consumo oficina
+  VEHICLE // Servicios autos, gasolina
+  OTHER
+}
+
+model Expense {
+  id            String         @id @default(cuid())
+  tenantId      String
+  legalEntityId String // qué entidad lo paga (CRT/TSR/QHS)
+  categoryId    String
+  propertyId    String? // si aplica a una propiedad específica
+  amount        Decimal        @db.Decimal(12, 2)
+  expenseDate   DateTime
+  description   String
+  vendor        String?
+  invoiceNumber String? // folio fiscal / referencia
+  paymentMethod PaymentMethod?
+  isPaid        Boolean        @default(true)
+  notes         String?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  tenant      Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  legalEntity LegalEntity     @relation(fields: [legalEntityId], references: [id])
+  category    ExpenseCategory @relation(fields: [categoryId], references: [id])
+  documents   Document[]
+
+  @@index([tenantId])
+  @@index([legalEntityId])
+  @@index([expenseDate])
+  @@map("expenses")
+}
+
+// ============================================================================
+// PREDIALES (caso especial: pagos catastrales por propiedad)
+// ============================================================================
+// Separado de Expense porque tiene reglas únicas:
+// - Asociado a clave catastral
+// - Puede pagarse en hasta 4 parcialidades
+// - Tiene descuentos por pronto pago en Q1
+// ============================================================================
+
+model CadastralPayment {
+  id          String    @id @default(cuid())
+  tenantId    String
+  propertyId  String
+  year        Int
+  installment Int // 1 a 4
+  totalAmount Decimal   @db.Decimal(12, 2)
+  paidAmount  Decimal?  @db.Decimal(12, 2)
+  paymentDate DateTime?
+  dueDate     DateTime
+  isPaid      Boolean   @default(false)
+  receiptUrl  String?
+  notes       String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@unique([propertyId, year, installment])
+  @@index([tenantId])
+  @@map("cadastral_payments")
+}
+
+// ============================================================================
+// NÓMINA (resumen mensual por entidad legal)
+// ============================================================================
+// El cliente la lleva separada en el Excel. Tiene tanto nómina propia
+// como factura de servicios administrativos (Audazon, OSC).
+// ============================================================================
+
+model Payroll {
+  id               String      @id @default(cuid())
+  tenantId         String
+  legalEntityId    String
+  period           DateTime // primer día del mes
+  type             PayrollType
+  amount           Decimal     @db.Decimal(12, 2)
+  amountWithoutTax Decimal?    @db.Decimal(12, 2)
+  taxAmount        Decimal?    @db.Decimal(12, 2)
+  description      String?
+  notes            String?
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+
+  legalEntity LegalEntity @relation(fields: [legalEntityId], references: [id])
+
+  @@index([tenantId])
+  @@index([period])
+  @@map("payrolls")
+}
+
+enum PayrollType {
+  ADMIN_SERVICE_INVOICE // Factura de servicios administrativos (Audazon, OSC)
+  DIRECT_PAYROLL // Nómina directa
+  STRATEGY_NOMINA // Estrategia fiscal
+  COMMISSION // Comisiones
+  BONUS
+}
+
+// ============================================================================
+// MANTENIMIENTOS
+// ============================================================================
+// Periódicos (techos antes de lluvias) y variables (incidencias).
+// Pueden estar a cargo del dueño o del inquilino según contrato.
+// ============================================================================
+
+model Maintenance {
+  id                String                    @id @default(cuid())
+  tenantId          String
+  propertyId        String
+  unitId            String? // null = aplica a la propiedad completa
+  type              MaintenanceType
+  status            MaintenanceStatus         @default(PLANNED)
+  responsibility    MaintenanceResponsibility @default(OWNER)
+  title             String
+  description       String?
+  scheduledDate     DateTime?
+  completedDate     DateTime?
+  cost              Decimal?                  @db.Decimal(12, 2)
+  vendor            String?
+  isRecurring       Boolean                   @default(false)
+  recurrencePattern String? // cron-like, ej. "yearly:may" para techos pre-lluvia
+  notes             String?
+  createdAt         DateTime                  @default(now())
+  updatedAt         DateTime                  @updatedAt
+
+  tenant    Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  property  Property   @relation(fields: [propertyId], references: [id])
+  unit      Unit?      @relation(fields: [unitId], references: [id])
+  documents Document[]
+
+  @@index([tenantId])
+  @@index([scheduledDate])
+  @@map("maintenances")
+}
+
+enum MaintenanceType {
+  PERIODIC // techos antes de lluvia, fumigación
+  CORRECTIVE // arreglar A/C que falló
+  PREVENTIVE // pintura, limpieza
+  EMERGENCY // fuga, daño urgente
+  REMODELING // remodelación mayor
+}
+
+enum MaintenanceStatus {
+  PLANNED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+  OVERDUE
+}
+
+enum MaintenanceResponsibility {
+  OWNER // lo paga la entidad dueña
+  LESSEE // lo paga el inquilino
+  SHARED // se prorratea
+}
+
+// ============================================================================
+// PROMOTORES EXTERNOS
+// ============================================================================
+// Vendedores externos (NEX, individuales) que ayudan a rentar locales
+// desocupados. Sin acceso al sistema, pero tienen un link público temporal.
+// ============================================================================
+
+model Promoter {
+  id        String   @id @default(cuid())
+  tenantId  String
+  fullName  String
+  phone     String
+  email     String?
+  agency    String? // "NEX", "Independiente", etc.
+  rating    Int? // 1-5, basado en éxito histórico
+  notes     String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  links  PromoterLink[]
+
+  @@index([tenantId])
+  @@map("promoters")
+}
+
+model PromoterLink {
+  id             String   @id @default(cuid())
+  tenantId       String
+  promoterId     String
+  unitId         String
+  publicToken    String   @unique // token único para URL pública
+  expiresAt      DateTime
+  isActive       Boolean  @default(true)
+  visitCount     Int      @default(0)
+  resultedInRent Boolean  @default(false)
+  notes          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  tenant   Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  promoter Promoter @relation(fields: [promoterId], references: [id])
+  unit     Unit     @relation(fields: [unitId], references: [id])
+
+  @@index([tenantId])
+  @@index([publicToken])
+  @@index([expiresAt])
+  @@map("promoter_links")
+}
+
+// ============================================================================
+// PRESUPUESTO ANUAL
+// ============================================================================
+// Replica funcionalidad de las hojas Cierre/Presupuesto del Excel.
+// Permite comparar presupuestado vs ejecutado mes a mes.
+// ============================================================================
+
+model Budget {
+  id            String   @id @default(cuid())
+  tenantId      String
+  legalEntityId String
+  year          Int
+  notes         String?
+  isLocked      Boolean  @default(false) // si ya se cerró el ejercicio
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  tenant      Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  legalEntity LegalEntity  @relation(fields: [legalEntityId], references: [id])
+  lines       BudgetLine[]
+
+  @@unique([tenantId, legalEntityId, year])
+  @@index([tenantId])
+  @@map("budgets")
+}
+
+model BudgetLine {
+  id           String            @id @default(cuid())
+  budgetId     String
+  categoryId   String? // si es egreso
+  conceptType  BudgetConceptType
+  conceptLabel String // "PLAZA PROGRESO", "Predial CRT", etc.
+  // 12 columnas para los 12 meses del año
+  jan          Decimal           @default(0) @db.Decimal(12, 2)
+  feb          Decimal           @default(0) @db.Decimal(12, 2)
+  mar          Decimal           @default(0) @db.Decimal(12, 2)
+  apr          Decimal           @default(0) @db.Decimal(12, 2)
+  may          Decimal           @default(0) @db.Decimal(12, 2)
+  jun          Decimal           @default(0) @db.Decimal(12, 2)
+  jul          Decimal           @default(0) @db.Decimal(12, 2)
+  aug          Decimal           @default(0) @db.Decimal(12, 2)
+  sep          Decimal           @default(0) @db.Decimal(12, 2)
+  oct          Decimal           @default(0) @db.Decimal(12, 2)
+  nov          Decimal           @default(0) @db.Decimal(12, 2)
+  dec          Decimal           @default(0) @db.Decimal(12, 2)
+
+  budget   Budget           @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+  category ExpenseCategory? @relation(fields: [categoryId], references: [id])
+
+  @@index([budgetId])
+  @@map("budget_lines")
+}
+
+enum BudgetConceptType {
+  INCOME_RENT // ingresos por renta
+  INCOME_BILLBOARD // espectacular
+  INCOME_GUARANTEE // depósitos en garantía recibidos
+  INCOME_OTHER
+  EXPENSE // egresos (categoryId obligatorio)
+}
+
+// ============================================================================
+// DOCUMENTOS Y ARCHIVOS
+// ============================================================================
+// Genérico, polimorfico. Puede asociarse a contrato, propiedad, gasto,
+// mantenimiento, depósito en garantía, etc.
+// ============================================================================
+
+model Document {
+  id           String       @id @default(cuid())
+  tenantId     String
+  type         DocumentType
+  filename     String
+  url          String // R2/S3 URL
+  mimeType     String?
+  sizeBytes    Int?
+  uploadedById String?
+  notes        String?
+  createdAt    DateTime     @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  // Relaciones polimórficas (solo una será no-null)
+  contractId    String?
+  contract      Contract?    @relation(fields: [contractId], references: [id])
+  propertyId    String?
+  property      Property?    @relation(fields: [propertyId], references: [id])
+  unitId        String?
+  unit          Unit?        @relation(fields: [unitId], references: [id])
+  expenseId     String?
+  expense       Expense?     @relation(fields: [expenseId], references: [id])
+  maintenanceId String?
+  maintenance   Maintenance? @relation(fields: [maintenanceId], references: [id])
+
+  @@index([tenantId])
+  @@map("documents")
+}
+
+enum DocumentType {
+  CONTRACT_PDF
+  PROPERTY_PHOTO
+  UNIT_PHOTO_INITIAL // foto al entrar el inquilino
+  UNIT_PHOTO_FINAL // foto al salir el inquilino
+  INVOICE
+  CADASTRAL_RECEIPT // boleta predial
+  EVICTION_LETTER // carta de desalojo generada
+  PAYMENT_REMINDER // aviso de pago generado
+  MAINTENANCE_PHOTO
+  IDENTIFICATION
+  PROOF_OF_ADDRESS
+  OTHER
+}
+
+// ============================================================================
+// COMUNICACIÓN Y NOTIFICACIONES
+// ============================================================================
+// Bitácora de cada comunicación enviada al inquilino. Resuelve dolor del
+// cliente: "ya no sabemos qué le mandamos a quién".
+// ============================================================================
+
+model NotificationLog {
+  id            String                    @id @default(cuid())
+  tenantId      String
+  recipientType NotificationRecipientType
+  recipientId   String // lesseeId, promoterId, userId, etc.
+  channel       CommunicationChannel
+  templateCode  String? // "RENT_REMINDER_1M", "EVICTION_NOTICE"
+  subject       String?
+  body          String                    @db.Text
+  status        NotificationStatus        @default(PENDING)
+  sentAt        DateTime?
+  deliveredAt   DateTime?
+  failureReason String?
+  externalId    String? // ID de WhatsApp/email provider
+  createdAt     DateTime                  @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([recipientType, recipientId])
+  @@index([sentAt])
+  @@map("notification_logs")
+}
+
+enum NotificationRecipientType {
+  LESSEE
+  PROMOTER
+  USER
+  EXTERNAL
+}
+
+enum NotificationStatus {
+  PENDING
+  SENT
+  DELIVERED
+  READ
+  FAILED
+  BOUNCED
+}
+
+// ============================================================================
+// AUDITORÍA
+// ============================================================================
+// Registro de quién hizo qué, especialmente para acciones críticas
+// (borrar contratos, modificar pagos). El cliente lo pidió explícitamente.
+// ============================================================================
+
+model AuditLog {
+  id         String      @id @default(cuid())
+  tenantId   String
+  userId     String?
+  action     AuditAction
+  entityType String // "Contract", "Payment", etc.
+  entityId   String
+  changes    Json? // diff de antes/después
+  ipAddress  String?
+  userAgent  String?
+  createdAt  DateTime    @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user   User?  @relation(fields: [userId], references: [id])
+
+  @@index([tenantId])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+  RESTORE
+  LOGIN
+  LOGOUT
+  EXPORT
+  PERMISSION_CHANGE
+}
+
+// ============================================================================
+// MOROSIDAD — snapshot diario
+// ============================================================================
+// Foto fija (1 fila por tenant por día) del estado de la cartera de Rents.
+// Permite hacer gráficas históricas tipo "cómo evolucionó la morosidad
+// este mes". La escribe el cron de update-rent-statuses al final de cada
+// corrida (upsert por [tenantId, date]).
+// ============================================================================
+
+model MorosityDailySnapshot {
+  id            String   @id @default(cuid())
+  tenantId      String
+  date          DateTime @db.Date
+  byStatus      Json // { PENDING: n, DUE: n, PARTIAL: n, OVERDUE_1M: n, ... }
+  totalAmount   Decimal  @db.Decimal(14, 2) // suma de amountDue de TODOS los rents del día
+  overdueAmount Decimal  @db.Decimal(14, 2) // saldo pendiente (amountDue - amountPaid) en estados DUE/PARTIAL/OVERDUE_*
+  createdAt     DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, date])
+  @@index([tenantId])
+  @@map("morosity_daily_snapshots")
+}

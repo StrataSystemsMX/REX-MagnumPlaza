@@ -1,0 +1,80 @@
+import { z } from "zod";
+
+const COMMUNICATION_CHANNEL_VALUES = [
+  "WHATSAPP",
+  "EMAIL",
+  "SMS",
+  "PHONE_CALL",
+  "IN_PERSON",
+] as const;
+
+// RFC Mexicano: 13 caracteres para persona física (4 letras + 6 dígitos + 3 alfanuméricos)
+// o 12 caracteres para persona moral (3 letras + 6 dígitos + 3 alfanuméricos).
+// Ver: https://www.sat.gob.mx
+const RFC_REGEX = /^[A-ZÑ&]{3,4}\d{6}[A-Z\d]{3}$/i;
+
+// Teléfono mexicano: +52 seguido de 10 dígitos. Permite espacios o guiones intermedios al capturar.
+const MX_PHONE_REGEX = /^\+52\s?\d{10}$/;
+
+const optionalString = (max: number, message: string) =>
+  z
+    .string()
+    .trim()
+    .max(max, message)
+    .optional()
+    .or(z.literal("").transform(() => undefined));
+
+const optionalRfc = z
+  .string()
+  .trim()
+  .transform((v) => v.toUpperCase().replace(/\s+/g, ""))
+  .refine((v) => v === "" || RFC_REGEX.test(v), {
+    message: "RFC inválido. Formato esperado: 3-4 letras + 6 dígitos + 3 alfanuméricos.",
+  })
+  .transform((v) => (v === "" ? undefined : v))
+  .optional();
+
+const optionalMxPhone = z
+  .string()
+  .trim()
+  .transform((v) => v.replace(/[\s-]/g, ""))
+  .refine((v) => v === "" || MX_PHONE_REGEX.test(v), {
+    message: "Teléfono mexicano inválido. Formato: +52 seguido de 10 dígitos.",
+  })
+  .transform((v) => (v === "" ? undefined : v))
+  .optional();
+
+const optionalEmail = z
+  .string()
+  .trim()
+  .transform((v) => v.toLowerCase())
+  .refine((v) => v === "" || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v), {
+    message: "Correo inválido.",
+  })
+  .transform((v) => (v === "" ? undefined : v))
+  .optional();
+
+export const createLesseeSchema = z.object({
+  legalName: z
+    .string()
+    .trim()
+    .min(1, "La razón social es requerida.")
+    .max(200, "Máximo 200 caracteres."),
+  contactName: optionalString(120, "Máximo 120 caracteres."),
+  rfc: optionalRfc,
+  email: optionalEmail,
+  phone: optionalMxPhone,
+  whatsapp: optionalMxPhone,
+  preferredChannel: z.enum(COMMUNICATION_CHANNEL_VALUES, {
+    message: "Canal preferido inválido.",
+  }),
+  notes: optionalString(2000, "Máximo 2000 caracteres."),
+});
+
+export type CreateLesseeInput = z.infer<typeof createLesseeSchema>;
+
+export const updateLesseeSchema = createLesseeSchema
+  .partial()
+  .extend({ isActive: z.boolean().optional() });
+
+export type UpdateLesseeInput = z.infer<typeof updateLesseeSchema>;
