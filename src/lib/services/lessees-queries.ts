@@ -1,5 +1,6 @@
 import { requireAuth } from "@/lib/auth/get-session";
 import { prisma } from "@/lib/prisma/client";
+import { serializeDecimals } from "@/lib/utils/serialize-decimals";
 import type { Prisma } from "@/generated/prisma/client";
 
 export type LesseeStatusFilter = "active" | "inactive" | "all";
@@ -72,7 +73,7 @@ export async function getLesseeById(id: string) {
     },
   });
 
-  return lessee;
+  return lessee ? serializeDecimals(lessee) : null;
 }
 
 export type LesseeDetail = NonNullable<Awaited<ReturnType<typeof getLesseeById>>>;

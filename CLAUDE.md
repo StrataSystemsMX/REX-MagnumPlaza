@@ -1,12 +1,14 @@
-# Strata Systems MX — CRM Inmobiliario
+# Rex (by Strata Systems MX) — CRM Inmobiliario
 
 > Este archivo es el contexto persistente del proyecto. Claude Code lo lee al inicio de cada sesión. **No lo borres ni lo muevas.**
+
+**Branding:** el producto se llama **Rex**. La empresa que lo desarrolla es **Strata Systems MX**. En la UI, PDFs y comunicaciones al usuario se muestra como "Rex · by Strata Systems".
 
 ---
 
 ## 1. Contexto del negocio
 
-**Strata Systems MX** es un SaaS para administradoras inmobiliarias en México. El producto es un CRM enfocado en **administración de propiedades** (no de venta), aunque la arquitectura debe permitir activar más adelante un perfil "Comercializadora".
+**Strata Systems MX** desarrolla **Rex**, un SaaS para administradoras inmobiliarias en México. El producto es un CRM enfocado en **administración de propiedades** (no de venta), aunque la arquitectura debe permitir activar más adelante un perfil "Comercializadora".
 
 **Cliente piloto: CRT — Plazas Magnum** (Hermosillo, Sonora). Administra ~30 locales comerciales en 4 plazas y varios inmuebles individuales desde 2008. Hoy operan todo en Excel.
 
@@ -91,7 +93,7 @@ Toda operación CREATE/UPDATE/DELETE en entidades sensibles (Contract, Payment, 
 
 ### Estructura de carpetas
 ```
-strata/
+rex/
 ├── prisma/
 │   ├── schema.prisma
 │   ├── migrations/

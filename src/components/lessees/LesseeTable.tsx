@@ -8,7 +8,7 @@ import {
   type ColumnDef,
   useReactTable,
 } from "@tanstack/react-table";
-import { ExternalLink, MoreHorizontal, Pencil, Plus, Trash2 } from "lucide-react";
+import { ExternalLink, LayoutGrid, List, MoreHorizontal, Pencil, Plus, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
@@ -50,6 +50,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { LesseeForm } from "@/components/forms/LesseeForm";
+import { TenantCard } from "@/components/lessees/TenantCard";
+import { cn } from "@/lib/utils";
 import { communicationChannelLabel } from "@/lib/i18n/enums";
 import { actionDeleteLessee } from "@/lib/services/lessees";
 import type { LesseeListItem } from "@/lib/services/lessees-queries";
@@ -61,6 +63,7 @@ interface LesseeTableProps {
 export function LesseeTable({ lessees }: LesseeTableProps) {
   const router = useRouter();
   const [search, setSearch] = useState("");
+  const [view, setView] = useState<"table" | "cards">("table");
   const [createOpen, setCreateOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<LesseeListItem | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<LesseeListItem | null>(null);
@@ -211,7 +214,42 @@ export function LesseeTable({ lessees }: LesseeTableProps) {
           placeholder="Buscar por razón social, contacto o RFC..."
           className="max-w-sm"
         />
-        <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+        <div className="flex items-center gap-2">
+          <div
+            role="group"
+            aria-label="Cambiar vista"
+            className="inline-flex h-8 overflow-hidden rounded-lg ring-1 ring-foreground/10"
+          >
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              aria-pressed={view === "table"}
+              onClick={() => setView("table")}
+              className={cn(
+                "h-8 rounded-none px-2.5",
+                view === "table" && "bg-muted text-foreground",
+              )}
+            >
+              <List className="size-3.5" />
+              Tabla
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              aria-pressed={view === "cards"}
+              onClick={() => setView("cards")}
+              className={cn(
+                "h-8 rounded-none px-2.5",
+                view === "cards" && "bg-muted text-foreground",
+              )}
+            >
+              <LayoutGrid className="size-3.5" />
+              Tarjetas
+            </Button>
+          </div>
+          <Dialog open={createOpen} onOpenChange={setCreateOpen}>
           <DialogTrigger render={<Button />}>
             <Plus className="size-4" />
             Nuevo inquilino
@@ -232,47 +270,60 @@ export function LesseeTable({ lessees }: LesseeTableProps) {
             />
           </DialogContent>
         </Dialog>
+        </div>
       </div>
 
-      <div className="rounded-md border bg-card">
-        <Table>
-          <TableHeader>
-            {table.getHeaderGroups().map((hg) => (
-              <TableRow key={hg.id}>
-                {hg.headers.map((h) => (
-                  <TableHead key={h.id}>
-                    {h.isPlaceholder
-                      ? null
-                      : flexRender(h.column.columnDef.header, h.getContext())}
-                  </TableHead>
-                ))}
-              </TableRow>
-            ))}
-          </TableHeader>
-          <TableBody>
-            {table.getRowModel().rows.length === 0 ? (
-              <TableRow>
-                <TableCell
-                  colSpan={columns.length}
-                  className="text-center text-sm text-muted-foreground"
-                >
-                  No hay inquilinos registrados.
-                </TableCell>
-              </TableRow>
-            ) : (
-              table.getRowModel().rows.map((row) => (
-                <TableRow key={row.id}>
-                  {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id}>
-                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                    </TableCell>
+      {view === "table" ? (
+        <div className="rounded-md border bg-card">
+          <Table>
+            <TableHeader>
+              {table.getHeaderGroups().map((hg) => (
+                <TableRow key={hg.id}>
+                  {hg.headers.map((h) => (
+                    <TableHead key={h.id}>
+                      {h.isPlaceholder
+                        ? null
+                        : flexRender(h.column.columnDef.header, h.getContext())}
+                    </TableHead>
                   ))}
                 </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </div>
+              ))}
+            </TableHeader>
+            <TableBody>
+              {table.getRowModel().rows.length === 0 ? (
+                <TableRow>
+                  <TableCell
+                    colSpan={columns.length}
+                    className="text-center text-sm text-muted-foreground"
+                  >
+                    No hay inquilinos registrados.
+                  </TableCell>
+                </TableRow>
+              ) : (
+                table.getRowModel().rows.map((row) => (
+                  <TableRow key={row.id}>
+                    {row.getVisibleCells().map((cell) => (
+                      <TableCell key={cell.id}>
+                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="rounded-xl border border-dashed p-10 text-center text-sm text-muted-foreground">
+          No hay inquilinos registrados.
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+          {filtered.map((lessee) => (
+            <TenantCard key={lessee.id} lessee={lessee} />
+          ))}
+        </div>
+      )}
 
       <Dialog
         open={editTarget !== null}

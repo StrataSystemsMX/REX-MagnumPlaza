@@ -58,6 +58,11 @@ const STATUS_OPTIONS: ReadonlyArray<RentStatus> = [
   "OVERDUE_3M",
 ];
 
+const statusFilterItems: Record<string, string> = {
+  ALL: "Todos los estados",
+  ...Object.fromEntries(STATUS_OPTIONS.map((s) => [s, s])),
+};
+
 interface OutstandingRentsTableProps {
   rents: ReadonlyArray<OutstandingRent>;
   properties: ReadonlyArray<{ id: string; name: string }>;
@@ -71,6 +76,14 @@ export function OutstandingRentsTable({ rents, properties }: OutstandingRentsTab
     null,
   );
   const [bulkOpen, setBulkOpen] = useState(false);
+
+  const propertyFilterItems = useMemo<Record<string, string>>(
+    () => ({
+      ALL: "Todos los inmuebles",
+      ...Object.fromEntries(properties.map((p) => [p.id, p.name])),
+    }),
+    [properties],
+  );
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -233,15 +246,15 @@ export function OutstandingRentsTable({ rents, properties }: OutstandingRentsTab
           <Select
             value={statusFilter}
             onValueChange={(v) => v && setStatusFilter(v as StatusFilter)}
+            items={statusFilterItems}
           >
             <SelectTrigger className="w-44">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="ALL">Todos los estados</SelectItem>
-              {STATUS_OPTIONS.map((s) => (
-                <SelectItem key={s} value={s}>
-                  {s}
+              {Object.entries(statusFilterItems).map(([value, label]) => (
+                <SelectItem key={value} value={value}>
+                  {label}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -249,15 +262,15 @@ export function OutstandingRentsTable({ rents, properties }: OutstandingRentsTab
           <Select
             value={propertyFilter}
             onValueChange={(v) => v && setPropertyFilter(v)}
+            items={propertyFilterItems}
           >
             <SelectTrigger className="w-56">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="ALL">Todos los inmuebles</SelectItem>
-              {properties.map((p) => (
-                <SelectItem key={p.id} value={p.id}>
-                  {p.name}
+              {Object.entries(propertyFilterItems).map(([value, label]) => (
+                <SelectItem key={value} value={value}>
+                  {label}
                 </SelectItem>
               ))}
             </SelectContent>

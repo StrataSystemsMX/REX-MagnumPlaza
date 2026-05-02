@@ -1,22 +1,30 @@
 import { ClerkProvider } from "@clerk/nextjs";
 import { esMX } from "@clerk/localizations";
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Outfit, Plus_Jakarta_Sans, Geist_Mono } from "next/font/google";
 import { Toaster } from "sonner";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const outfit = Outfit({
+  variable: "--font-outfit",
   subsets: ["latin"],
+  display: "swap",
+});
+
+const jakarta = Plus_Jakarta_Sans({
+  variable: "--font-jakarta",
+  subsets: ["latin"],
+  display: "swap",
 });
 
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
+  display: "swap",
 });
 
 export const metadata: Metadata = {
-  title: "Strata Systems MX",
+  title: "Rex · by Strata Systems",
   description: "CRM Inmobiliario para administradoras de propiedades en México.",
 };
 
@@ -27,8 +35,8 @@ export default function RootLayout({
 }>) {
   return (
     <ClerkProvider localization={esMX}>
-      <html lang="es-MX">
-        <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+      <html lang="es-MX" className={`${outfit.variable} ${jakarta.variable} ${geistMono.variable}`}>
+        <body className="antialiased">
           {children}
           <Toaster richColors position="top-right" />
         </body>

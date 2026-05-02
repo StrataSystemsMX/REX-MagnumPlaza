@@ -142,7 +142,7 @@ export function DocFooter({ contactInfo }: DocFooterProps) {
     <View fixed style={sharedStyles.footer}>
       <Text>{contactInfo}</Text>
       <Text style={{ marginTop: 2 }}>
-        Documento generado automáticamente por Strata Systems · Para
+        Documento generado automáticamente por Rex (by Strata Systems) · Para
         aclaraciones contactar a la administración
       </Text>
     </View>

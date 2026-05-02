@@ -44,12 +44,19 @@ function Button({
   className,
   variant = "default",
   size = "default",
+  render,
+  nativeButton,
   ...props
 }: ButtonPrimitive.Props & VariantProps<typeof buttonVariants>) {
+  // Si se usa `render` para sustituir el botón nativo (ej. <Link />),
+  // base-ui exige nativeButton={false} para no perder semántica.
+  const resolvedNativeButton = nativeButton ?? render === undefined
   return (
     <ButtonPrimitive
       data-slot="button"
       className={cn(buttonVariants({ variant, size, className }))}
+      render={render}
+      nativeButton={resolvedNativeButton}
       {...props}
     />
   )

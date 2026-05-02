@@ -2,7 +2,7 @@
 
 import { RefreshCcw } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useTransition } from "react";
+import { useMemo, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -49,16 +49,35 @@ export function DashboardFilters({
 
   const refresh = () => startTransition(() => router.refresh());
 
+  const monthItems = useMemo<Record<string, string>>(
+    () => Object.fromEntries(monthOptions.map((opt) => [opt.value, opt.label])),
+    [monthOptions],
+  );
+
+  const legalEntityItems = useMemo<Record<string, string>>(
+    () => ({
+      all: "Todas las razones",
+      ...Object.fromEntries(
+        legalEntities.map((le) => [le.id, `${le.code} — ${le.legalName}`]),
+      ),
+    }),
+    [legalEntities],
+  );
+
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <Select value={currentMonth} onValueChange={(v) => setParam("month", v)}>
+      <Select
+        value={currentMonth}
+        onValueChange={(v) => setParam("month", v)}
+        items={monthItems}
+      >
         <SelectTrigger className="w-44">
           <SelectValue placeholder="Mes" />
         </SelectTrigger>
         <SelectContent>
-          {monthOptions.map((opt) => (
-            <SelectItem key={opt.value} value={opt.value}>
-              {opt.label}
+          {Object.entries(monthItems).map(([value, label]) => (
+            <SelectItem key={value} value={value}>
+              {label}
             </SelectItem>
           ))}
         </SelectContent>
@@ -68,15 +87,15 @@ export function DashboardFilters({
         <Select
           value={currentLegalEntity}
           onValueChange={(v) => setParam("legalEntity", v)}
+          items={legalEntityItems}
         >
           <SelectTrigger className="w-56">
             <SelectValue placeholder="Razón social" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">Todas las razones</SelectItem>
-            {legalEntities.map((le) => (
-              <SelectItem key={le.id} value={le.id}>
-                {le.code} — {le.legalName}
+            {Object.entries(legalEntityItems).map(([value, label]) => (
+              <SelectItem key={value} value={value}>
+                {label}
               </SelectItem>
             ))}
           </SelectContent>

@@ -39,8 +39,8 @@ export function Sidebar() {
           <Building2 className="size-4" />
         </div>
         <div className="leading-tight">
-          <p className="text-sm font-semibold">Strata Systems</p>
-          <p className="text-xs text-muted-foreground">CRM Inmobiliario</p>
+          <p className="text-sm font-semibold">Rex</p>
+          <p className="text-xs text-muted-foreground">by Strata Systems</p>
         </div>
       </div>
       <nav className="flex-1 space-y-1 px-3 py-4">

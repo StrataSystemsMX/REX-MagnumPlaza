@@ -5,9 +5,11 @@ import {
   MonthlyRentCalendar,
   type RentCalendarItem,
 } from "@/components/collections/MonthlyRentCalendar";
+import { MonthlyCollectionsView } from "@/components/collections/MonthlyCollectionsView";
 import { OutstandingRentsTable } from "@/components/collections/OutstandingRentsTable";
 import { PaymentsTable } from "@/components/collections/PaymentsTable";
 import type {
+  MonthlyCollections,
   OutstandingRent,
   PaymentListItem,
 } from "@/lib/services/payments-queries";
@@ -16,6 +18,7 @@ interface CollectionsTabsProps {
   outstanding: ReadonlyArray<OutstandingRent>;
   payments: ReadonlyArray<PaymentListItem>;
   calendarRents: ReadonlyArray<RentCalendarItem>;
+  monthly: MonthlyCollections;
   properties: ReadonlyArray<{ id: string; name: string }>;
   canDeletePayment: boolean;
 }
@@ -24,12 +27,14 @@ export function CollectionsTabs({
   outstanding,
   payments,
   calendarRents,
+  monthly,
   properties,
   canDeletePayment,
 }: CollectionsTabsProps) {
   return (
-    <Tabs defaultValue="outstanding" className="w-full">
+    <Tabs defaultValue="monthly" className="w-full">
       <TabsList>
+        <TabsTrigger value="monthly">Cobros del mes</TabsTrigger>
         <TabsTrigger value="outstanding">
           Por cobrar ({outstanding.length})
         </TabsTrigger>
@@ -38,6 +43,10 @@ export function CollectionsTabs({
         </TabsTrigger>
         <TabsTrigger value="calendar">Calendario</TabsTrigger>
       </TabsList>
+
+      <TabsContent value="monthly" className="mt-4">
+        <MonthlyCollectionsView data={monthly} />
+      </TabsContent>
 
       <TabsContent value="outstanding" className="mt-4">
         <OutstandingRentsTable rents={outstanding} properties={properties} />

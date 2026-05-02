@@ -73,6 +73,11 @@ const METHODS: ReadonlyArray<PaymentMethod> = [
   "OTHER",
 ];
 
+const methodFilterItems: Record<string, string> = {
+  ALL: "Todos los métodos",
+  ...Object.fromEntries(METHODS.map((m) => [m, paymentMethodLabel(m)])),
+};
+
 interface PaymentsTableProps {
   payments: ReadonlyArray<PaymentListItem>;
   /** Si el usuario es MASTER, muestra el botón de borrar. */
@@ -273,15 +278,15 @@ export function PaymentsTable({ payments, canDelete }: PaymentsTableProps) {
           <Select
             value={methodFilter}
             onValueChange={(v) => v && setMethodFilter(v as PaymentMethod | "ALL")}
+            items={methodFilterItems}
           >
             <SelectTrigger className="w-40">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="ALL">Todos los métodos</SelectItem>
-              {METHODS.map((m) => (
-                <SelectItem key={m} value={m}>
-                  {paymentMethodLabel(m)}
+              {Object.entries(methodFilterItems).map(([value, label]) => (
+                <SelectItem key={value} value={value}>
+                  {label}
                 </SelectItem>
               ))}
             </SelectContent>

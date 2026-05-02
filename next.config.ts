@@ -13,6 +13,10 @@ const nextConfig: NextConfig = {
         : []),
     ],
   },
+  experimental: {
+    // Default es 1MB; subimos a 6MB para cubrir MAX_PROPERTY_PHOTO_SIZE_BYTES (5MB) + overhead de FormData.
+    serverActions: { bodySizeLimit: "6mb" },
+  },
 };
 
 export default nextConfig;

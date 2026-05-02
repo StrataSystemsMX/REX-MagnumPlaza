@@ -49,7 +49,13 @@ export async function getContracts(filters: ContractListFilters = {}) {
   const today = Date.now();
   return contracts.map((c) => {
     const daysToExpire = Math.ceil((c.endDate.getTime() - today) / (1000 * 60 * 60 * 24));
-    return { ...c, daysToExpire };
+    return {
+      ...c,
+      monthlyAmount: c.monthlyAmount.toNumber(),
+      guaranteeAmount: c.guaranteeAmount.toNumber(),
+      lateFeePercentage: c.lateFeePercentage?.toNumber() ?? null,
+      daysToExpire,
+    };
   });
 }
 
@@ -120,7 +126,7 @@ export async function getContractsExpiringSoon(daysAhead = 60) {
 /** Unidades disponibles del tenant — para el formulario de nuevo contrato. */
 export async function getAvailableUnits() {
   const { tenantId } = await requireAuth();
-  return prisma.unit.findMany({
+  const units = await prisma.unit.findMany({
     where: { tenantId, isActive: true, status: { in: ["DISPONIBLE", "APARTADA"] } },
     orderBy: [{ property: { name: "asc" } }, { code: "asc" }],
     select: {
@@ -132,6 +138,10 @@ export async function getAvailableUnits() {
       property: { select: { id: true, name: true } },
     },
   });
+  return units.map((u) => ({
+    ...u,
+    estimatedRent: u.estimatedRent?.toNumber() ?? null,
+  }));
 }
 
 export type AvailableUnit = Awaited<ReturnType<typeof getAvailableUnits>>[number];

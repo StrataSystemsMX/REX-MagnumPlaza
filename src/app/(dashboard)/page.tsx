@@ -28,6 +28,7 @@ import { Badge } from "@/components/ui/badge";
 import { IncomeChart, OccupancyChart } from "@/components/dashboard/charts";
 import { DashboardFilters } from "@/components/dashboard/dashboard-filters";
 import { MetricCard } from "@/components/shared/metric-card";
+import { getActiveLegalEntityId } from "@/lib/auth/active-legal-entity";
 import { requireAuth } from "@/lib/auth/get-session";
 import { getUserRoleCodes } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/prisma/client";
@@ -114,7 +115,10 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const canSeeLegalEntities = isMaster || isAccountant || roles.length === 0;
 
   const monthParam = params.month;
-  const legalEntityParam = params.legalEntity;
+  // El URL param tiene prioridad para no romper links compartidos. Si no viene,
+  // cae a la cookie del switcher global de la topbar.
+  const cookieLegalEntityId = await getActiveLegalEntityId();
+  const legalEntityParam = params.legalEntity ?? cookieLegalEntityId ?? undefined;
   const { month } = parseMonth(monthParam);
 
   const metrics = await getDashboardMetrics(dbUser.tenantId, {

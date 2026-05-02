@@ -59,6 +59,18 @@ const STATUSES: ReadonlyArray<ContractStatus> = [
   "CANCELLED",
 ];
 
+const statusFilterItems: Record<string, string> = {
+  ALL: "Todos los estados",
+  ...Object.fromEntries(STATUSES.map((s) => [s, contractStatusLabel(s)])),
+};
+
+const expiryFilterItems: Record<string, string> = {
+  ALL: "Todos los vencimientos",
+  "30": "Vence en ≤ 30 días",
+  "60": "Vence en ≤ 60 días",
+  "90": "Vence en ≤ 90 días",
+};
+
 const MXN = new Intl.NumberFormat("es-MX", {
   style: "currency",
   currency: "MXN",
@@ -224,15 +236,15 @@ export function ContractTable({ contracts, availableUnits }: ContractTableProps)
           <Select
             value={statusFilter}
             onValueChange={(v) => setStatusFilter(v as StatusFilter)}
+            items={statusFilterItems}
           >
             <SelectTrigger className="w-48">
               <SelectValue placeholder="Estado" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="ALL">Todos los estados</SelectItem>
-              {STATUSES.map((s) => (
-                <SelectItem key={s} value={s}>
-                  {contractStatusLabel(s)}
+              {Object.entries(statusFilterItems).map(([value, label]) => (
+                <SelectItem key={value} value={value}>
+                  {label}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -240,15 +252,17 @@ export function ContractTable({ contracts, availableUnits }: ContractTableProps)
           <Select
             value={expiryFilter}
             onValueChange={(v) => setExpiryFilter(v as ExpiryFilter)}
+            items={expiryFilterItems}
           >
             <SelectTrigger className="w-56">
               <SelectValue placeholder="Vencimiento" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="ALL">Todos los vencimientos</SelectItem>
-              <SelectItem value="30">Vence en ≤ 30 días</SelectItem>
-              <SelectItem value="60">Vence en ≤ 60 días</SelectItem>
-              <SelectItem value="90">Vence en ≤ 90 días</SelectItem>
+              {Object.entries(expiryFilterItems).map(([value, label]) => (
+                <SelectItem key={value} value={value}>
+                  {label}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>

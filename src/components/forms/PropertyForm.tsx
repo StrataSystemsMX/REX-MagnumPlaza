@@ -137,7 +137,7 @@ export function PropertyForm({
                 <FormLabel>Tipo</FormLabel>
                 <Select onValueChange={field.onChange} value={field.value}>
                   <FormControl>
-                    <SelectTrigger>
+                    <SelectTrigger className="w-full">
                       <SelectValue placeholder="Selecciona un tipo" />
                     </SelectTrigger>
                   </FormControl>
@@ -194,7 +194,7 @@ export function PropertyForm({
                 <FormLabel>Razón social dueña</FormLabel>
                 <Select onValueChange={field.onChange} value={field.value}>
                   <FormControl>
-                    <SelectTrigger>
+                    <SelectTrigger className="w-full">
                       <SelectValue placeholder="Selecciona una razón social" />
                     </SelectTrigger>
                   </FormControl>
@@ -218,7 +218,7 @@ export function PropertyForm({
                 <FormLabel>Razón social administradora</FormLabel>
                 <Select onValueChange={field.onChange} value={field.value}>
                   <FormControl>
-                    <SelectTrigger>
+                    <SelectTrigger className="w-full">
                       <SelectValue placeholder="Selecciona una razón social" />
                     </SelectTrigger>
                   </FormControl>

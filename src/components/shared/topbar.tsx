@@ -1,18 +1,31 @@
-import { ChevronDown } from "lucide-react";
 import { UserButton } from "@clerk/nextjs";
+import { getActiveLegalEntityId } from "@/lib/auth/active-legal-entity";
+import { requireAuth } from "@/lib/auth/get-session";
+import { prisma } from "@/lib/prisma/client";
+import { LegalEntitySwitcher } from "./legal-entity-switcher";
 
 interface TopbarProps {
   tenantName: string;
 }
 
-export function Topbar({ tenantName }: TopbarProps) {
+export async function Topbar({ tenantName }: TopbarProps) {
+  const { tenantId } = await requireAuth();
+  const [entities, activeEntityId] = await Promise.all([
+    prisma.legalEntity.findMany({
+      where: { tenantId, isActive: true },
+      orderBy: { code: "asc" },
+      select: { id: true, code: true, legalName: true },
+    }),
+    getActiveLegalEntityId(),
+  ]);
+
   return (
     <header className="flex h-16 items-center justify-between border-b bg-card px-6">
-      <div className="flex items-center gap-2 rounded-md border bg-background px-3 py-1.5 text-sm">
-        <span className="text-muted-foreground">Tenant:</span>
-        <span className="font-medium">{tenantName}</span>
-        <ChevronDown className="size-4 text-muted-foreground" />
-      </div>
+      <LegalEntitySwitcher
+        tenantName={tenantName}
+        entities={entities}
+        activeEntityId={activeEntityId}
+      />
       <div className="flex items-center gap-3">
         <UserButton
           appearance={{

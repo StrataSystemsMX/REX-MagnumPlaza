@@ -1,6 +1,7 @@
 import { Prisma } from "@/generated/prisma/client";
 import { requireAuth } from "@/lib/auth/get-session";
 import { prisma } from "@/lib/prisma/client";
+import { serializeDecimals } from "@/lib/utils/serialize-decimals";
 import type { PaymentMethod, RentStatus } from "@/generated/prisma/enums";
 
 const OUTSTANDING_STATUSES: RentStatus[] = [
@@ -81,7 +82,7 @@ export async function getOutstandingRents(filters: OutstandingFilters = {}) {
   return rents.map((r) => {
     const balance = new Prisma.Decimal(r.amountDue).minus(new Prisma.Decimal(r.amountPaid));
     const daysOverdue = Math.floor((now - r.dueDate.getTime()) / (1000 * 60 * 60 * 24));
-    return { ...r, balance: balance.toString(), daysOverdue };
+    return serializeDecimals({ ...r, balance: balance.toString(), daysOverdue });
   });
 }
 
@@ -109,7 +110,7 @@ export async function getPayments(filters: PaymentFilters = {}) {
     where.rent = { contract: { lesseeId: filters.lesseeId } };
   }
 
-  return prisma.payment.findMany({
+  const payments = await prisma.payment.findMany({
     where,
     orderBy: { paymentDate: "desc" },
     include: {
@@ -138,6 +139,7 @@ export async function getPayments(filters: PaymentFilters = {}) {
       },
     },
   });
+  return serializeDecimals(payments);
 }
 
 export type PaymentListItem = Awaited<ReturnType<typeof getPayments>>[number];
@@ -154,7 +156,7 @@ export async function getPaymentsByRent(rentId: string) {
 /** Pagos históricos de un Lessee — usado en su tab "Pagos históricos". */
 export async function getPaymentsByLessee(lesseeId: string) {
   const { tenantId } = await requireAuth();
-  return prisma.payment.findMany({
+  const payments = await prisma.payment.findMany({
     where: { tenantId, rent: { contract: { lesseeId } } },
     orderBy: { paymentDate: "desc" },
     include: {
@@ -177,6 +179,7 @@ export async function getPaymentsByLessee(lesseeId: string) {
       },
     },
   });
+  return serializeDecimals(payments);
 }
 
 export type LesseePayment = Awaited<ReturnType<typeof getPaymentsByLessee>>[number];
@@ -276,7 +279,7 @@ export async function getLesseeStatement(lesseeId: string) {
     orderBy: { paymentDate: "desc" },
   });
 
-  return { lessee, summary, lastPayment };
+  return serializeDecimals({ lessee, summary, lastPayment });
 }
 
 export type LesseeStatement = NonNullable<Awaited<ReturnType<typeof getLesseeStatement>>>;
@@ -350,3 +353,512 @@ export async function getAllRentsForCalendar() {
 }
 
 export type CalendarRent = Awaited<ReturnType<typeof getAllRentsForCalendar>>[number];
+
+/**
+ * Vista mensual agrupada por Property — pivote para la pantalla "Cobros del Mes".
+ * Para cada Property activa devuelve TODAS sus Units (incluso vacías), con su
+ * contrato activo del periodo (si existe), el Rent del periodo (si existe), y
+ * un estado derivado: PAID / PARTIAL / SIN_PAGO / PRE_PAGADO / ABONO / VACANT.
+ *
+ * El periodo se interpreta en UTC (matches Rent.period que es el primer día
+ * del mes UTC). PRE_PAGADO se deriva de Contract.paidInAdvance + advancePaidUntil.
+ * ABONO indica sobrepago (amountPaid > amountDue).
+ */
+export type MonthlyUnitStatus =
+  | "PAID"
+  | "PARTIAL"
+  | "SIN_PAGO"
+  | "PRE_PAGADO"
+  | "ABONO"
+  | "VACANT";
+
+export interface MonthlyUnitRow {
+  unitId: string;
+  unitCode: string;
+  unitName: string | null;
+  contractId: string | null;
+  lesseeId: string | null;
+  lesseeLegalName: string | null;
+  rentId: string | null;
+  amountDue: string;
+  amountPaid: string;
+  rentStatus: RentStatus | null;
+  status: MonthlyUnitStatus;
+  /** Meses pre-pagados desde el periodo consultado (sólo si PRE_PAGADO). */
+  prePaidMonths: number | null;
+  /** Nivel de escalón 1/2/3 si está OVERDUE_xM, null en otro caso. */
+  overdueLevel: 1 | 2 | 3 | null;
+  /** Última persona asociada a la unidad si está vacía (último contrato). */
+  lastLesseeName: string | null;
+}
+
+export interface MonthlyPropertyGroup {
+  propertyId: string;
+  propertyName: string;
+  managerEntityCode: string;
+  ownerEntityCode: string;
+  unitCount: number;
+  expectedTotal: string;
+  units: MonthlyUnitRow[];
+}
+
+export interface MonthlyCollections {
+  period: Date;
+  properties: MonthlyPropertyGroup[];
+  totals: {
+    paid: number;
+    partial: number;
+    sinPago: number;
+    prePagado: number;
+    abono: number;
+    vacant: number;
+  };
+}
+
+export async function getMonthlyCollectionsByProperty(period: Date): Promise<MonthlyCollections> {
+  const { tenantId } = await requireAuth();
+
+  const periodStart = new Date(
+    Date.UTC(period.getUTCFullYear(), period.getUTCMonth(), 1),
+  );
+  const periodEnd = new Date(
+    Date.UTC(period.getUTCFullYear(), period.getUTCMonth() + 1, 1),
+  );
+
+  const properties = await prisma.property.findMany({
+    where: { tenantId, isActive: true },
+    orderBy: { name: "asc" },
+    include: {
+      ownerEntity: { select: { code: true } },
+      managerEntity: { select: { code: true } },
+      units: {
+        where: { isActive: true },
+        orderBy: { code: "asc" },
+        include: {
+          contracts: {
+            where: {
+              status: "ACTIVE",
+              startDate: { lt: periodEnd },
+              endDate: { gte: periodStart },
+            },
+            orderBy: { startDate: "desc" },
+            take: 1,
+            include: {
+              lessee: { select: { id: true, legalName: true } },
+              rents: {
+                where: { period: periodStart },
+                take: 1,
+              },
+            },
+          },
+        },
+      },
+    },
+  });
+
+  // Para units vacías traemos el último contrato (cualquiera) para mostrar
+  // el último inquilino que ocupó el local — útil como contexto en la fila.
+  const emptyUnitIds = properties.flatMap((p) =>
+    p.units.filter((u) => u.contracts.length === 0).map((u) => u.id),
+  );
+  const lastContractsByUnit = emptyUnitIds.length
+    ? await prisma.contract
+        .findMany({
+          where: { tenantId, unitId: { in: emptyUnitIds } },
+          orderBy: { endDate: "desc" },
+          select: {
+            unitId: true,
+            lessee: { select: { legalName: true } },
+          },
+        })
+        .then((rows) => {
+          const map = new Map<string, string>();
+          for (const r of rows) {
+            if (!map.has(r.unitId)) map.set(r.unitId, r.lessee.legalName);
+          }
+          return map;
+        })
+    : new Map<string, string>();
+
+  const totals = {
+    paid: 0,
+    partial: 0,
+    sinPago: 0,
+    prePagado: 0,
+    abono: 0,
+    vacant: 0,
+  };
+
+  const groups: MonthlyPropertyGroup[] = properties.map((p) => {
+    let expected = new Prisma.Decimal(0);
+    const rows: MonthlyUnitRow[] = p.units.map((u) => {
+      const contract = u.contracts[0];
+
+      if (!contract) {
+        totals.vacant += 1;
+        return {
+          unitId: u.id,
+          unitCode: u.code,
+          unitName: u.name,
+          contractId: null,
+          lesseeId: null,
+          lesseeLegalName: null,
+          rentId: null,
+          amountDue: "0",
+          amountPaid: "0",
+          rentStatus: null,
+          status: "VACANT",
+          prePaidMonths: null,
+          overdueLevel: null,
+          lastLesseeName: lastContractsByUnit.get(u.id) ?? null,
+        };
+      }
+
+      const rent = contract.rents[0] ?? null;
+      const amountDue = rent ? new Prisma.Decimal(rent.amountDue) : new Prisma.Decimal(contract.monthlyAmount);
+      const amountPaid = rent ? new Prisma.Decimal(rent.amountPaid) : new Prisma.Decimal(0);
+      expected = expected.plus(amountDue);
+
+      // PRE_PAGADO: contrato marcado paidInAdvance y la fecha límite de
+      // anticipo cubre o pasa este periodo.
+      const prePaid =
+        contract.paidInAdvance &&
+        contract.advancePaidUntil !== null &&
+        contract.advancePaidUntil >= periodEnd;
+      const prePaidMonths = prePaid && contract.advancePaidUntil
+        ? Math.max(
+            0,
+            (contract.advancePaidUntil.getUTCFullYear() - period.getUTCFullYear()) * 12 +
+              (contract.advancePaidUntil.getUTCMonth() - period.getUTCMonth()),
+          )
+        : null;
+
+      // Estado derivado: el orden importa — PRE_PAGADO gana sobre todo.
+      let status: MonthlyUnitStatus;
+      if (prePaid) {
+        status = "PRE_PAGADO";
+      } else if (amountPaid.greaterThan(amountDue)) {
+        status = "ABONO";
+      } else if (amountPaid.equals(amountDue) && amountDue.greaterThan(0)) {
+        status = "PAID";
+      } else if (amountPaid.greaterThan(0)) {
+        status = "PARTIAL";
+      } else {
+        status = "SIN_PAGO";
+      }
+
+      switch (status) {
+        case "PAID":
+          totals.paid += 1;
+          break;
+        case "PARTIAL":
+          totals.partial += 1;
+          break;
+        case "SIN_PAGO":
+          totals.sinPago += 1;
+          break;
+        case "PRE_PAGADO":
+          totals.prePagado += 1;
+          break;
+        case "ABONO":
+          totals.abono += 1;
+          break;
+      }
+
+      const overdueLevel: 1 | 2 | 3 | null =
+        rent?.status === "OVERDUE_1M"
+          ? 1
+          : rent?.status === "OVERDUE_2M"
+            ? 2
+            : rent?.status === "OVERDUE_3M"
+              ? 3
+              : null;
+
+      return {
+        unitId: u.id,
+        unitCode: u.code,
+        unitName: u.name,
+        contractId: contract.id,
+        lesseeId: contract.lessee.id,
+        lesseeLegalName: contract.lessee.legalName,
+        rentId: rent?.id ?? null,
+        amountDue: amountDue.toString(),
+        amountPaid: amountPaid.toString(),
+        rentStatus: rent?.status ?? null,
+        status,
+        prePaidMonths,
+        overdueLevel,
+        lastLesseeName: null,
+      };
+    });
+
+    return {
+      propertyId: p.id,
+      propertyName: p.name,
+      managerEntityCode: p.managerEntity.code,
+      ownerEntityCode: p.ownerEntity.code,
+      unitCount: p.units.length,
+      expectedTotal: expected.toString(),
+      units: rows,
+    };
+  });
+
+  return { period: periodStart, properties: groups, totals };
+}
+
+/**
+ * Matriz anual de cobranza: 12 meses × locales, agrupado por Property.
+ * Cada celda lleva el estado derivado del mes (mismo enum que la vista
+ * mensual). Pensado para una vista tipo Excel donde de un vistazo se ven
+ * patrones de morosidad histórica.
+ */
+export interface YearlyCell {
+  period: Date;
+  rentId: string | null;
+  contractId: string | null;
+  amountDue: string;
+  amountPaid: string;
+  status: MonthlyUnitStatus;
+  prePaidMonths: number | null;
+  overdueLevel: 1 | 2 | 3 | null;
+}
+
+export interface YearlyUnitRow {
+  unitId: string;
+  unitCode: string;
+  unitName: string | null;
+  currentLesseeName: string | null;
+  currentLesseeId: string | null;
+  cells: YearlyCell[];
+  expectedTotal: string;
+  paidTotal: string;
+}
+
+export interface YearlyPropertyGroup {
+  propertyId: string;
+  propertyName: string;
+  managerEntityCode: string;
+  ownerEntityCode: string;
+  unitCount: number;
+  expectedTotal: string;
+  paidTotal: string;
+  units: YearlyUnitRow[];
+}
+
+export interface YearlyCollections {
+  year: number;
+  properties: YearlyPropertyGroup[];
+  monthlyTotals: Array<{
+    period: Date;
+    expected: string;
+    paid: string;
+    paidCount: number;
+    sinPagoCount: number;
+  }>;
+}
+
+export async function getYearlyCollectionsMatrix(year: number): Promise<YearlyCollections> {
+  const { tenantId } = await requireAuth();
+
+  const yearStart = new Date(Date.UTC(year, 0, 1));
+  const yearEnd = new Date(Date.UTC(year + 1, 0, 1));
+
+  const periods: Date[] = Array.from({ length: 12 }, (_, i) =>
+    new Date(Date.UTC(year, i, 1)),
+  );
+
+  const properties = await prisma.property.findMany({
+    where: { tenantId, isActive: true },
+    orderBy: { name: "asc" },
+    include: {
+      ownerEntity: { select: { code: true } },
+      managerEntity: { select: { code: true } },
+      units: {
+        where: { isActive: true },
+        orderBy: { code: "asc" },
+        include: {
+          contracts: {
+            where: {
+              startDate: { lt: yearEnd },
+              endDate: { gte: yearStart },
+            },
+            orderBy: { startDate: "desc" },
+            include: {
+              lessee: { select: { id: true, legalName: true } },
+              rents: {
+                where: { period: { gte: yearStart, lt: yearEnd } },
+              },
+            },
+          },
+        },
+      },
+    },
+  });
+
+  const monthlyAgg = periods.map((p) => ({
+    period: p,
+    expected: new Prisma.Decimal(0),
+    paid: new Prisma.Decimal(0),
+    paidCount: 0,
+    sinPagoCount: 0,
+  }));
+
+  const groups: YearlyPropertyGroup[] = properties.map((p) => {
+    let groupExpected = new Prisma.Decimal(0);
+    let groupPaid = new Prisma.Decimal(0);
+
+    const rows: YearlyUnitRow[] = p.units.map((u) => {
+      const rentByMonth = new Map<string, (typeof u.contracts)[number]["rents"][number]>();
+      const contractByMonth = new Map<string, (typeof u.contracts)[number]>();
+      for (const c of u.contracts) {
+        for (const r of c.rents) {
+          const key = monthKey(r.period);
+          rentByMonth.set(key, r);
+          contractByMonth.set(key, c);
+        }
+        for (const period of periods) {
+          const key = monthKey(period);
+          if (contractByMonth.has(key)) continue;
+          const periodEnd = new Date(
+            Date.UTC(period.getUTCFullYear(), period.getUTCMonth() + 1, 1),
+          );
+          if (
+            c.startDate < periodEnd &&
+            c.endDate >= period &&
+            c.status === "ACTIVE"
+          ) {
+            contractByMonth.set(key, c);
+          }
+        }
+      }
+
+      let unitExpected = new Prisma.Decimal(0);
+      let unitPaid = new Prisma.Decimal(0);
+
+      const cells: YearlyCell[] = periods.map((period, i) => {
+        const key = monthKey(period);
+        const contract = contractByMonth.get(key);
+        const rent = rentByMonth.get(key);
+
+        if (!contract) {
+          return {
+            period,
+            rentId: null,
+            contractId: null,
+            amountDue: "0",
+            amountPaid: "0",
+            status: "VACANT",
+            prePaidMonths: null,
+            overdueLevel: null,
+          };
+        }
+
+        const amountDue = rent
+          ? new Prisma.Decimal(rent.amountDue)
+          : new Prisma.Decimal(contract.monthlyAmount);
+        const amountPaid = rent
+          ? new Prisma.Decimal(rent.amountPaid)
+          : new Prisma.Decimal(0);
+        unitExpected = unitExpected.plus(amountDue);
+        unitPaid = unitPaid.plus(amountPaid);
+        monthlyAgg[i]!.expected = monthlyAgg[i]!.expected.plus(amountDue);
+        monthlyAgg[i]!.paid = monthlyAgg[i]!.paid.plus(amountPaid);
+
+        const periodEnd = new Date(
+          Date.UTC(period.getUTCFullYear(), period.getUTCMonth() + 1, 1),
+        );
+        const prePaid =
+          contract.paidInAdvance &&
+          contract.advancePaidUntil !== null &&
+          contract.advancePaidUntil >= periodEnd;
+        const prePaidMonths = prePaid && contract.advancePaidUntil
+          ? Math.max(
+              0,
+              (contract.advancePaidUntil.getUTCFullYear() - period.getUTCFullYear()) * 12 +
+                (contract.advancePaidUntil.getUTCMonth() - period.getUTCMonth()),
+            )
+          : null;
+
+        let status: MonthlyUnitStatus;
+        if (prePaid) {
+          status = "PRE_PAGADO";
+        } else if (amountPaid.greaterThan(amountDue)) {
+          status = "ABONO";
+        } else if (amountPaid.equals(amountDue) && amountDue.greaterThan(0)) {
+          status = "PAID";
+        } else if (amountPaid.greaterThan(0)) {
+          status = "PARTIAL";
+        } else {
+          status = "SIN_PAGO";
+        }
+
+        if (status === "PAID" || status === "PRE_PAGADO") monthlyAgg[i]!.paidCount += 1;
+        if (status === "SIN_PAGO") monthlyAgg[i]!.sinPagoCount += 1;
+
+        const overdueLevel: 1 | 2 | 3 | null =
+          rent?.status === "OVERDUE_1M"
+            ? 1
+            : rent?.status === "OVERDUE_2M"
+              ? 2
+              : rent?.status === "OVERDUE_3M"
+                ? 3
+                : null;
+
+        return {
+          period,
+          rentId: rent?.id ?? null,
+          contractId: contract.id,
+          amountDue: amountDue.toString(),
+          amountPaid: amountPaid.toString(),
+          status,
+          prePaidMonths,
+          overdueLevel,
+        };
+      });
+
+      groupExpected = groupExpected.plus(unitExpected);
+      groupPaid = groupPaid.plus(unitPaid);
+
+      const current = u.contracts[0];
+
+      return {
+        unitId: u.id,
+        unitCode: u.code,
+        unitName: u.name,
+        currentLesseeName: current?.lessee.legalName ?? null,
+        currentLesseeId: current?.lessee.id ?? null,
+        cells,
+        expectedTotal: unitExpected.toString(),
+        paidTotal: unitPaid.toString(),
+      };
+    });
+
+    return {
+      propertyId: p.id,
+      propertyName: p.name,
+      managerEntityCode: p.managerEntity.code,
+      ownerEntityCode: p.ownerEntity.code,
+      unitCount: p.units.length,
+      expectedTotal: groupExpected.toString(),
+      paidTotal: groupPaid.toString(),
+      units: rows,
+    };
+  });
+
+  return {
+    year,
+    properties: groups,
+    monthlyTotals: monthlyAgg.map((m) => ({
+      period: m.period,
+      expected: m.expected.toString(),
+      paid: m.paid.toString(),
+      paidCount: m.paidCount,
+      sinPagoCount: m.sinPagoCount,
+    })),
+  };
+}
+
+function monthKey(d: Date): string {
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+

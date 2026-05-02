@@ -2,21 +2,30 @@
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PropertyForm } from "@/components/forms/PropertyForm";
+import { PropertyPhotoGallery } from "@/components/properties/PropertyPhotoGallery";
 import { UnitTable } from "@/components/properties/UnitTable";
 import type { LegalEntityOption, PropertyDetail } from "@/lib/services/properties-queries";
 
 interface PropertyDetailTabsProps {
   property: PropertyDetail;
   legalEntities: ReadonlyArray<LegalEntityOption>;
+  canEditPhotos: boolean;
 }
 
-export function PropertyDetailTabs({ property, legalEntities }: PropertyDetailTabsProps) {
+export function PropertyDetailTabs({
+  property,
+  legalEntities,
+  canEditPhotos,
+}: PropertyDetailTabsProps) {
   return (
     <Tabs defaultValue="info" className="w-full">
       <TabsList>
         <TabsTrigger value="info">Información general</TabsTrigger>
         <TabsTrigger value="units">
           Unidades ({property.units.length})
+        </TabsTrigger>
+        <TabsTrigger value="photos">
+          Fotos ({property.documents.length})
         </TabsTrigger>
       </TabsList>
       <TabsContent value="info" className="mt-4 rounded-md border bg-card p-6">
@@ -40,6 +49,13 @@ export function PropertyDetailTabs({ property, legalEntities }: PropertyDetailTa
       </TabsContent>
       <TabsContent value="units" className="mt-4 space-y-3">
         <UnitTable propertyId={property.id} units={property.units} />
+      </TabsContent>
+      <TabsContent value="photos" className="mt-4 space-y-4">
+        <PropertyPhotoGallery
+          propertyId={property.id}
+          photos={property.documents}
+          canEdit={canEditPhotos}
+        />
       </TabsContent>
     </Tabs>
   );

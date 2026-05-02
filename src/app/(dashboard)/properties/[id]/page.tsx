@@ -3,6 +3,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { PropertyDetailTabs } from "@/components/properties/PropertyDetailTabs";
+import { requireAuth } from "@/lib/auth/get-session";
+import { hasPermission } from "@/lib/auth/permissions";
 import { propertyTypeLabel } from "@/lib/i18n/enums";
 import {
   getLegalEntities,
@@ -19,9 +21,11 @@ export default async function PropertyDetailPage({
   params: Promise<Params>;
 }) {
   const { id } = await params;
-  const [property, legalEntities] = await Promise.all([
+  const { dbUser } = await requireAuth();
+  const [property, legalEntities, canEditPhotos] = await Promise.all([
     getPropertyById(id),
     getLegalEntities(),
+    hasPermission(dbUser.id, "property.update"),
   ]);
 
   if (!property) {
@@ -50,7 +54,11 @@ export default async function PropertyDetailPage({
         </p>
       </div>
 
-      <PropertyDetailTabs property={property} legalEntities={legalEntities} />
+      <PropertyDetailTabs
+        property={property}
+        legalEntities={legalEntities}
+        canEditPhotos={canEditPhotos}
+      />
     </div>
   );
 }

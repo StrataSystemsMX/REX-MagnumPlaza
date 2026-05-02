@@ -1,6 +1,8 @@
-# Strata Systems MX
+# Rex · by Strata Systems
 
 CRM SaaS para administradoras inmobiliarias en México. Enfoque en administración de propiedades (no venta), con soporte multi-tenant y multi-razón-social desde el día 1.
+
+> **Rex** es el nombre del producto. **Strata Systems MX** es la empresa que lo desarrolla.
 
 > Ver [`CLAUDE.md`](./CLAUDE.md) para el contexto completo del proyecto: negocio, arquitectura, convenciones y roadmap.
 
@@ -83,7 +85,7 @@ Servicios externos (se agregan en fases siguientes): Clerk, Cloudflare R2, Resen
 ## Estructura del proyecto
 
 ```
-strata/
+rex/
 ├── prisma/                  # Schema y migraciones
 ├── src/
 │   ├── app/                 # App Router (auth, dashboard, api)

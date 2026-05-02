@@ -1,5 +1,10 @@
+import {
+  getActiveLegalEntityId,
+  legalEntityPropertyFilter,
+} from "@/lib/auth/active-legal-entity";
 import { requireAuth } from "@/lib/auth/get-session";
 import { prisma } from "@/lib/prisma/client";
+import { serializeDecimals } from "@/lib/utils/serialize-decimals";
 import type { PropertyType } from "@/generated/prisma/enums";
 import type { Prisma } from "@/generated/prisma/client";
 
@@ -13,8 +18,12 @@ export interface PropertyFilters {
 /** Listado de inmuebles con conteos de unidades y razones sociales asociadas. */
 export async function getProperties(filters: PropertyFilters = {}) {
   const { tenantId } = await requireAuth();
+  const activeLegalEntityId = await getActiveLegalEntityId();
 
-  const where: Prisma.PropertyWhereInput = { tenantId };
+  const where: Prisma.PropertyWhereInput = {
+    tenantId,
+    ...legalEntityPropertyFilter(activeLegalEntityId),
+  };
   const status = filters.status ?? "active";
   if (status === "active") where.isActive = true;
   if (status === "inactive") where.isActive = false;
@@ -26,7 +35,27 @@ export async function getProperties(filters: PropertyFilters = {}) {
     include: {
       ownerEntity: { select: { id: true, code: true, legalName: true } },
       managerEntity: { select: { id: true, code: true, legalName: true } },
-      units: { select: { id: true, status: true, isActive: true } },
+      units: {
+        orderBy: { code: "asc" },
+        select: {
+          id: true,
+          code: true,
+          name: true,
+          status: true,
+          isActive: true,
+          estimatedRent: true,
+          contracts: {
+            where: { status: "ACTIVE" },
+            orderBy: { startDate: "desc" },
+            take: 1,
+            select: {
+              id: true,
+              monthlyAmount: true,
+              lessee: { select: { id: true, legalName: true, contactName: true } },
+            },
+          },
+        },
+      },
       documents: {
         where: { type: "PROPERTY_PHOTO" },
         orderBy: { createdAt: "desc" },
@@ -36,19 +65,27 @@ export async function getProperties(filters: PropertyFilters = {}) {
     },
   });
 
-  return properties.map((p) => {
-    const activeUnits = p.units.filter((u) => u.isActive);
-    const { documents, ...rest } = p;
-    return {
-      ...rest,
-      unitCounts: {
-        total: activeUnits.length,
-        rented: activeUnits.filter((u) => u.status === "RENTADA").length,
-        available: activeUnits.filter((u) => u.status === "DISPONIBLE").length,
-      },
-      coverPhotoUrl: documents[0]?.url ?? null,
-    };
-  });
+  return properties
+    .map((p) => {
+      const activeUnits = p.units.filter((u) => u.isActive);
+      const { documents, ...rest } = p;
+      return serializeDecimals({
+        ...rest,
+        unitCounts: {
+          total: activeUnits.length,
+          rented: activeUnits.filter((u) => u.status === "RENTADA").length,
+          available: activeUnits.filter((u) => u.status === "DISPONIBLE").length,
+        },
+        coverPhotoUrl: documents[0]?.url ?? null,
+      });
+    })
+    .sort((a, b) => {
+      // Más unidades primero; alfabético como desempate.
+      if (b.unitCounts.total !== a.unitCounts.total) {
+        return b.unitCounts.total - a.unitCounts.total;
+      }
+      return a.name.localeCompare(b.name, "es-MX");
+    });
 }
 
 export type PropertyListItem = Awaited<ReturnType<typeof getProperties>>[number];
@@ -85,7 +122,7 @@ export async function getPropertyById(id: string) {
     },
   });
 
-  return property;
+  return property ? serializeDecimals(property) : null;
 }
 
 export type PropertyDetail = NonNullable<Awaited<ReturnType<typeof getPropertyById>>>;
