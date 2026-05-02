@@ -86,7 +86,7 @@ function colorBorder(color: MetricColor): string {
     case "success":
       return "ring-emerald-500/20";
     case "warning":
-      return "ring-amber-500/30";
+      return "ring-warning/30";
     case "danger":
       return "ring-rose-500/30";
     default:
@@ -99,7 +99,7 @@ function colorIcon(color: MetricColor): string {
     case "success":
       return "text-emerald-600";
     case "warning":
-      return "text-amber-600";
+      return "text-warning";
     case "danger":
       return "text-rose-600";
     default:

@@ -36,7 +36,7 @@ const CONTRACT_START = utcDate(YEAR, 0, 1); // 2026-01-01
 const CONTRACT_END = utcDate(YEAR, 11, 31); // 2026-12-31
 const SIGNED = utcDate(2025, 11, 15); // diciembre 2025
 
-type EntityCode = "CRT" | "TSR" | "QHS";
+type EntityCode = "CRT" | "TSR" | "QHS" | "JCL";
 
 interface UnitDef {
   code: string;
@@ -177,7 +177,20 @@ async function main(): Promise<void> {
       isOperator: false,
     },
   });
-  const entities: Record<EntityCode, { id: string }> = { CRT: crt, TSR: tsr, QHS: qhs };
+  const jcl = await prisma.legalEntity.create({
+    data: {
+      tenantId: tenant.id,
+      code: "JCL",
+      legalName: "JCL S.A. de C.V.",
+      isOperator: false,
+    },
+  });
+  const entities: Record<EntityCode, { id: string }> = {
+    CRT: crt,
+    TSR: tsr,
+    QHS: qhs,
+    JCL: jcl,
+  };
 
   // -- 5. ExpenseCategories -------------------------------------------------
   const categoriesData: Array<{
@@ -364,6 +377,7 @@ async function main(): Promise<void> {
       name: "Capilla del Carmen",
       type: PropertyType.OFICINA,
       address: "Capilla del Carmen, Hermosillo",
+      cadastralKey: "01179002",
       owner: "TSR",
       manager: "TSR",
       units: [
@@ -394,6 +408,54 @@ async function main(): Promise<void> {
       units: [
         { code: "OF", name: "Ferretería", monthlyAmount: 18560.0, lessee: { legalName: "Ferretería Nayarit" } },
       ],
+    },
+
+    // 10. Bodega JCL — sin units, sólo aparece en prediales (paga JC).
+    {
+      name: "Bodega JCL",
+      type: PropertyType.BODEGA,
+      address: "Bodega, Hermosillo",
+      cadastralKey: "02074018",
+      notes: "Predial pagado por terceros (JC).",
+      owner: "JCL",
+      manager: "JCL",
+      units: [],
+    },
+
+    // 11. La Jolla — sin units, sólo aparece en prediales (paga JC).
+    {
+      name: "La Jolla",
+      type: PropertyType.OTRO,
+      address: "La Jolla, Hermosillo",
+      cadastralKey: "14333037",
+      notes: "Predial pagado por terceros (JC).",
+      owner: "JCL",
+      manager: "JCL",
+      units: [],
+    },
+
+    // 12. Ma Escriba — propiedad CRT cuyo predial paga JC.
+    {
+      name: "Ma Escriba",
+      type: PropertyType.OTRO,
+      address: "Ma Escriba, Hermosillo",
+      cadastralKey: "30204003",
+      notes: "Predial pagado por terceros (JC).",
+      owner: "CRT",
+      manager: "CRT",
+      units: [],
+    },
+
+    // 13. Serdán — dueña real Cecilia, predial lo paga CRT.
+    {
+      name: "Serdán",
+      type: PropertyType.OTRO,
+      address: "Serdán, Hermosillo",
+      cadastralKey: "01173002",
+      notes: "Dueña real: Cecilia. CRT realiza el pago de predial.",
+      owner: "CRT",
+      manager: "CRT",
+      units: [],
     },
   ];
 
@@ -555,6 +617,61 @@ async function main(): Promise<void> {
     }
   }
 
+  // -- 6.5. Prediales 2026 -------------------------------------------------
+  // Datos del Excel "PREDIALES 2026" del cliente.
+  // dueDate por convención = 31-mar-YEAR (vencimiento Q1 con descuento por
+  // pronto pago). paidMonth (0-indexado) = mes en que el cliente registró
+  // el pago en su Excel; si null, predial pendiente sin monto confirmado.
+  type PredialDef = {
+    cadastralKey: string;
+    totalAmount: number | null;
+    paidMonth: number | null;
+    payer?: EntityCode;
+    paidByThirdPartyName?: string;
+    notes?: string;
+  };
+
+  const predialesDef: PredialDef[] = [
+    { cadastralKey: "05436042", totalAmount: 10517.00, paidMonth: 5 }, // Plaza Olivares — JUNIO
+    { cadastralKey: "15924002", totalAmount: 17085.00, paidMonth: 4 }, // Plaza Progreso — MAYO
+    { cadastralKey: "03111002", totalAmount: 13969.00, paidMonth: 3 }, // Inbursa/Kino — pagado, sin mes en Excel; asumimos abril.
+    { cadastralKey: "01119010", totalAmount: 8977.00, paidMonth: 3 }, // La Chila/Garmendia — ABRIL
+    { cadastralKey: "51007086", totalAmount: 24881.00, paidMonth: 3 }, // Plaza Quiroga — pagado, sin mes; asumimos abril.
+    { cadastralKey: "01179002", totalAmount: 805.00, paidMonth: 3, payer: "TSR" }, // Capilla del Carmen (CLICK) — paga TSR
+    { cadastralKey: "01173002", totalAmount: 5277.00, paidMonth: 3, payer: "CRT", notes: "Dueña real: Cecilia." }, // Serdán — paga CRT
+    { cadastralKey: "02074018", totalAmount: null, paidMonth: null, paidByThirdPartyName: "JC" }, // Bodega JCL
+    { cadastralKey: "14333037", totalAmount: null, paidMonth: null, paidByThirdPartyName: "JC" }, // La Jolla
+    { cadastralKey: "30204003", totalAmount: null, paidMonth: null, paidByThirdPartyName: "JC" }, // Ma Escriba
+  ];
+
+  const dueDate2026 = utcDate(YEAR, 2, 31); // 31 de marzo del año fiscal
+  for (const pd of predialesDef) {
+    const property = await prisma.property.findFirst({
+      where: { tenantId: tenant.id, cadastralKey: pd.cadastralKey },
+      select: { id: true, name: true },
+    });
+    if (!property) {
+      console.warn(`⚠️  Predial: no se encontró Property con clave ${pd.cadastralKey}, se omite.`);
+      continue;
+    }
+    const paid = pd.paidMonth !== null;
+    await prisma.cadastralPayment.create({
+      data: {
+        tenantId: tenant.id,
+        propertyId: property.id,
+        year: YEAR,
+        totalAmount: pd.totalAmount !== null ? decimal(pd.totalAmount) : null,
+        paidAmount: paid && pd.totalAmount !== null ? decimal(pd.totalAmount) : null,
+        paymentDate: paid ? utcDate(YEAR, pd.paidMonth!, 15) : null,
+        dueDate: dueDate2026,
+        isPaid: paid,
+        payerEntityId: pd.payer ? entities[pd.payer].id : null,
+        paidByThirdPartyName: pd.paidByThirdPartyName ?? null,
+        notes: pd.notes ?? null,
+      },
+    });
+  }
+
   // -- 7. Usuario admin de prueba ------------------------------------------
   const masterRole = await prisma.role.findUnique({
     where: { code: RoleCode.MASTER },
@@ -592,6 +709,8 @@ async function main(): Promise<void> {
     paymentsCount,
     guaranteesCount,
     expenseCategoriesCount,
+    cadastralCount,
+    cadastralPaid,
     usersCount,
   ] = await Promise.all([
     prisma.tenant.count({ where: { slug: TENANT_SLUG } }),
@@ -622,6 +741,10 @@ async function main(): Promise<void> {
     prisma.payment.count(tenantWhere),
     prisma.guarantee.count(tenantWhere),
     prisma.expenseCategory.count(tenantWhere),
+    prisma.cadastralPayment.count(tenantWhere),
+    prisma.cadastralPayment.count({
+      where: { tenantId: tenant.id, isPaid: true },
+    }),
     prisma.user.count(tenantWhere),
   ]);
 
@@ -629,7 +752,7 @@ async function main(): Promise<void> {
   console.log("✅ Seed completado: Plazas Magnum");
   console.log("========================================");
   console.log(`Tenants:                ${tenantsCount}`);
-  console.log(`Razones sociales:       ${legalEntitiesCount}  (CRT, TSR, QHS)`);
+  console.log(`Razones sociales:       ${legalEntitiesCount}  (CRT, TSR, QHS, JCL)`);
   console.log(`Inmuebles (Property):   ${propertiesCount}`);
   console.log(`Unidades:               ${unitsTotal}  (${unitsRented} rentadas, ${unitsAvailable} disponibles)`);
   console.log(`Inquilinos (Lessee):    ${lesseesCount}`);
@@ -638,6 +761,7 @@ async function main(): Promise<void> {
   console.log(`Pagos registrados:      ${paymentsCount}`);
   console.log(`Depósitos en garantía:  ${guaranteesCount}`);
   console.log(`Categorías de gasto:    ${expenseCategoriesCount}`);
+  console.log(`Prediales ${YEAR}:           ${cadastralCount}  (${cadastralPaid} pagados)`);
   console.log(`Usuarios:               ${usersCount}`);
   console.log("========================================");
   console.log(`Login demo: crm.inmobiliaria02@gmail.com (rol MASTER)\n`);

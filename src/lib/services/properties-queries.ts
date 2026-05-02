@@ -111,6 +111,11 @@ export async function getPropertyById(id: string) {
               lessee: { select: { id: true, legalName: true, contactName: true } },
             },
           },
+          documents: {
+            where: { type: "UNIT_PHOTO" },
+            orderBy: { createdAt: "desc" },
+            select: { id: true, url: true, filename: true, createdAt: true },
+          },
         },
       },
       documents: {

@@ -110,7 +110,7 @@ export function PropertyTable({ properties, legalEntities }: PropertyTableProps)
   const [editTarget, setEditTarget] = useState<PropertyListItem | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<PropertyListItem | null>(null);
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
-  const [view, setView] = useState<"table" | "cards">("table");
+  const [view, setView] = useState<"table" | "cards">("cards");
   const [pending, startTransition] = useTransition();
 
   function toggleRow(id: string) {

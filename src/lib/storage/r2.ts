@@ -142,3 +142,23 @@ export function r2KeyForPropertyPhoto(
   const id = crypto.randomUUID().replace(/-/g, "");
   return `tenants/${tenantId}/properties/${propertyId}/photos/${id}.${ext}`;
 }
+
+/** Punto único de generación de keys para fotos de Unit. */
+export function r2KeyForUnitPhoto(
+  tenantId: string,
+  unitId: string,
+  ext: string,
+): string {
+  const id = crypto.randomUUID().replace(/-/g, "");
+  return `tenants/${tenantId}/units/${unitId}/photos/${id}.${ext}`;
+}
+
+/** Punto único de generación de keys para documentos de Contract. */
+export function r2KeyForContractDocument(
+  tenantId: string,
+  contractId: string,
+  ext: string,
+): string {
+  const id = crypto.randomUUID().replace(/-/g, "");
+  return `tenants/${tenantId}/contracts/${contractId}/documents/${id}.${ext}`;
+}

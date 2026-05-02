@@ -11,6 +11,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { ContractActions } from "@/components/contracts/ContractActions";
+import { ContractDocumentManager } from "@/components/contracts/ContractDocumentManager";
 import { RentCalendar } from "@/components/contracts/RentCalendar";
 import {
   auditActionLabel,
@@ -45,9 +46,14 @@ const DATETIME = new Intl.DateTimeFormat("es-MX", {
 interface ContractDetailTabsProps {
   contract: ContractDetail;
   auditLog: ReadonlyArray<ContractAuditEntry>;
+  canEditDocuments: boolean;
 }
 
-export function ContractDetailTabs({ contract, auditLog }: ContractDetailTabsProps) {
+export function ContractDetailTabs({
+  contract,
+  auditLog,
+  canEditDocuments,
+}: ContractDetailTabsProps) {
   return (
     <Tabs defaultValue="summary" className="w-full">
       <TabsList>
@@ -181,32 +187,11 @@ export function ContractDetailTabs({ contract, auditLog }: ContractDetailTabsPro
       </TabsContent>
 
       <TabsContent value="documents" className="mt-4">
-        <div className="rounded-md border bg-card p-6">
-          {contract.documents.length === 0 ? (
-            <p className="text-center text-sm text-muted-foreground">
-              Aún no hay documentos. La carga a Cloudflare R2 se habilitará en la siguiente
-              iteración (botón &quot;Subir contrato firmado&quot;).
-            </p>
-          ) : (
-            <ul className="space-y-2 text-sm">
-              {contract.documents.map((d) => (
-                <li key={d.id}>
-                  <a
-                    href={d.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="font-medium hover:underline"
-                  >
-                    {d.filename}
-                  </a>
-                  <span className="ml-2 text-xs text-muted-foreground">
-                    {d.type}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
+        <ContractDocumentManager
+          contractId={contract.id}
+          documents={contract.documents}
+          canEdit={canEditDocuments}
+        />
       </TabsContent>
 
       <TabsContent value="guarantee" className="mt-4">

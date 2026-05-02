@@ -375,6 +375,8 @@ export function documentTypeLabel(t: DocumentType): string {
       return "Contrato (PDF)";
     case "PROPERTY_PHOTO":
       return "Foto del inmueble";
+    case "UNIT_PHOTO":
+      return "Foto de la unidad";
     case "UNIT_PHOTO_INITIAL":
       return "Foto inicial de la unidad";
     case "UNIT_PHOTO_FINAL":
