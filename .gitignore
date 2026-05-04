@@ -1,5 +1,8 @@
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
+# local docker port overrides (cada dev tiene su propio puerto)
+docker-compose.override.yml
+
 # dependencies
 /node_modules
 /.pnp

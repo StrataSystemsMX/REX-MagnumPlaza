@@ -36,7 +36,7 @@ const CONTRACT_START = utcDate(YEAR, 0, 1); // 2026-01-01
 const CONTRACT_END = utcDate(YEAR, 11, 31); // 2026-12-31
 const SIGNED = utcDate(2025, 11, 15); // diciembre 2025
 
-type EntityCode = "CRT" | "TSR" | "QHS" | "JCL";
+type EntityCode = "CRT" | "TSR" | "QHS";
 
 interface UnitDef {
   code: string;
@@ -177,19 +177,10 @@ async function main(): Promise<void> {
       isOperator: false,
     },
   });
-  const jcl = await prisma.legalEntity.create({
-    data: {
-      tenantId: tenant.id,
-      code: "JCL",
-      legalName: "JCL S.A. de C.V.",
-      isOperator: false,
-    },
-  });
   const entities: Record<EntityCode, { id: string }> = {
     CRT: crt,
     TSR: tsr,
     QHS: qhs,
-    JCL: jcl,
   };
 
   // -- 5. ExpenseCategories -------------------------------------------------
@@ -410,27 +401,27 @@ async function main(): Promise<void> {
       ],
     },
 
-    // 10. Bodega JCL — sin units, sólo aparece en prediales (paga JC).
+    // 10. Bodega — sin units, sólo aparece en prediales (predial paga tercero JC).
     {
-      name: "Bodega JCL",
+      name: "Bodega",
       type: PropertyType.BODEGA,
       address: "Bodega, Hermosillo",
       cadastralKey: "02074018",
       notes: "Predial pagado por terceros (JC).",
-      owner: "JCL",
-      manager: "JCL",
+      owner: "CRT",
+      manager: "CRT",
       units: [],
     },
 
-    // 11. La Jolla — sin units, sólo aparece en prediales (paga JC).
+    // 11. La Jolla — sin units, sólo aparece en prediales (predial paga tercero JC).
     {
       name: "La Jolla",
       type: PropertyType.OTRO,
       address: "La Jolla, Hermosillo",
       cadastralKey: "14333037",
       notes: "Predial pagado por terceros (JC).",
-      owner: "JCL",
-      manager: "JCL",
+      owner: "CRT",
+      manager: "CRT",
       units: [],
     },
 
@@ -639,7 +630,7 @@ async function main(): Promise<void> {
     { cadastralKey: "51007086", totalAmount: 24881.00, paidMonth: 3 }, // Plaza Quiroga — pagado, sin mes; asumimos abril.
     { cadastralKey: "01179002", totalAmount: 805.00, paidMonth: 3, payer: "TSR" }, // Capilla del Carmen (CLICK) — paga TSR
     { cadastralKey: "01173002", totalAmount: 5277.00, paidMonth: 3, payer: "CRT", notes: "Dueña real: Cecilia." }, // Serdán — paga CRT
-    { cadastralKey: "02074018", totalAmount: null, paidMonth: null, paidByThirdPartyName: "JC" }, // Bodega JCL
+    { cadastralKey: "02074018", totalAmount: null, paidMonth: null, paidByThirdPartyName: "JC" }, // Bodega — predial paga tercero JC
     { cadastralKey: "14333037", totalAmount: null, paidMonth: null, paidByThirdPartyName: "JC" }, // La Jolla
     { cadastralKey: "30204003", totalAmount: null, paidMonth: null, paidByThirdPartyName: "JC" }, // Ma Escriba
   ];
@@ -752,7 +743,7 @@ async function main(): Promise<void> {
   console.log("✅ Seed completado: Plazas Magnum");
   console.log("========================================");
   console.log(`Tenants:                ${tenantsCount}`);
-  console.log(`Razones sociales:       ${legalEntitiesCount}  (CRT, TSR, QHS, JCL)`);
+  console.log(`Razones sociales:       ${legalEntitiesCount}  (CRT, TSR, QHS)`);
   console.log(`Inmuebles (Property):   ${propertiesCount}`);
   console.log(`Unidades:               ${unitsTotal}  (${unitsRented} rentadas, ${unitsAvailable} disponibles)`);
   console.log(`Inquilinos (Lessee):    ${lesseesCount}`);
