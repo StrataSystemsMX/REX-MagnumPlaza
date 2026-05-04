@@ -582,7 +582,7 @@ model CadastralPayment {
   // Ej: "CAP CARMEN" la paga TSR aunque sea de otra razón social.
   payerEntityId        String?
   // Tercero externo al tenant que paga (no es LegalEntity).
-  // Ej: "JC" paga los prediales de JCL. Solo aplica cuando no es payerEntityId.
+  // Ej: "JC" paga prediales de inmuebles administrados por CRT. Solo aplica cuando no es payerEntityId.
   paidByThirdPartyName String?
   notes                String?
   createdAt            DateTime  @default(now())

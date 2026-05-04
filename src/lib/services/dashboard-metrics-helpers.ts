@@ -57,6 +57,8 @@ export interface LegalEntityMetricRow {
   profit: string;
 }
 
+export type OverdueLevel = "DUE" | "OVERDUE_1M" | "OVERDUE_2M" | "OVERDUE_3M";
+
 export interface TopOverdueRow {
   lesseeId: string;
   legalName: string;
@@ -66,6 +68,7 @@ export interface TopOverdueRow {
   outstanding: string;
   oldestDaysOverdue: number;
   rentsOverdue: number;
+  worstLevel: OverdueLevel;
 }
 
 export interface RecentActivityRow {

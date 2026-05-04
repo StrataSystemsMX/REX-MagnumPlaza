@@ -324,6 +324,13 @@ const fetchDashboardMetricsImpl = async (
   });
 
   // ----- topOverdue -----
+  const LEVEL_ORDER: Record<string, number> = {
+    DUE: 0,
+    PARTIAL: 0,
+    OVERDUE_1M: 1,
+    OVERDUE_2M: 2,
+    OVERDUE_3M: 3,
+  };
   const overdueByLessee = new Map<
     string,
     {
@@ -331,6 +338,7 @@ const fetchDashboardMetricsImpl = async (
       total: Prisma.Decimal;
       oldestDays: number;
       count: number;
+      worstStatus: string;
     }
   >();
   for (const r of outstandingRents) {
@@ -342,8 +350,17 @@ const fetchDashboardMetricsImpl = async (
       cur.total = cur.total.plus(balance);
       cur.oldestDays = Math.max(cur.oldestDays, days);
       cur.count += 1;
+      if ((LEVEL_ORDER[r.status] ?? 0) > (LEVEL_ORDER[cur.worstStatus] ?? 0)) {
+        cur.worstStatus = r.status;
+      }
     } else {
-      overdueByLessee.set(l.id, { lessee: l, total: balance, oldestDays: days, count: 1 });
+      overdueByLessee.set(l.id, {
+        lessee: l,
+        total: balance,
+        oldestDays: days,
+        count: 1,
+        worstStatus: r.status,
+      });
     }
   }
   const topOverdue: TopOverdueRow[] = Array.from(overdueByLessee.values())
@@ -358,6 +375,13 @@ const fetchDashboardMetricsImpl = async (
       outstanding: row.total.toString(),
       oldestDaysOverdue: row.oldestDays,
       rentsOverdue: row.count,
+      worstLevel: (row.worstStatus === "OVERDUE_3M"
+        ? "OVERDUE_3M"
+        : row.worstStatus === "OVERDUE_2M"
+          ? "OVERDUE_2M"
+          : row.worstStatus === "OVERDUE_1M"
+            ? "OVERDUE_1M"
+            : "DUE") as import("@/lib/services/dashboard-metrics-helpers").OverdueLevel,
     }));
 
   // ----- trends -----
