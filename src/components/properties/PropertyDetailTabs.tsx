@@ -10,15 +10,23 @@ interface PropertyDetailTabsProps {
   property: PropertyDetail;
   legalEntities: ReadonlyArray<LegalEntityOption>;
   canEditPhotos: boolean;
+  /** Tab inicial vía `?tab=info|units|photos`. Default: info. */
+  initialTab?: string;
 }
+
+const VALID_TABS = ["info", "units", "photos"] as const;
 
 export function PropertyDetailTabs({
   property,
   legalEntities,
   canEditPhotos,
+  initialTab,
 }: PropertyDetailTabsProps) {
+  const defaultTab = (VALID_TABS as ReadonlyArray<string>).includes(initialTab ?? "")
+    ? (initialTab as (typeof VALID_TABS)[number])
+    : "info";
   return (
-    <Tabs defaultValue="info" className="w-full">
+    <Tabs defaultValue={defaultTab} className="w-full">
       <TabsList>
         <TabsTrigger value="info">Información general</TabsTrigger>
         <TabsTrigger value="units">

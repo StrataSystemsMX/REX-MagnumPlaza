@@ -402,7 +402,6 @@ function StepLessee({
           <Input
             value={search}
             onChange={(e) => onSearch(e.target.value)}
-            placeholder="Razón social, contacto o RFC..."
           />
         </div>
         <Button variant="secondary" onClick={onCreateNew}>
@@ -576,7 +575,6 @@ function StepTerms({
           rows={3}
           value={terms.notes}
           onChange={(e) => set("notes", e.target.value)}
-          placeholder="Particularidades del contrato, acuerdos verbales, etc."
         />
       </div>
     </div>

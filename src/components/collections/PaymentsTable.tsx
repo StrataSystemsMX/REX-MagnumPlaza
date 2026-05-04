@@ -272,7 +272,6 @@ export function PaymentsTable({ payments, canDelete }: PaymentsTableProps) {
           <Input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Buscar inquilino, referencia..."
             className="max-w-xs"
           />
           <Select
@@ -296,14 +295,12 @@ export function PaymentsTable({ payments, canDelete }: PaymentsTableProps) {
             value={from}
             onChange={(e) => setFrom(e.target.value)}
             className="w-40"
-            placeholder="Desde"
           />
           <Input
             type="date"
             value={to}
             onChange={(e) => setTo(e.target.value)}
             className="w-40"
-            placeholder="Hasta"
           />
         </div>
         <div className="flex items-center gap-3">

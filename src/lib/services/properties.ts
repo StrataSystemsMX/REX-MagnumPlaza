@@ -48,7 +48,9 @@ export async function actionCreateProperty(
     after: data as unknown as Prisma.InputJsonValue,
   });
 
-  revalidatePath("/properties");
+  revalidatePath("/plazas");
+  revalidatePath("/inmuebles");
+  revalidatePath("/units");
   return property;
 }
 
@@ -77,7 +79,9 @@ export async function actionUpdateProperty(
     after: data as unknown as Prisma.InputJsonValue,
   });
 
-  revalidatePath("/properties");
+  revalidatePath("/plazas");
+  revalidatePath("/inmuebles");
+  revalidatePath("/units");
   revalidatePath(`/properties/${id}`);
   return updated;
 }
@@ -96,6 +100,8 @@ export async function actionDeleteProperty(id: string): Promise<void> {
 
   await logAudit(tenantId, dbUser.id, "DELETE", id, { soft: true });
 
-  revalidatePath("/properties");
+  revalidatePath("/plazas");
+  revalidatePath("/inmuebles");
+  revalidatePath("/units");
   revalidatePath(`/properties/${id}`);
 }

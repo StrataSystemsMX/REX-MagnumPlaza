@@ -106,7 +106,7 @@ export function LesseeForm({ initial, onSuccess, submitLabel = "Guardar" }: Less
               <FormItem className="md:col-span-2">
                 <FormLabel>Razón social</FormLabel>
                 <FormControl>
-                  <Input placeholder="Farmacias Benavides S.A.B de C.V." {...field} />
+                  <Input {...field} />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -119,11 +119,7 @@ export function LesseeForm({ initial, onSuccess, submitLabel = "Guardar" }: Less
               <FormItem>
                 <FormLabel>Persona de contacto</FormLabel>
                 <FormControl>
-                  <Input
-                    placeholder="Juan Pablo Martinez"
-                    {...field}
-                    value={field.value ?? ""}
-                  />
+                  <Input {...field} value={field.value ?? ""} />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -136,11 +132,7 @@ export function LesseeForm({ initial, onSuccess, submitLabel = "Guardar" }: Less
               <FormItem>
                 <FormLabel>RFC</FormLabel>
                 <FormControl>
-                  <Input
-                    placeholder="XAXX010101000"
-                    {...field}
-                    value={field.value ?? ""}
-                  />
+                  <Input {...field} value={field.value ?? ""} />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -153,12 +145,7 @@ export function LesseeForm({ initial, onSuccess, submitLabel = "Guardar" }: Less
               <FormItem>
                 <FormLabel>Correo electrónico</FormLabel>
                 <FormControl>
-                  <Input
-                    type="email"
-                    placeholder="contacto@empresa.com"
-                    {...field}
-                    value={field.value ?? ""}
-                  />
+                  <Input type="email" {...field} value={field.value ?? ""} />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -171,11 +158,7 @@ export function LesseeForm({ initial, onSuccess, submitLabel = "Guardar" }: Less
               <FormItem>
                 <FormLabel>Teléfono</FormLabel>
                 <FormControl>
-                  <Input
-                    placeholder="+526621234567"
-                    {...field}
-                    value={field.value ?? ""}
-                  />
+                  <Input {...field} value={field.value ?? ""} />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -188,11 +171,7 @@ export function LesseeForm({ initial, onSuccess, submitLabel = "Guardar" }: Less
               <FormItem>
                 <FormLabel>WhatsApp</FormLabel>
                 <FormControl>
-                  <Input
-                    placeholder="+526621234567"
-                    {...field}
-                    value={field.value ?? ""}
-                  />
+                  <Input {...field} value={field.value ?? ""} />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -229,12 +208,7 @@ export function LesseeForm({ initial, onSuccess, submitLabel = "Guardar" }: Less
               <FormItem className="md:col-span-2">
                 <FormLabel>Notas</FormLabel>
                 <FormControl>
-                  <Textarea
-                    rows={3}
-                    placeholder="Historial, particularidades, observaciones..."
-                    {...field}
-                    value={field.value ?? ""}
-                  />
+                  <Textarea rows={3} {...field} value={field.value ?? ""} />
                 </FormControl>
                 <FormMessage />
               </FormItem>

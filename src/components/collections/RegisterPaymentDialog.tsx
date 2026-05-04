@@ -188,7 +188,6 @@ export function RegisterPaymentDialog({
               <Input
                 value={reference}
                 onChange={(e) => setReference(e.target.value)}
-                placeholder="Folio, # cheque, # transfer..."
               />
             </div>
           </div>

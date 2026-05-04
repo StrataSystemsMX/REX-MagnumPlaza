@@ -209,7 +209,6 @@ export function BulkPaymentDialog({
             <Input
               value={search}
               onChange={(e) => runSearch(e.target.value)}
-              placeholder="Razón social, contacto, RFC..."
             />
             <div className="rounded-md border max-h-64 overflow-auto">
               {searching ? (
@@ -285,7 +284,6 @@ export function BulkPaymentDialog({
                 <Input
                   value={reference}
                   onChange={(e) => setReference(e.target.value)}
-                  placeholder="Folio / Transfer #"
                 />
               </div>
             </div>

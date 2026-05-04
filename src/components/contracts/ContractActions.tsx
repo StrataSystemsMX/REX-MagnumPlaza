@@ -205,7 +205,6 @@ export function ContractActions({
                 rows={3}
                 value={terminationReason}
                 onChange={(e) => setTerminationReason(e.target.value)}
-                placeholder="Ej. Inquilino solicitó terminación por cierre de operaciones."
               />
             </div>
           </div>

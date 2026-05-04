@@ -102,7 +102,7 @@ export function UnitForm({ initial, onSuccess, submitLabel = "Guardar" }: UnitFo
               <FormItem>
                 <FormLabel>Código</FormLabel>
                 <FormControl>
-                  <Input placeholder="L1, LP, OF, E..." {...field} />
+                  <Input {...field} />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -115,11 +115,7 @@ export function UnitForm({ initial, onSuccess, submitLabel = "Guardar" }: UnitFo
               <FormItem>
                 <FormLabel>Nombre / Inquilino actual</FormLabel>
                 <FormControl>
-                  <Input
-                    placeholder="Goyoma, 7-Eleven..."
-                    {...field}
-                    value={field.value ?? ""}
-                  />
+                  <Input {...field} value={field.value ?? ""} />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -136,7 +132,6 @@ export function UnitForm({ initial, onSuccess, submitLabel = "Guardar" }: UnitFo
                     type="number"
                     step="0.01"
                     min="0"
-                    placeholder="60"
                     value={field.value ?? ""}
                     onChange={(e) =>
                       field.onChange(
@@ -160,7 +155,6 @@ export function UnitForm({ initial, onSuccess, submitLabel = "Guardar" }: UnitFo
                     type="number"
                     step="0.01"
                     min="0"
-                    placeholder="13500"
                     value={field.value ?? ""}
                     onChange={(e) =>
                       field.onChange(
@@ -204,12 +198,7 @@ export function UnitForm({ initial, onSuccess, submitLabel = "Guardar" }: UnitFo
               <FormItem className="md:col-span-2">
                 <FormLabel>Notas</FormLabel>
                 <FormControl>
-                  <Textarea
-                    rows={3}
-                    placeholder="Particularidades de la unidad..."
-                    {...field}
-                    value={field.value ?? ""}
-                  />
+                  <Textarea rows={3} {...field} value={field.value ?? ""} />
                 </FormControl>
                 <FormMessage />
               </FormItem>

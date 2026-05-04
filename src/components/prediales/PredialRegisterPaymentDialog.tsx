@@ -131,7 +131,6 @@ export function PredialRegisterPaymentDialog({ target, onClose }: Props) {
               rows={2}
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              placeholder="Folio, banco, observaciones (opcional)."
               maxLength={500}
             />
           </div>

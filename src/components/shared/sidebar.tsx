@@ -9,6 +9,7 @@ import {
   DoorOpen,
   FileBarChart,
   HandCoins,
+  Home,
   Landmark,
   LayoutDashboard,
   Receipt,
@@ -45,11 +46,12 @@ const GROUPS: ReadonlyArray<NavGroup> = [
   {
     label: "Operación Inmobiliaria",
     items: [
-      { href: "/properties",  label: "Plazas / Inmuebles", icon: Building2 },
-      { href: "/units",       label: "Locales",            icon: DoorOpen },
-      { href: "/lessees",     label: "Inquilinos",         icon: Users },
-      { href: "/rentas",      label: "Rentas",             icon: CalendarDays },
-      { href: "/collections", label: "Cobranza",           icon: HandCoins },
+      { href: "/plazas",      label: "Plazas",     icon: Building2 },
+      { href: "/inmuebles",   label: "Inmuebles",  icon: Home },
+      { href: "/units",       label: "Locales",    icon: DoorOpen },
+      { href: "/lessees",     label: "Inquilinos", icon: Users },
+      { href: "/rentas",      label: "Rentas",     icon: CalendarDays },
+      { href: "/collections", label: "Cobranza",   icon: HandCoins },
     ],
   },
   {

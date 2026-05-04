@@ -216,7 +216,6 @@ export function PredialFormDialog({
                 type="number"
                 step="0.01"
                 min="0"
-                placeholder="0.00"
                 value={totalAmount}
                 onChange={(e) => setTotalAmount(e.target.value)}
               />
@@ -297,7 +296,6 @@ export function PredialFormDialog({
               rows={2}
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              placeholder="Detalles adicionales (opcional)."
               maxLength={500}
             />
           </div>

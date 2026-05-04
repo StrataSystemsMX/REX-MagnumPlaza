@@ -211,7 +211,6 @@ export function LesseeTable({ lessees }: LesseeTableProps) {
         <Input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Buscar por razón social, contacto o RFC..."
           className="max-w-sm"
         />
         <div className="flex items-center gap-2">
