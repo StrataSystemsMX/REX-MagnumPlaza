@@ -240,7 +240,6 @@ export function OutstandingRentsTable({ rents, properties }: OutstandingRentsTab
           <Input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Buscar inquilino, plaza, unidad..."
             className="max-w-xs"
           />
           <Select

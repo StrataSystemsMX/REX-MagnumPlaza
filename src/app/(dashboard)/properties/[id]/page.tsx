@@ -15,12 +15,19 @@ interface Params {
   id: string;
 }
 
+interface SearchParams {
+  tab?: string;
+}
+
 export default async function PropertyDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<Params>;
+  searchParams: Promise<SearchParams>;
 }) {
   const { id } = await params;
+  const sp = await searchParams;
   const { dbUser } = await requireAuth();
   const [property, legalEntities, canEditPhotos] = await Promise.all([
     getPropertyById(id),
@@ -32,15 +39,19 @@ export default async function PropertyDetailPage({
     notFound();
   }
 
+  const isPlaza = property.type === "PLAZA_COMERCIAL";
+  const backHref = isPlaza ? "/plazas" : "/inmuebles";
+  const backLabel = isPlaza ? "Volver a plazas" : "Volver a inmuebles";
+
   return (
     <div className="space-y-6">
       <div>
         <Link
-          href="/properties"
+          href={backHref}
           className="mb-2 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
         >
           <ArrowLeft className="size-4" />
-          Volver a inmuebles
+          {backLabel}
         </Link>
         <div className="flex flex-wrap items-center gap-3">
           <h1 className="text-2xl font-semibold tracking-tight">{property.name}</h1>
@@ -58,6 +69,7 @@ export default async function PropertyDetailPage({
         property={property}
         legalEntities={legalEntities}
         canEditPhotos={canEditPhotos}
+        initialTab={sp.tab}
       />
     </div>
   );

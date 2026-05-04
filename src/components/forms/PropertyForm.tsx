@@ -66,6 +66,10 @@ interface PropertyFormProps {
   onSuccess?: () => void;
   /** Texto del botón submit; default "Guardar". */
   submitLabel?: string;
+  /** Fija el tipo y deshabilita el select. Tiene precedencia sobre `excludedTypes` y `initial.type`. */
+  lockedType?: PropertyType;
+  /** Tipos a ocultar del select. Útil para `/inmuebles` que excluye PLAZA_COMERCIAL. */
+  excludedTypes?: ReadonlyArray<PropertyType>;
 }
 
 export function PropertyForm({
@@ -73,22 +77,30 @@ export function PropertyForm({
   initial,
   onSuccess,
   submitLabel = "Guardar",
+  lockedType,
+  excludedTypes,
 }: PropertyFormProps) {
   const isEdit = Boolean(initial?.id);
   const [pending, startTransition] = useTransition();
+
+  const availableTypes = lockedType
+    ? [lockedType]
+    : excludedTypes && excludedTypes.length > 0
+      ? PROPERTY_TYPES.filter((t) => !excludedTypes.includes(t))
+      : PROPERTY_TYPES;
+
+  const initialType: PropertyType =
+    lockedType ?? initial?.type ?? availableTypes[0] ?? "PLAZA_COMERCIAL";
 
   const form = useForm<CreatePropertyInput>({
     resolver: zodResolver(createPropertySchema),
     defaultValues: {
       name: initial?.name ?? "",
-      type: initial?.type ?? "PLAZA_COMERCIAL",
+      type: initialType,
       address: initial?.address ?? "",
       ownerEntityId: initial?.ownerEntityId ?? "",
       managerEntityId: initial?.managerEntityId ?? "",
       cadastralKey: initial?.cadastralKey ?? "",
-      latitude: initial?.latitude ?? undefined,
-      longitude: initial?.longitude ?? undefined,
-      totalArea: initial?.totalArea ?? undefined,
       notes: initial?.notes ?? "",
     },
   });
@@ -123,7 +135,7 @@ export function PropertyForm({
               <FormItem className="md:col-span-2">
                 <FormLabel>Nombre</FormLabel>
                 <FormControl>
-                  <Input placeholder="Plaza Magnum Progreso" {...field} />
+                  <Input {...field} />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -135,14 +147,18 @@ export function PropertyForm({
             render={({ field }) => (
               <FormItem>
                 <FormLabel>Tipo</FormLabel>
-                <Select onValueChange={field.onChange} value={field.value}>
+                <Select
+                  onValueChange={field.onChange}
+                  value={field.value}
+                  disabled={Boolean(lockedType)}
+                >
                   <FormControl>
                     <SelectTrigger className="w-full">
                       <SelectValue placeholder="Selecciona un tipo" />
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent>
-                    {PROPERTY_TYPES.map((t) => (
+                    {availableTypes.map((t) => (
                       <SelectItem key={t} value={t}>
                         {propertyTypeLabel(t)}
                       </SelectItem>
@@ -160,11 +176,7 @@ export function PropertyForm({
               <FormItem>
                 <FormLabel>Clave catastral</FormLabel>
                 <FormControl>
-                  <Input
-                    placeholder="15924002"
-                    {...field}
-                    value={field.value ?? ""}
-                  />
+                  <Input {...field} value={field.value ?? ""} />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -177,10 +189,7 @@ export function PropertyForm({
               <FormItem className="md:col-span-2">
                 <FormLabel>Dirección</FormLabel>
                 <FormControl>
-                  <Input
-                    placeholder="Blvd Progreso M-1A, Hermosillo, Sonora"
-                    {...field}
-                  />
+                  <Input {...field} />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -236,87 +245,12 @@ export function PropertyForm({
           />
           <FormField
             control={form.control}
-            name="totalArea"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Área total (m²)</FormLabel>
-                <FormControl>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    placeholder="350"
-                    value={field.value ?? ""}
-                    onChange={(e) =>
-                      field.onChange(
-                        e.target.value === "" ? undefined : Number(e.target.value),
-                      )
-                    }
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          <FormField
-            control={form.control}
-            name="latitude"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Latitud</FormLabel>
-                <FormControl>
-                  <Input
-                    type="number"
-                    step="0.000001"
-                    placeholder="29.0729"
-                    value={field.value ?? ""}
-                    onChange={(e) =>
-                      field.onChange(
-                        e.target.value === "" ? undefined : Number(e.target.value),
-                      )
-                    }
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          <FormField
-            control={form.control}
-            name="longitude"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Longitud</FormLabel>
-                <FormControl>
-                  <Input
-                    type="number"
-                    step="0.000001"
-                    placeholder="-110.9559"
-                    value={field.value ?? ""}
-                    onChange={(e) =>
-                      field.onChange(
-                        e.target.value === "" ? undefined : Number(e.target.value),
-                      )
-                    }
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          <FormField
-            control={form.control}
             name="notes"
             render={({ field }) => (
               <FormItem className="md:col-span-2">
                 <FormLabel>Notas</FormLabel>
                 <FormControl>
-                  <Textarea
-                    placeholder="Información adicional, contexto fiscal, particularidades..."
-                    rows={3}
-                    {...field}
-                    value={field.value ?? ""}
-                  />
+                  <Textarea rows={3} {...field} value={field.value ?? ""} />
                 </FormControl>
                 <FormMessage />
               </FormItem>

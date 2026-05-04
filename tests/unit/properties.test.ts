@@ -173,7 +173,9 @@ describe("actionCreateProperty", () => {
       action: "CREATE",
     });
 
-    expect(mockRevalidatePath).toHaveBeenCalledWith("/properties");
+    expect(mockRevalidatePath).toHaveBeenCalledWith("/plazas");
+    expect(mockRevalidatePath).toHaveBeenCalledWith("/inmuebles");
+    expect(mockRevalidatePath).toHaveBeenCalledWith("/units");
   });
 });
 
