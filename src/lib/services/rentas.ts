@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { requireAuth } from "@/lib/auth/get-session";
 import { requirePermission } from "@/lib/auth/permissions";
 import { generateMonthlyRents } from "@/lib/services/rent-generation";
+import { getRentHistoryForContract, type ContractHistoryEntry } from "@/lib/services/rentas-queries";
 
 /**
  * Genera las rentas faltantes para todos los contratos activos del tenant.
@@ -37,4 +38,11 @@ export async function actionGenerateMissingRents(now?: string): Promise<{
   revalidatePath("/collections");
   revalidatePath("/");
   return summary;
+}
+
+export async function actionGetContractRentHistory(
+  contractId: string,
+): Promise<ContractHistoryEntry[]> {
+  await requireAuth();
+  return getRentHistoryForContract(contractId);
 }
