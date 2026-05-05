@@ -38,6 +38,11 @@ const SIGNED = utcDate(2025, 11, 15); // diciembre 2025
 
 type EntityCode = "CRT" | "TSR" | "QHS";
 
+type PaymentEntry =
+  | { kind: "paid"; amount?: number }
+  | { kind: "partial"; amount: number }
+  | { kind: "unpaid" };
+
 interface UnitDef {
   code: string;
   name?: string;
@@ -60,11 +65,23 @@ interface UnitDef {
    * sin importar la fecha actual (caso pago adelantado).
    */
   paidThroughMonth?: number;
+  /** Override de fecha de inicio del contrato. */
+  contractStartDate?: Date;
   /** Override de fecha de fin del contrato. */
   contractEndDate?: Date;
-  /** Genera Rents solo de Ene hasta este mes (0..11). */
+  /** Genera Rents desde este mes (0..11). Default 0 = Ene. */
+  rentStartMonth?: number;
+  /** Genera Rents hasta este mes (0..11). Default 11 = Dic. */
   rentEndMonth?: number;
+  /** Estado de pago por mes (0..11). Para meses pasados sin entrada → UNPAID. */
+  payments?: Partial<Record<number, PaymentEntry>>;
 }
+
+const PAID_Q1: Partial<Record<number, PaymentEntry>> = {
+  0: { kind: "paid" },
+  1: { kind: "paid" },
+  2: { kind: "paid" },
+};
 
 interface PropertyDef {
   name: string;
@@ -236,25 +253,45 @@ async function main(): Promise<void> {
       owner: "CRT",
       manager: "CRT",
       units: [
-        { code: "L1", name: "Goyoma", monthlyAmount: 16524.52, lessee: { legalName: "Goyoma", contactName: "Juan Pablo Martinez" } },
+        { code: "L1", name: "Goyoma", monthlyAmount: 16524.52, lessee: { legalName: "Goyoma", contactName: "Juan Pablo Martinez" }, payments: PAID_Q1 },
         { code: "L2", vacant: true, unitNotes: "Local desocupado, en proceso de búsqueda de inquilino." },
-        { code: "L3", name: "Comex", monthlyAmount: 10050.14, lessee: { legalName: "Servicios de Informática y Variables" } },
-        { code: "L4", name: "Tintorería", monthlyAmount: 9617.78, lessee: { legalName: "Tintorería", contactName: "Maria Hortencia Galaz Ruiz" } },
-        { code: "L5", name: "Automoney", monthlyAmount: 10771.8, lessee: { legalName: "Automoney", contactName: "Luis Edmundo Reina Sanchez" } },
-        { code: "L6", name: "Nikte", monthlyAmount: 9320.65, lessee: { legalName: "Nikte" } },
-        { code: "L7", name: "Master Cash", monthlyAmount: 8976.64, lessee: { legalName: "Master Cash" } },
+        { code: "L3", name: "Comex", monthlyAmount: 10050.14, lessee: { legalName: "Servicios de Informática y Variables" }, payments: PAID_Q1 },
+        { code: "L4", name: "Tintorería", monthlyAmount: 9617.78, lessee: { legalName: "Tintorería", contactName: "Maria Hortencia Galaz Ruiz" }, payments: PAID_Q1 },
+        { code: "L5", name: "Automoney", monthlyAmount: 10771.8, lessee: { legalName: "Automoney", contactName: "Luis Edmundo Reina Sanchez" }, payments: PAID_Q1 },
+        { code: "L6", name: "Nikte", monthlyAmount: 9320.65, lessee: { legalName: "Nikte" }, payments: PAID_Q1 },
+        { code: "L7", name: "Master Cash", monthlyAmount: 8976.64, lessee: { legalName: "Master Cash" }, payments: PAID_Q1 },
         {
           code: "L8",
           name: "Bluecell",
           monthlyAmount: 13500.0,
           lessee: { legalName: "Bluecell" },
           paidInAdvance: true,
-          advancePaidUntil: utcDate(YEAR, 7, 31), // 2026-08-31
-          paidThroughMonth: 7, // Ene..Ago PAID
-          contractNotes: "Cliente pagó 6 meses adelantados (mar–ago 2026).",
+          advancePaidUntil: utcDate(YEAR, 6, 31), // 2026-07-31
+          paidThroughMonth: 6, // Ene..Jul PAID
+          contractNotes: "Cliente pagó adelantado en enero ($81,600 cubre Ene–Jul).",
         },
-        { code: "L9", name: "Sushi", monthlyAmount: 10530.85, lessee: { legalName: "Sushi" } },
-        { code: "E", name: "ID Gráficos (espectacular)", monthlyAmount: 2320.0, lessee: { legalName: "ID Gráficos" } },
+        {
+          code: "L9",
+          name: "Sushi",
+          monthlyAmount: 10530.85,
+          lessee: { legalName: "Sushi" },
+          payments: {
+            0: { kind: "paid" },
+            1: { kind: "partial", amount: 6445 },
+            2: { kind: "paid" },
+          },
+        },
+        {
+          code: "E",
+          name: "ID Gráficos (espectacular)",
+          monthlyAmount: 2320.0,
+          lessee: { legalName: "ID Gráficos" },
+          payments: {
+            0: { kind: "paid" },
+            1: { kind: "paid" },
+            2: { kind: "unpaid" },
+          },
+        },
       ],
     },
 
@@ -267,8 +304,8 @@ async function main(): Promise<void> {
       owner: "CRT",
       manager: "CRT",
       units: [
-        { code: "LP", name: "Benavides", monthlyAmount: 37156.17, lessee: { legalName: "Farmacias Benavides S.A.B de C.V." } },
-        { code: "L1", name: "Panadería", monthlyAmount: 10015.42, lessee: { legalName: "Panadería", contactName: "Vintila Mora Avalos" } },
+        { code: "LP", name: "Benavides", monthlyAmount: 37156.17, lessee: { legalName: "Farmacias Benavides S.A.B de C.V." }, payments: PAID_Q1 },
+        { code: "L1", name: "Panadería", monthlyAmount: 10015.42, lessee: { legalName: "Panadería", contactName: "Vintila Mora Avalos" }, payments: PAID_Q1 },
         {
           code: "L2",
           name: "Telcel",
@@ -278,8 +315,13 @@ async function main(): Promise<void> {
             contactName: "Oscar Hugo Lopez Alvarado",
             notes: "Cliente con historial de pagos atrasados.",
           },
+          payments: {
+            0: { kind: "unpaid" },
+            1: { kind: "paid" },
+            2: { kind: "paid" },
+          },
         },
-        { code: "L3", name: "Interio", monthlyAmount: 19755.96, lessee: { legalName: "Interio", contactName: "Denisse Emilia Peñaflor Castellanos" } },
+        { code: "L3", name: "Interio", monthlyAmount: 19755.96, lessee: { legalName: "Interio", contactName: "Denisse Emilia Peñaflor Castellanos" }, payments: PAID_Q1 },
         {
           code: "L4",
           name: "Interio 2",
@@ -297,9 +339,9 @@ async function main(): Promise<void> {
       owner: "CRT",
       manager: "CRT",
       units: [
-        { code: "LP", name: "7-Eleven", monthlyAmount: 41088.27, lessee: { legalName: "7-Eleven Mexico S.A de C.V." } },
-        { code: "L.A", name: "Quesos Calza", monthlyAmount: 11048.32, lessee: { legalName: "Quesos Calza" } },
-        { code: "L.B", name: "GI Similares", monthlyAmount: 11536.0, lessee: { legalName: "GI Similares", contactName: "Carlos Alberto Bernal Marquez" } },
+        { code: "LP", name: "7-Eleven", monthlyAmount: 41088.27, lessee: { legalName: "7-Eleven Mexico S.A de C.V." }, payments: PAID_Q1 },
+        { code: "L.A", name: "Quesos Calza", monthlyAmount: 11048.32, lessee: { legalName: "Quesos Calza" }, payments: PAID_Q1 },
+        { code: "L.B", name: "GI Similares", monthlyAmount: 11536.0, lessee: { legalName: "GI Similares", contactName: "Carlos Alberto Bernal Marquez" }, payments: PAID_Q1 },
       ],
     },
 
@@ -312,28 +354,36 @@ async function main(): Promise<void> {
       owner: "QHS",
       manager: "CRT",
       units: [
-        { code: "L1", name: "Sucree", monthlyAmount: 13484.39, lessee: { legalName: "Sucree" } },
-        { code: "L2", name: "Dentista", monthlyAmount: 12210.72, lessee: { legalName: "Dentista" } },
+        { code: "L1", name: "Sucree", monthlyAmount: 13484.39, lessee: { legalName: "Sucree" }, payments: PAID_Q1 },
+        { code: "L2", name: "Dentista", monthlyAmount: 12210.72, lessee: { legalName: "Dentista" }, payments: PAID_Q1 },
         {
           code: "L3",
           name: "Cristianos",
           monthlyAmount: 12586.0,
           lessee: { legalName: "Cristianos" },
-          contractNotes: "NO RENTADO algunos meses, contrato vence próximamente.",
+          contractNotes: "Local desocupado Ene–Feb 2026; contrato firmado en marzo.",
+          contractStartDate: utcDate(YEAR, 2, 1), // 2026-03-01
           contractEndDate: utcDate(YEAR, 5, 30), // 2026-06-30
+          rentStartMonth: 2, // desde marzo
           rentEndMonth: 5, // hasta junio
+          payments: { 2: { kind: "paid" } },
         },
-        { code: "L4", name: "Maki Sushi", monthlyAmount: 13020.83, lessee: { legalName: "Maki Sushi" } },
-        { code: "L5", name: "Frituras Kikin", monthlyAmount: 13600.0, lessee: { legalName: "Frituras Kikin" } },
-        { code: "L6", name: "Puro Pa' Delante", monthlyAmount: 13500.0, lessee: { legalName: "Puro Pa' Delante" } },
+        { code: "L4", name: "Maki Sushi", monthlyAmount: 13020.83, lessee: { legalName: "Maki Sushi" }, payments: PAID_Q1 },
+        { code: "L5", name: "Frituras Kikin", monthlyAmount: 13600.0, lessee: { legalName: "Frituras Kikin" }, payments: PAID_Q1 },
+        { code: "L6", name: "Puro Pa' Delante", monthlyAmount: 13500.0, lessee: { legalName: "Puro Pa' Delante" }, payments: PAID_Q1 },
         {
           code: "L7",
           name: "Hitness",
           monthlyAmount: 13496.16,
           lessee: { legalName: "Hitness", notes: "Cliente con historial de pagos atrasados." },
+          payments: {
+            0: { kind: "paid" },
+            1: { kind: "unpaid" },
+            2: { kind: "paid" },
+          },
         },
-        { code: "L8", name: "Armando Elotes", monthlyAmount: 13746.0, lessee: { legalName: "Armando Elotes" } },
-        { code: "E", name: "Medios Rubí (espectacular)", monthlyAmount: 2320.0, lessee: { legalName: "Medios Rubí" } },
+        { code: "L8", name: "Armando Elotes", monthlyAmount: 13746.0, lessee: { legalName: "Armando Elotes" }, payments: PAID_Q1 },
+        { code: "E", name: "Medios Rubí (espectacular)", monthlyAmount: 2320.0, lessee: { legalName: "Medios Rubí" }, payments: PAID_Q1 },
       ],
     },
 
@@ -346,7 +396,7 @@ async function main(): Promise<void> {
       owner: "TSR",
       manager: "TSR",
       units: [
-        { code: "LP", name: "Banco Inbursa", monthlyAmount: 86028.56, lessee: { legalName: "Banco Inbursa" } },
+        { code: "LP", name: "Banco Inbursa", monthlyAmount: 86028.56, lessee: { legalName: "Banco Inbursa" }, payments: PAID_Q1 },
       ],
     },
 
@@ -359,7 +409,17 @@ async function main(): Promise<void> {
       owner: "TSR",
       manager: "TSR",
       units: [
-        { code: "OF", name: "La Chila", monthlyAmount: 30740.0, lessee: { legalName: "La Chila" } },
+        {
+          code: "OF",
+          name: "La Chila",
+          monthlyAmount: 30740.0,
+          lessee: { legalName: "La Chila" },
+          payments: {
+            0: { kind: "paid" },
+            1: { kind: "partial", amount: 23000 },
+            2: { kind: "paid" },
+          },
+        },
       ],
     },
 
@@ -372,11 +432,11 @@ async function main(): Promise<void> {
       owner: "TSR",
       manager: "TSR",
       units: [
-        { code: "LP", name: "Inquilino actual", monthlyAmount: 19350.12, lessee: { legalName: "Inquilino Capilla del Carmen" } },
+        { code: "LP", name: "Inquilino actual", monthlyAmount: 19350.12, lessee: { legalName: "Inquilino Capilla del Carmen" }, payments: PAID_Q1 },
       ],
     },
 
-    // 8. Oficina Elias Piso 2 (vacante)
+    // 8. Oficina Elias Piso 2 — empezó a rentarse en marzo 2026
     {
       name: "Oficina Elias Piso 2",
       type: PropertyType.OFICINA,
@@ -384,7 +444,16 @@ async function main(): Promise<void> {
       owner: "TSR",
       manager: "TSR",
       units: [
-        { code: "OF", name: "Oficina Piso 2", monthlyAmount: 12500.0, vacant: true, unitNotes: "Disponible para renta." },
+        {
+          code: "OF",
+          name: "Oficina Piso 2",
+          monthlyAmount: 12500.0,
+          lessee: { legalName: "Inquilino Oficina Elias" },
+          contractNotes: "Local desocupado Ene–Feb 2026; rentado desde marzo.",
+          contractStartDate: utcDate(YEAR, 2, 1), // 2026-03-01
+          rentStartMonth: 2,
+          payments: { 2: { kind: "paid" } },
+        },
       ],
     },
 
@@ -397,7 +466,7 @@ async function main(): Promise<void> {
       owner: "TSR",
       manager: "TSR",
       units: [
-        { code: "OF", name: "Ferretería", monthlyAmount: 18560.0, lessee: { legalName: "Ferretería Nayarit" } },
+        { code: "OF", name: "Ferretería", monthlyAmount: 18560.0, lessee: { legalName: "Ferretería Nayarit" }, payments: PAID_Q1 },
       ],
     },
 
@@ -491,6 +560,7 @@ async function main(): Promise<void> {
         },
       });
 
+      const contractStart = u.contractStartDate ?? CONTRACT_START;
       const contractEnd = u.contractEndDate ?? CONTRACT_END;
       const monthlyAmt = u.monthlyAmount;
 
@@ -501,7 +571,7 @@ async function main(): Promise<void> {
           lesseeId: lessee.id,
           type: ContractType.ARRENDAMIENTO,
           status: ContractStatus.ACTIVE,
-          startDate: CONTRACT_START,
+          startDate: contractStart,
           endDate: contractEnd,
           monthlyAmount: decimal(monthlyAmt),
           guaranteeAmount: decimal(monthlyAmt),
@@ -525,21 +595,20 @@ async function main(): Promise<void> {
         },
       });
 
-      // Cargos mensuales (Rents) + pagos generados para meses pasados.
-      // Distribución para datos realistas en demo:
-      //   · paidInAdvance (Bluecell, etc.) → siempre PAID
-      //   · meses futuros                  → PENDING, sin pago
-      //   · meses pasados (no advance):
-      //       70% PAID (pago completo)
-      //       10% PARTIAL (pagó 50–80%)
-      //       20% sin pago (DUE/OVERDUE_X según días vencidos)
+      // Cargos mensuales (Rents) + pagos según el mapa `payments` del unit.
+      //   · paidInAdvance (Bluecell)              → siempre PAID
+      //   · payments[m] explícito                 → respeta kind (paid/partial/unpaid)
+      //   · mes pasado sin entrada y sin advance  → UNPAID (días vencidos)
+      //   · mes futuro sin entrada                → PENDING
+      const startMonth = u.rentStartMonth ?? 0;
       const endMonth = u.rentEndMonth ?? 11;
-      for (let m = 0; m <= endMonth; m++) {
+      for (let m = startMonth; m <= endMonth; m++) {
         const period = utcDate(YEAR, m, 1);
         const dueDate = utcDate(YEAR, m, 1);
         const isAdvancePaid =
           u.paidThroughMonth !== undefined && m <= u.paidThroughMonth;
         const isPast = dueDate < TODAY;
+        const explicit = u.payments?.[m];
 
         let rentStatus: (typeof RentStatus)[keyof typeof RentStatus];
         let amountPaid: Prisma.Decimal;
@@ -549,34 +618,27 @@ async function main(): Promise<void> {
           rentStatus = RentStatus.PAID;
           amountPaid = decimal(monthlyAmt);
           paymentToCreate = amountPaid;
-        } else if (!isPast) {
+        } else if (explicit?.kind === "paid") {
+          const amt = explicit.amount ?? monthlyAmt;
+          rentStatus = RentStatus.PAID;
+          amountPaid = decimal(amt);
+          paymentToCreate = amountPaid;
+        } else if (explicit?.kind === "partial") {
+          rentStatus = RentStatus.PARTIAL;
+          amountPaid = decimal(explicit.amount);
+          paymentToCreate = amountPaid;
+        } else if (!isPast && explicit?.kind !== "unpaid") {
           rentStatus = RentStatus.PENDING;
           amountPaid = decimal(0);
         } else {
-          const r = Math.random();
-          if (r < 0.7) {
-            // 70% PAID
-            rentStatus = RentStatus.PAID;
-            amountPaid = decimal(monthlyAmt);
-            paymentToCreate = amountPaid;
-          } else if (r < 0.8) {
-            // 10% PARTIAL — pagó entre 50% y 80%
-            const pct = 0.5 + Math.random() * 0.3;
-            const partial = monthlyAmt * pct;
-            rentStatus = RentStatus.PARTIAL;
-            amountPaid = decimal(partial);
-            paymentToCreate = amountPaid;
-          } else {
-            // 20% impago — clasificar por días vencidos
-            const days = Math.floor(
-              (TODAY.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24),
-            );
-            if (days >= 90) rentStatus = RentStatus.OVERDUE_3M;
-            else if (days >= 60) rentStatus = RentStatus.OVERDUE_2M;
-            else if (days >= 30) rentStatus = RentStatus.OVERDUE_1M;
-            else rentStatus = RentStatus.DUE;
-            amountPaid = decimal(0);
-          }
+          const days = Math.floor(
+            (TODAY.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24),
+          );
+          if (days >= 90) rentStatus = RentStatus.OVERDUE_3M;
+          else if (days >= 60) rentStatus = RentStatus.OVERDUE_2M;
+          else if (days >= 30) rentStatus = RentStatus.OVERDUE_1M;
+          else rentStatus = RentStatus.DUE;
+          amountPaid = decimal(0);
         }
 
         const rent = await prisma.rent.create({
