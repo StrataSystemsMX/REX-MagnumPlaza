@@ -1,20 +1,33 @@
 import { RentasView } from "@/components/rentas/RentasView";
-import { getRentasOverview } from "@/lib/services/rentas-queries";
+import { getRentasTableData } from "@/lib/services/rentas-queries";
 
-export default async function RentasPage() {
-  const overview = await getRentasOverview();
+function parsePeriod(periodo?: string): Date {
+  if (periodo && /^\d{4}-\d{2}$/.test(periodo)) {
+    const [year, month] = periodo.split("-").map(Number);
+    return new Date(Date.UTC(year!, month! - 1, 1));
+  }
+  const now = new Date();
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+}
+
+export default async function RentasPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ periodo?: string }>;
+}) {
+  const { periodo } = await searchParams;
+  const period = parsePeriod(periodo);
+  const tableData = await getRentasTableData(period);
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Rentas</h1>
         <p className="text-sm text-muted-foreground">
-          Ciclo mensual de facturación: lo que el sistema generó, lo que viene y
-          anomalías de generación. Para registrar pagos y perseguir morosos usa{" "}
-          <span className="font-medium">Cobranza</span>.
+          Control operativo mensual — estado de locales, cobranza y adeudos.
         </p>
       </div>
-      <RentasView overview={overview} />
+      <RentasView tableData={tableData} />
     </div>
   );
 }

@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const MAX_PROPERTY_PHOTO_SIZE_BYTES = 5 * 1024 * 1024;
+export const MAX_PROPERTY_PHOTO_SIZE_BYTES = 8 * 1024 * 1024;
 
 export const ALLOWED_PROPERTY_PHOTO_MIME_TYPES = [
   "image/jpeg",
@@ -25,7 +25,7 @@ export const propertyPhotoFileSchema = z
   )
   .refine(
     (f) => f.size <= MAX_PROPERTY_PHOTO_SIZE_BYTES,
-    "La imagen no debe pesar más de 5 MB.",
+    "La imagen no debe pesar más de 8 MB.",
   );
 
 export const uploadPropertyPhotoSchema = z.object({
