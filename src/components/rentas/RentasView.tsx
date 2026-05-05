@@ -148,16 +148,18 @@ interface PropertySummary {
   accumulatedDebt: number;
 }
 
-type Tone = "positive" | "warning" | "danger" | "neutral";
+type Tone = "positive" | "good" | "warning" | "danger" | "neutral";
 
 function getCollectionTone(pct: number): Tone {
   if (pct >= 90) return "positive";
-  if (pct >= 70) return "warning";
+  if (pct >= 70) return "good";
+  if (pct >= 50) return "warning";
   return "danger";
 }
 
 function toneTextClass(tone: Tone): string {
   if (tone === "positive") return "text-green-700 dark:text-green-400";
+  if (tone === "good") return "text-blue-700 dark:text-blue-400";
   if (tone === "warning") return "text-amber-700 dark:text-amber-400";
   if (tone === "danger") return "text-red-700 dark:text-red-400";
   return "text-foreground";
@@ -165,6 +167,7 @@ function toneTextClass(tone: Tone): string {
 
 function toneBarClass(tone: Tone): string {
   if (tone === "positive") return "bg-green-500";
+  if (tone === "good") return "bg-blue-500";
   if (tone === "warning") return "bg-amber-500";
   if (tone === "danger") return "bg-red-500";
   return "bg-primary";
@@ -319,24 +322,42 @@ export function RentasView({ tableData }: { tableData: RentasTableData }) {
           <div className="p-5 sm:p-6">
             <div className="max-w-2xl">
               <p className="text-muted-foreground text-xs font-medium tracking-wider uppercase">
-                {selectedProperty ? "Plaza seleccionada" : "Vista mensual"}
+                {selectedProperty?.propertyName ?? "Vista mensual"}
               </p>
               <h2 className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">
-                {selectedProperty?.propertyName ?? "Rentas por plaza"}
+                Renta total
               </h2>
+              <p className="mt-3 text-3xl font-semibold tracking-tight tabular-nums">
+                {MXN.format(expected)}
+              </p>
               <p className="text-muted-foreground mt-2 text-sm">
-                {activeUnitCount} locales activos con {MXN.format(pendingAmount)} por cobrar.
+                Pendiente {MXN.format(pendingAmount)}
               </p>
             </div>
 
-            <div className="mt-6 grid gap-3 sm:grid-cols-3">
-              <DigestMetric label="Esperado" value={MXN.format(expected)} />
-              <DigestMetric label="Cobrado" value={MXN.format(collected)} tone="positive" />
-              <DigestMetric
-                label="Pendiente"
-                value={MXN.format(pendingAmount)}
-                tone={pendingAmount > 0 ? "warning" : "positive"}
-              />
+            <div className="mt-6 space-y-3">
+              <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+                <p className="text-sm font-medium">Progreso de cobranza</p>
+                <p className="text-muted-foreground text-sm tabular-nums">
+                  <span className={toneTextClass(periodTone)}>{MXN.format(collected)}</span> /{" "}
+                  {MXN.format(expected)}
+                </p>
+              </div>
+              <div className="bg-muted h-4 overflow-hidden rounded-full">
+                <div
+                  className={cn("h-full rounded-full transition-all", toneBarClass(periodTone))}
+                  style={{ width: `${Math.min(pctValue, 100)}%` }}
+                />
+              </div>
+              <div className="grid gap-3 sm:grid-cols-3">
+                <DigestMetric label="Cobrado" value={MXN.format(collected)} tone="positive" />
+                <DigestMetric
+                  label="Pendiente"
+                  value={MXN.format(pendingAmount)}
+                  tone={pendingAmount > 0 ? "warning" : "positive"}
+                />
+                <DigestMetric label="Avance" value={`${pctValue}%`} tone={periodTone} />
+              </div>
             </div>
           </div>
 
@@ -357,7 +378,6 @@ export function RentasView({ tableData }: { tableData: RentasTableData }) {
                       {pctValue}%
                     </p>
                   </div>
-                  <CollectionSignal tone={periodTone} />
                 </div>
                 <div className="bg-background ring-border mt-4 h-3 overflow-hidden rounded-full ring-1">
                   <div
@@ -456,25 +476,6 @@ function StatusCount({ label, value, tone }: { label: string; value: number; ton
       <p className={cn("font-semibold tabular-nums", toneTextClass(tone))}>{value}</p>
       <p className="text-muted-foreground mt-0.5 truncate">{label}</p>
     </div>
-  );
-}
-
-function CollectionSignal({ tone }: { tone: Tone }) {
-  const label = tone === "positive" ? "Sano" : tone === "warning" ? "Atencion" : "Prioridad";
-
-  return (
-    <span
-      className={cn(
-        "inline-flex rounded-full px-2.5 py-1 text-xs font-medium",
-        tone === "positive" &&
-          "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400",
-        tone === "warning" &&
-          "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400",
-        tone === "danger" && "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400",
-      )}
-    >
-      {label}
-    </span>
   );
 }
 
