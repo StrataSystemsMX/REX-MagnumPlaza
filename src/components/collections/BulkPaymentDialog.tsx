@@ -14,13 +14,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { EnumSelect } from "@/components/ui/enum-select";
 import { Separator } from "@/components/ui/separator";
 import { paymentMethodLabel } from "@/lib/i18n/enums";
 import {
@@ -78,6 +72,7 @@ export function BulkPaymentDialog({
   const [paymentDate, setPaymentDate] = useState(new Date().toISOString().slice(0, 10));
   const [method, setMethod] = useState<PaymentMethod>("TRANSFER");
   const [reference, setReference] = useState("");
+  const [autoTotal, setAutoTotal] = useState("");
 
   useEffect(() => {
     if (!open) return;
@@ -88,6 +83,7 @@ export function BulkPaymentDialog({
     setReference("");
     setMethod("TRANSFER");
     setPaymentDate(new Date().toISOString().slice(0, 10));
+    setAutoTotal("");
     if (initialLessee) {
       setLesseeId(initialLessee.id);
       setLesseeLabel(initialLessee.legalName);
@@ -151,6 +147,31 @@ export function BulkPaymentDialog({
     setSelected((prev) => ({ ...prev, [rentId]: amount }));
   }
 
+  function distributeOldestFirst() {
+    const total = Number(autoTotal);
+    if (!Number.isFinite(total) || total <= 0) {
+      toast.error("Ingresa un monto válido en 'Monto recibido'.");
+      return;
+    }
+    let remaining = total;
+    const next: Record<string, string> = {};
+    for (const r of rents) {
+      if (remaining <= 0) continue;
+      const balance = Number(r.balance);
+      const apply = Math.min(remaining, balance);
+      if (apply > 0) {
+        next[r.id] = apply.toFixed(2);
+        remaining -= apply;
+      }
+    }
+    setSelected(next);
+    if (remaining > 0.01) {
+      toast.info(
+        `Sobran ${MXN.format(remaining)} sin aplicar (excedió el saldo total pendiente).`,
+      );
+    }
+  }
+
   const splitByRent = useMemo(
     () =>
       Object.entries(selected)
@@ -194,7 +215,7 @@ export function BulkPaymentDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Registrar pago bulk</DialogTitle>
           <DialogDescription>
@@ -263,21 +284,12 @@ export function BulkPaymentDialog({
               </div>
               <div className="space-y-1">
                 <Label>Método</Label>
-                <Select
+                <EnumSelect
+                  values={METHODS}
+                  labelFor={paymentMethodLabel}
                   value={method}
-                  onValueChange={(v) => v && setMethod(v as PaymentMethod)}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {METHODS.map((m) => (
-                      <SelectItem key={m} value={m}>
-                        {paymentMethodLabel(m)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  onValueChange={(v) => setMethod(v)}
+                />
               </div>
               <div className="space-y-1">
                 <Label>Referencia</Label>
@@ -289,7 +301,37 @@ export function BulkPaymentDialog({
             </div>
 
             <div>
-              <Label className="mb-1 block">Aplicar a rentas pendientes</Label>
+              <div className="mb-1 flex flex-wrap items-end justify-between gap-2">
+                <Label>Aplicar a rentas pendientes</Label>
+                <div className="flex items-end gap-2">
+                  <div className="space-y-1">
+                    <Label className="text-xs text-muted-foreground">
+                      Monto recibido
+                    </Label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      placeholder="69220"
+                      className="w-36 tabular-nums"
+                      value={autoTotal}
+                      onChange={(e) => setAutoTotal(e.target.value)}
+                    />
+                  </div>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    onClick={distributeOldestFirst}
+                    disabled={!autoTotal || rents.length === 0}
+                  >
+                    Distribuir
+                  </Button>
+                </div>
+              </div>
+              <p className="mb-2 text-xs text-muted-foreground">
+                "Distribuir" llena las rentas más antiguas primero hasta cubrir el monto recibido.
+              </p>
               <div className="rounded-md border max-h-72 overflow-auto">
                 {loadingRents ? (
                   <p className="p-3 text-center text-sm text-muted-foreground">

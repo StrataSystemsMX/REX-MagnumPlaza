@@ -14,13 +14,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { EnumSelect } from "@/components/ui/enum-select";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { paymentMethodLabel } from "@/lib/i18n/enums";
@@ -170,18 +164,12 @@ export function RegisterPaymentDialog({
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
               <Label>Método</Label>
-              <Select value={method} onValueChange={(v) => v && setMethod(v as PaymentMethod)}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {METHODS.map((m) => (
-                    <SelectItem key={m} value={m}>
-                      {paymentMethodLabel(m)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <EnumSelect
+                values={METHODS}
+                labelFor={paymentMethodLabel}
+                value={method}
+                onValueChange={(v) => setMethod(v)}
+              />
             </div>
             <div className="space-y-1">
               <Label>Referencia</Label>

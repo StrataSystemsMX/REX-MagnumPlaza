@@ -2,7 +2,7 @@
 
 import { Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -63,6 +63,29 @@ export function PredialFormDialog({
   const [pending, startTransition] = useTransition();
 
   const open = mode !== null;
+
+  const propertyItems = useMemo<Record<string, string>>(
+    () =>
+      Object.fromEntries(
+        properties.map((p) => [
+          p.id,
+          p.cadastralKey ? `${p.name} · ${p.cadastralKey}` : p.name,
+        ]),
+      ),
+    [properties],
+  );
+
+  const payerKindItems: Record<PayerKind, string> = {
+    OWNER: "Misma razón social dueña",
+    ENTITY: "Otra razón social del tenant",
+    THIRD_PARTY: "Tercero externo",
+  };
+
+  const payerEntityItems = useMemo<Record<string, string>>(
+    () =>
+      Object.fromEntries(legalEntities.map((e) => [e.id, `${e.code} — ${e.legalName}`])),
+    [legalEntities],
+  );
 
   const [propertyId, setPropertyId] = useState<string>("");
   const [year, setYear] = useState<string>(String(defaultYear));
@@ -184,8 +207,9 @@ export function PredialFormDialog({
               value={propertyId}
               onValueChange={(v) => v && setPropertyId(v)}
               disabled={mode === "edit"}
+              items={propertyItems}
             >
-              <SelectTrigger>
+              <SelectTrigger className="w-full">
                 <SelectValue placeholder="Selecciona un inmueble" />
               </SelectTrigger>
               <SelectContent>
@@ -240,16 +264,15 @@ export function PredialFormDialog({
                 if (v !== "ENTITY") setPayerEntityId("");
                 if (v !== "THIRD_PARTY") setPaidByThirdPartyName("");
               }}
+              items={payerKindItems}
             >
-              <SelectTrigger>
+              <SelectTrigger className="w-full">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="OWNER">Misma razón social dueña</SelectItem>
-                <SelectItem value="ENTITY">
-                  Otra razón social del tenant
-                </SelectItem>
-                <SelectItem value="THIRD_PARTY">Tercero externo</SelectItem>
+                <SelectItem value="OWNER">{payerKindItems.OWNER}</SelectItem>
+                <SelectItem value="ENTITY">{payerKindItems.ENTITY}</SelectItem>
+                <SelectItem value="THIRD_PARTY">{payerKindItems.THIRD_PARTY}</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -263,8 +286,9 @@ export function PredialFormDialog({
                   if (!v) return;
                   setPayerEntityId(v === PAYER_NONE ? "" : v);
                 }}
+                items={payerEntityItems}
               >
-                <SelectTrigger>
+                <SelectTrigger className="w-full">
                   <SelectValue placeholder="Selecciona" />
                 </SelectTrigger>
                 <SelectContent>

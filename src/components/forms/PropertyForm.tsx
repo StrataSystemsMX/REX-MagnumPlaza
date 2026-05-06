@@ -2,7 +2,7 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
-import { useTransition } from "react";
+import { useMemo, useTransition } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -92,6 +92,16 @@ export function PropertyForm({
   const initialType: PropertyType =
     lockedType ?? initial?.type ?? availableTypes[0] ?? "PLAZA_COMERCIAL";
 
+  const typeItems = useMemo<Record<string, string>>(
+    () => Object.fromEntries(availableTypes.map((t) => [t, propertyTypeLabel(t)])),
+    [availableTypes],
+  );
+
+  const legalEntityItems = useMemo<Record<string, string>>(
+    () => Object.fromEntries(legalEntities.map((e) => [e.id, `${e.code} — ${e.legalName}`])),
+    [legalEntities],
+  );
+
   const form = useForm<CreatePropertyInput>({
     resolver: zodResolver(createPropertySchema),
     defaultValues: {
@@ -151,6 +161,7 @@ export function PropertyForm({
                   onValueChange={field.onChange}
                   value={field.value}
                   disabled={Boolean(lockedType)}
+                  items={typeItems}
                 >
                   <FormControl>
                     <SelectTrigger className="w-full">
@@ -199,9 +210,13 @@ export function PropertyForm({
             control={form.control}
             name="ownerEntityId"
             render={({ field }) => (
-              <FormItem>
+              <FormItem className="md:col-span-2">
                 <FormLabel>Razón social dueña</FormLabel>
-                <Select onValueChange={field.onChange} value={field.value}>
+                <Select
+                  onValueChange={field.onChange}
+                  value={field.value}
+                  items={legalEntityItems}
+                >
                   <FormControl>
                     <SelectTrigger className="w-full">
                       <SelectValue placeholder="Selecciona una razón social" />
@@ -223,9 +238,13 @@ export function PropertyForm({
             control={form.control}
             name="managerEntityId"
             render={({ field }) => (
-              <FormItem>
+              <FormItem className="md:col-span-2">
                 <FormLabel>Razón social administradora</FormLabel>
-                <Select onValueChange={field.onChange} value={field.value}>
+                <Select
+                  onValueChange={field.onChange}
+                  value={field.value}
+                  items={legalEntityItems}
+                >
                   <FormControl>
                     <SelectTrigger className="w-full">
                       <SelectValue placeholder="Selecciona una razón social" />
