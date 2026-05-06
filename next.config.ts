@@ -8,14 +8,15 @@ const nextConfig: NextConfig = {
   images: {
     remotePatterns: [
       { protocol: "https", hostname: "**.r2.cloudflarestorage.com" },
+      { protocol: "https", hostname: "**.r2.dev" },
       ...(r2PublicHost
         ? [{ protocol: "https" as const, hostname: r2PublicHost }]
         : []),
     ],
   },
   experimental: {
-    // Default es 1MB; subimos a 6MB para cubrir MAX_PROPERTY_PHOTO_SIZE_BYTES (5MB) + overhead de FormData.
-    serverActions: { bodySizeLimit: "6mb" },
+    // Default es 1MB; subimos a 8MB para cubrir MAX_PROPERTY_PHOTO_SIZE_BYTES.
+    serverActions: { bodySizeLimit: "8mb" },
   },
 };
 

@@ -27,6 +27,11 @@ vi.mock("@/lib/auth/get-session", () => ({
   requireAuth: () => mockRequireAuth(),
 }));
 
+vi.mock("@/lib/auth/active-legal-entity", () => ({
+  getActiveLegalEntityId: vi.fn().mockResolvedValue(null),
+  legalEntityPropertyFilter: vi.fn().mockReturnValue({}),
+}));
+
 vi.mock("@/lib/auth/permissions", async () => {
   const actual = await vi.importActual<typeof import("@/lib/auth/permissions")>(
     "@/lib/auth/permissions",
@@ -168,7 +173,9 @@ describe("actionCreateProperty", () => {
       action: "CREATE",
     });
 
-    expect(mockRevalidatePath).toHaveBeenCalledWith("/properties");
+    expect(mockRevalidatePath).toHaveBeenCalledWith("/plazas");
+    expect(mockRevalidatePath).toHaveBeenCalledWith("/inmuebles");
+    expect(mockRevalidatePath).toHaveBeenCalledWith("/units");
   });
 });
 

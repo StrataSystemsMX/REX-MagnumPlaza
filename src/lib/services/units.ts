@@ -58,6 +58,9 @@ export async function actionCreateUnit(input: CreateUnitInput): Promise<UnitMode
   });
 
   revalidatePath(`/properties/${data.propertyId}`);
+  revalidatePath("/units");
+  revalidatePath("/plazas");
+  revalidatePath("/inmuebles");
   return unit;
 }
 
@@ -90,6 +93,9 @@ export async function actionUpdateUnit(
   });
 
   revalidatePath(`/properties/${updated.propertyId}`);
+  revalidatePath("/units");
+  revalidatePath("/plazas");
+  revalidatePath("/inmuebles");
   return updated;
 }
 
@@ -113,4 +119,7 @@ export async function actionDeleteUnit(id: string): Promise<void> {
   await logAudit(tenantId, dbUser.id, "DELETE", id, { soft: true });
 
   revalidatePath(`/properties/${target.propertyId}`);
+  revalidatePath("/units");
+  revalidatePath("/plazas");
+  revalidatePath("/inmuebles");
 }

@@ -3,6 +3,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { ContractDetailTabs } from "@/components/contracts/ContractDetailTabs";
+import { requireAuth } from "@/lib/auth/get-session";
+import { hasPermission } from "@/lib/auth/permissions";
 import {
   contractStatusLabel,
   contractStatusVariant,
@@ -29,9 +31,11 @@ export default async function ContractDetailPage({
   params: Promise<Params>;
 }) {
   const { id } = await params;
-  const [contract, auditLog] = await Promise.all([
+  const { dbUser } = await requireAuth();
+  const [contract, auditLog, canEditDocuments] = await Promise.all([
     getContractById(id),
     getContractAuditLog(id),
+    hasPermission(dbUser.id, "contract.update"),
   ]);
 
   if (!contract) {
@@ -71,7 +75,11 @@ export default async function ContractDetailPage({
         </p>
       </div>
 
-      <ContractDetailTabs contract={contract} auditLog={auditLog} />
+      <ContractDetailTabs
+        contract={contract}
+        auditLog={auditLog}
+        canEditDocuments={canEditDocuments}
+      />
     </div>
   );
 }

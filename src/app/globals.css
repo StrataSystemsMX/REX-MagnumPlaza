@@ -27,6 +27,8 @@
   --color-input: var(--input);
   --color-border: var(--border);
   --color-destructive: var(--destructive);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
   --color-accent-foreground: var(--accent-foreground);
   --color-accent: var(--accent);
   --color-muted-foreground: var(--muted-foreground);
@@ -49,72 +51,82 @@
 }
 
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.129 0.042 264.695);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.129 0.042 264.695);
+  /* Strata Systems brand palette
+   * Frost   #f0f6f7   Slate   #89aec8   Brass   #7b6727
+   * Timber  #4e452a   Marine  #002c55   Midnight #0b0e29
+   */
+  --background: oklch(0.971 0.005 220);            /* Frost #f0f6f7 */
+  --foreground: oklch(0.135 0.045 270);            /* Midnight #0b0e29 */
+  --card: oklch(1 0 0);                            /* Pure white — pops sobre Frost */
+  --card-foreground: oklch(0.135 0.045 270);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.129 0.042 264.695);
-  --primary: oklch(0.208 0.042 265.755);
-  --primary-foreground: oklch(0.984 0.003 247.858);
-  --secondary: oklch(0.968 0.007 247.896);
-  --secondary-foreground: oklch(0.208 0.042 265.755);
-  --muted: oklch(0.968 0.007 247.896);
-  --muted-foreground: oklch(0.554 0.046 257.417);
-  --accent: oklch(0.968 0.007 247.896);
-  --accent-foreground: oklch(0.208 0.042 265.755);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.929 0.013 255.508);
-  --input: oklch(0.929 0.013 255.508);
-  --ring: oklch(0.704 0.04 256.788);
-  --chart-1: oklch(0.646 0.222 41.116);
-  --chart-2: oklch(0.6 0.118 184.704);
-  --chart-3: oklch(0.398 0.07 227.392);
-  --chart-4: oklch(0.828 0.189 84.429);
-  --chart-5: oklch(0.769 0.188 70.08);
+  --popover-foreground: oklch(0.135 0.045 270);
+  --primary: oklch(0.255 0.085 255);               /* Marine #002c55 */
+  --primary-foreground: oklch(0.971 0.005 220);    /* Frost */
+  --secondary: oklch(0.93 0.025 230);              /* Slate desat — botones secundarios */
+  --secondary-foreground: oklch(0.255 0.085 255);
+  --muted: oklch(0.945 0.012 225);
+  --muted-foreground: oklch(0.5 0.04 240);
+  --accent: oklch(0.93 0.025 230);                 /* Slate suave para hovers — Brass se aplica opt-in */
+  --accent-foreground: oklch(0.255 0.085 255);
+  --destructive: oklch(0.577 0.245 27.325);        /* Rose — sin paleta de rojo, mantener */
+  --border: oklch(0.88 0.025 230);
+  --input: oklch(0.88 0.025 230);
+  --ring: oklch(0.7 0.05 230);                     /* Slate */
+  --warning: oklch(0.495 0.09 75);                 /* Brass #7b6727 — warning state */
+  --warning-foreground: oklch(0.971 0.005 220);
+  --chart-1: oklch(0.255 0.085 255);               /* Marine */
+  --chart-2: oklch(0.495 0.09 75);                 /* Brass */
+  --chart-3: oklch(0.72 0.06 230);                 /* Slate */
+  --chart-4: oklch(0.34 0.04 75);                  /* Timber */
+  --chart-5: oklch(0.135 0.045 270);               /* Midnight */
   --radius: 0.625rem;
-  --sidebar: oklch(0.984 0.003 247.858);
-  --sidebar-foreground: oklch(0.129 0.042 264.695);
-  --sidebar-primary: oklch(0.208 0.042 265.755);
-  --sidebar-primary-foreground: oklch(0.984 0.003 247.858);
-  --sidebar-accent: oklch(0.968 0.007 247.896);
-  --sidebar-accent-foreground: oklch(0.208 0.042 265.755);
-  --sidebar-border: oklch(0.929 0.013 255.508);
-  --sidebar-ring: oklch(0.704 0.04 256.788);
+  --sidebar: oklch(0.971 0.005 220);               /* Frost — sidebar claro */
+  --sidebar-foreground: oklch(0.135 0.045 270);    /* Midnight */
+  --sidebar-primary: oklch(0.255 0.085 255);       /* Marine — item activo */
+  --sidebar-primary-foreground: oklch(0.971 0.005 220);
+  --sidebar-accent: oklch(0.93 0.025 230);         /* Slate suave — hover */
+  --sidebar-accent-foreground: oklch(0.255 0.085 255);
+  --sidebar-border: oklch(0.88 0.025 230);         /* Slate light — borde visible */
+  --sidebar-ring: oklch(0.7 0.05 230);
 }
 
 .dark {
-  --background: oklch(0.129 0.042 264.695);
-  --foreground: oklch(0.984 0.003 247.858);
-  --card: oklch(0.208 0.042 265.755);
-  --card-foreground: oklch(0.984 0.003 247.858);
-  --popover: oklch(0.208 0.042 265.755);
-  --popover-foreground: oklch(0.984 0.003 247.858);
-  --primary: oklch(0.929 0.013 255.508);
-  --primary-foreground: oklch(0.208 0.042 265.755);
-  --secondary: oklch(0.279 0.041 260.031);
-  --secondary-foreground: oklch(0.984 0.003 247.858);
-  --muted: oklch(0.279 0.041 260.031);
-  --muted-foreground: oklch(0.704 0.04 256.788);
-  --accent: oklch(0.279 0.041 260.031);
-  --accent-foreground: oklch(0.984 0.003 247.858);
+  /* Dark mode invertido sobre la paleta Strata. No hay switcher en UI todavía;
+   * estos valores se mantienen consistentes por si Clerk u otro consumidor activa .dark. */
+  --background: oklch(0.135 0.045 270);            /* Midnight */
+  --foreground: oklch(0.971 0.005 220);            /* Frost */
+  --card: oklch(0.2 0.06 268);                     /* Midnight + claro */
+  --card-foreground: oklch(0.971 0.005 220);
+  --popover: oklch(0.2 0.06 268);
+  --popover-foreground: oklch(0.971 0.005 220);
+  --primary: oklch(0.72 0.06 230);                 /* Slate — más visible en dark */
+  --primary-foreground: oklch(0.135 0.045 270);
+  --secondary: oklch(0.255 0.085 255);             /* Marine */
+  --secondary-foreground: oklch(0.971 0.005 220);
+  --muted: oklch(0.255 0.06 268);
+  --muted-foreground: oklch(0.72 0.04 230);
+  --accent: oklch(0.255 0.06 268);
+  --accent-foreground: oklch(0.971 0.005 220);
   --destructive: oklch(0.704 0.191 22.216);
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.551 0.027 264.364);
-  --chart-1: oklch(0.488 0.243 264.376);
-  --chart-2: oklch(0.696 0.17 162.48);
-  --chart-3: oklch(0.769 0.188 70.08);
-  --chart-4: oklch(0.627 0.265 303.9);
-  --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: oklch(0.208 0.042 265.755);
-  --sidebar-foreground: oklch(0.984 0.003 247.858);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.984 0.003 247.858);
-  --sidebar-accent: oklch(0.279 0.041 260.031);
-  --sidebar-accent-foreground: oklch(0.984 0.003 247.858);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.551 0.027 264.364);
+  --ring: oklch(0.72 0.06 230);
+  --warning: oklch(0.65 0.11 75);                  /* Brass más claro para dark */
+  --warning-foreground: oklch(0.135 0.045 270);
+  --chart-1: oklch(0.72 0.06 230);                 /* Slate */
+  --chart-2: oklch(0.65 0.11 75);                  /* Brass claro */
+  --chart-3: oklch(0.45 0.08 255);                 /* Marine medio */
+  --chart-4: oklch(0.5 0.06 75);                   /* Timber medio */
+  --chart-5: oklch(0.971 0.005 220);               /* Frost */
+  --sidebar: oklch(0.135 0.045 270);
+  --sidebar-foreground: oklch(0.971 0.005 220);
+  --sidebar-primary: oklch(0.255 0.085 255);
+  --sidebar-primary-foreground: oklch(0.971 0.005 220);
+  --sidebar-accent: oklch(0.2 0.05 270);
+  --sidebar-accent-foreground: oklch(0.971 0.005 220);
+  --sidebar-border: oklch(1 0 0 / 8%);
+  --sidebar-ring: oklch(0.72 0.06 230);
 }
 
 @layer base {

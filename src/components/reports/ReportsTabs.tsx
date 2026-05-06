@@ -116,10 +116,10 @@ function AgingTab({ data }: { data: ReportsBundle["aging"] }) {
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
-        <BucketCard label="0 – 30 días" value={data.totals.bucket0to30} tone="default" />
-        <BucketCard label="31 – 60 días" value={data.totals.bucket31to60} tone="warning" />
-        <BucketCard label="61 – 90 días" value={data.totals.bucket61to90} tone="warning" />
-        <BucketCard label="Más de 90 días" value={data.totals.bucket90plus} tone="danger" />
+        <BucketCard label="Mes actual" value={data.totals.bucket0to30} tone="default" />
+        <BucketCard label="1 mes vencido" value={data.totals.bucket31to60} tone="warning" />
+        <BucketCard label="2 meses vencidos" value={data.totals.bucket61to90} tone="warning" />
+        <BucketCard label="3+ meses vencidos" value={data.totals.bucket90plus} tone="danger" />
         <BucketCard label="Total" value={data.totals.total} tone="emphasis" />
       </div>
 
@@ -139,13 +139,12 @@ function AgingTab({ data }: { data: ReportsBundle["aging"] }) {
               <TableHeader>
                 <TableRow>
                   <TableHead>Inquilino</TableHead>
-                  <TableHead className="text-right">0-30</TableHead>
-                  <TableHead className="text-right">31-60</TableHead>
-                  <TableHead className="text-right">61-90</TableHead>
-                  <TableHead className="text-right">90+</TableHead>
+                  <TableHead className="text-right">Mes actual</TableHead>
+                  <TableHead className="text-right">1 mes</TableHead>
+                  <TableHead className="text-right">2 meses</TableHead>
+                  <TableHead className="text-right">3+ meses</TableHead>
                   <TableHead className="text-right">Total</TableHead>
                   <TableHead className="text-right">Días máx</TableHead>
-                  <TableHead className="text-right">Rentas</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -184,7 +183,6 @@ function AgingTab({ data }: { data: ReportsBundle["aging"] }) {
                         {row.oldestDaysOverdue}d
                       </Badge>
                     </TableCell>
-                    <TableCell className="text-right">{row.rentsOverdueCount}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>

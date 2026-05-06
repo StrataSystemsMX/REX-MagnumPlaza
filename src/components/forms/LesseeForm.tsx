@@ -14,13 +14,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { EnumSelect } from "@/components/ui/enum-select";
 import { Textarea } from "@/components/ui/textarea";
 import { communicationChannelLabel } from "@/lib/i18n/enums";
 import {
@@ -41,6 +35,16 @@ const CHANNELS: ReadonlyArray<CommunicationChannel> = [
   "PHONE_CALL",
   "IN_PERSON",
 ];
+
+function formatMxPhoneDisplay(input: string): string {
+  const digits = input.replace(/\D/g, "");
+  const local = digits.startsWith("52") && digits.length > 10 ? digits.slice(-10) : digits;
+  const ten = local.slice(0, 10);
+  if (ten.length === 0) return "";
+  if (ten.length <= 3) return `(${ten}`;
+  if (ten.length <= 6) return `(${ten.slice(0, 3)}) ${ten.slice(3)}`;
+  return `(${ten.slice(0, 3)}) ${ten.slice(3, 6)} ${ten.slice(6)}`;
+}
 
 export interface LesseeFormInitial {
   id?: string;
@@ -71,8 +75,8 @@ export function LesseeForm({ initial, onSuccess, submitLabel = "Guardar" }: Less
       contactName: initial?.contactName ?? "",
       rfc: initial?.rfc ?? "",
       email: initial?.email ?? "",
-      phone: initial?.phone ?? "",
-      whatsapp: initial?.whatsapp ?? "",
+      phone: formatMxPhoneDisplay(initial?.phone ?? ""),
+      whatsapp: formatMxPhoneDisplay(initial?.whatsapp ?? ""),
       preferredChannel: initial?.preferredChannel ?? "WHATSAPP",
       notes: initial?.notes ?? "",
     },
@@ -106,7 +110,7 @@ export function LesseeForm({ initial, onSuccess, submitLabel = "Guardar" }: Less
               <FormItem className="md:col-span-2">
                 <FormLabel>Razón social</FormLabel>
                 <FormControl>
-                  <Input placeholder="Farmacias Benavides S.A.B de C.V." {...field} />
+                  <Input {...field} />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -119,11 +123,7 @@ export function LesseeForm({ initial, onSuccess, submitLabel = "Guardar" }: Less
               <FormItem>
                 <FormLabel>Persona de contacto</FormLabel>
                 <FormControl>
-                  <Input
-                    placeholder="Juan Pablo Martinez"
-                    {...field}
-                    value={field.value ?? ""}
-                  />
+                  <Input {...field} value={field.value ?? ""} />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -136,11 +136,7 @@ export function LesseeForm({ initial, onSuccess, submitLabel = "Guardar" }: Less
               <FormItem>
                 <FormLabel>RFC</FormLabel>
                 <FormControl>
-                  <Input
-                    placeholder="XAXX010101000"
-                    {...field}
-                    value={field.value ?? ""}
-                  />
+                  <Input {...field} value={field.value ?? ""} />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -153,12 +149,7 @@ export function LesseeForm({ initial, onSuccess, submitLabel = "Guardar" }: Less
               <FormItem>
                 <FormLabel>Correo electrónico</FormLabel>
                 <FormControl>
-                  <Input
-                    type="email"
-                    placeholder="contacto@empresa.com"
-                    {...field}
-                    value={field.value ?? ""}
-                  />
+                  <Input type="email" {...field} value={field.value ?? ""} />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -172,9 +163,13 @@ export function LesseeForm({ initial, onSuccess, submitLabel = "Guardar" }: Less
                 <FormLabel>Teléfono</FormLabel>
                 <FormControl>
                   <Input
-                    placeholder="+526621234567"
-                    {...field}
+                    inputMode="tel"
+                    placeholder="(662) 429 6727"
                     value={field.value ?? ""}
+                    onChange={(e) => field.onChange(formatMxPhoneDisplay(e.target.value))}
+                    onBlur={field.onBlur}
+                    name={field.name}
+                    ref={field.ref}
                   />
                 </FormControl>
                 <FormMessage />
@@ -189,9 +184,13 @@ export function LesseeForm({ initial, onSuccess, submitLabel = "Guardar" }: Less
                 <FormLabel>WhatsApp</FormLabel>
                 <FormControl>
                   <Input
-                    placeholder="+526621234567"
-                    {...field}
+                    inputMode="tel"
+                    placeholder="(662) 429 6727"
                     value={field.value ?? ""}
+                    onChange={(e) => field.onChange(formatMxPhoneDisplay(e.target.value))}
+                    onBlur={field.onBlur}
+                    name={field.name}
+                    ref={field.ref}
                   />
                 </FormControl>
                 <FormMessage />
@@ -204,20 +203,13 @@ export function LesseeForm({ initial, onSuccess, submitLabel = "Guardar" }: Less
             render={({ field }) => (
               <FormItem>
                 <FormLabel>Canal preferido</FormLabel>
-                <Select onValueChange={field.onChange} value={field.value}>
-                  <FormControl>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecciona un canal" />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    {CHANNELS.map((c) => (
-                      <SelectItem key={c} value={c}>
-                        {communicationChannelLabel(c)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <EnumSelect
+                  values={CHANNELS}
+                  labelFor={communicationChannelLabel}
+                  value={field.value}
+                  onValueChange={field.onChange}
+                  placeholder="Selecciona un canal"
+                />
                 <FormMessage />
               </FormItem>
             )}
@@ -229,12 +221,7 @@ export function LesseeForm({ initial, onSuccess, submitLabel = "Guardar" }: Less
               <FormItem className="md:col-span-2">
                 <FormLabel>Notas</FormLabel>
                 <FormControl>
-                  <Textarea
-                    rows={3}
-                    placeholder="Historial, particularidades, observaciones..."
-                    {...field}
-                    value={field.value ?? ""}
-                  />
+                  <Textarea rows={3} {...field} value={field.value ?? ""} />
                 </FormControl>
                 <FormMessage />
               </FormItem>

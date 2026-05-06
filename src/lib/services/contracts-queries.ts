@@ -96,7 +96,29 @@ export async function getContractById(id: string) {
     },
   });
 
-  return contract;
+  if (!contract) return null;
+
+  // Serializamos Decimal → number antes de cruzar a Client Components.
+  return {
+    ...contract,
+    monthlyAmount: contract.monthlyAmount.toNumber(),
+    guaranteeAmount: contract.guaranteeAmount.toNumber(),
+    lateFeePercentage: contract.lateFeePercentage?.toNumber() ?? null,
+    rents: contract.rents.map((r) => ({
+      ...r,
+      amountDue: r.amountDue.toNumber(),
+      amountPaid: r.amountPaid.toNumber(),
+      payments: r.payments.map((p) => ({
+        ...p,
+        amount: p.amount.toNumber(),
+      })),
+    })),
+    guarantees: contract.guarantees.map((g) => ({
+      ...g,
+      amount: g.amount.toNumber(),
+      returnedAmount: g.returnedAmount?.toNumber() ?? null,
+    })),
+  };
 }
 
 export type ContractDetail = NonNullable<Awaited<ReturnType<typeof getContractById>>>;

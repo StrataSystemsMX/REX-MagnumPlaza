@@ -37,9 +37,15 @@ const optionalRfc = z
 const optionalMxPhone = z
   .string()
   .trim()
-  .transform((v) => v.replace(/[\s-]/g, ""))
+  .transform((v) => {
+    const digits = v.replace(/\D/g, "");
+    if (digits.length === 0) return "";
+    if (digits.length === 10) return `+52${digits}`;
+    if (digits.length === 12 && digits.startsWith("52")) return `+${digits}`;
+    return v;
+  })
   .refine((v) => v === "" || MX_PHONE_REGEX.test(v), {
-    message: "Teléfono mexicano inválido. Formato: +52 seguido de 10 dígitos.",
+    message: "Teléfono mexicano inválido. Captura 10 dígitos.",
   })
   .transform((v) => (v === "" ? undefined : v))
   .optional();

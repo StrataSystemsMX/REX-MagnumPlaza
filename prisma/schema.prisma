@@ -26,7 +26,7 @@ datasource db {
 model Tenant {
   id        String   @id @default(cuid())
   slug      String   @unique // ej. "crt-plazas-magnum"
-  name      String   // "Plazas Magnum"
+  name      String // "Plazas Magnum"
   plan      Plan     @default(STARTER)
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
@@ -171,13 +171,14 @@ model LegalEntity {
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
-  tenant            Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  ownedProperties   Property[] @relation("OwnerEntity")
-  managedProperties Property[] @relation("ManagerEntity")
+  tenant            Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  ownedProperties   Property[]         @relation("OwnerEntity")
+  managedProperties Property[]         @relation("ManagerEntity")
   expenses          Expense[]
   rents             Rent[]
   budgets           Budget[]
   payrolls          Payroll[]
+  paidCadastrals    CadastralPayment[] @relation("CadastralPayer")
 
   @@unique([tenantId, code])
   @@index([tenantId])
@@ -316,29 +317,29 @@ enum CommunicationChannel {
 // ============================================================================
 
 model Contract {
-  id                String         @id @default(cuid())
-  tenantId          String
-  unitId            String
-  lesseeId          String
-  type              ContractType
-  status            ContractStatus @default(DRAFT)
+  id       String         @id @default(cuid())
+  tenantId String
+  unitId   String
+  lesseeId String
+  type     ContractType
+  status   ContractStatus @default(DRAFT)
 
   startDate         DateTime
   endDate           DateTime
-  monthlyAmount     Decimal        @db.Decimal(12, 2)
-  guaranteeAmount   Decimal        @db.Decimal(12, 2)
-  paymentDay        Int            @default(1) // día del mes en que se cobra
-  lateFeePercentage Decimal?       @db.Decimal(5, 2) // interés moratorio
-  autoRenew         Boolean        @default(false)
+  monthlyAmount     Decimal  @db.Decimal(12, 2)
+  guaranteeAmount   Decimal  @db.Decimal(12, 2)
+  paymentDay        Int      @default(1) // día del mes en que se cobra
+  lateFeePercentage Decimal? @db.Decimal(5, 2) // interés moratorio
+  autoRenew         Boolean  @default(false)
 
   // Casos especiales que detectamos en el Excel:
-  paidInAdvance     Boolean        @default(false) // tipo Bluecell que pagó 6 meses
-  advancePaidUntil  DateTime?
+  paidInAdvance    Boolean   @default(false) // tipo Bluecell que pagó 6 meses
+  advancePaidUntil DateTime?
 
-  signedDate        DateTime?
-  notes             String?
-  createdAt         DateTime       @default(now())
-  updatedAt         DateTime       @updatedAt
+  signedDate DateTime?
+  notes      String?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
 
   tenant     Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   unit       Unit        @relation(fields: [unitId], references: [id])
@@ -566,24 +567,32 @@ model Expense {
 // ============================================================================
 
 model CadastralPayment {
-  id          String    @id @default(cuid())
-  tenantId    String
-  propertyId  String
-  year        Int
-  installment Int // 1 a 4
-  totalAmount Decimal   @db.Decimal(12, 2)
-  paidAmount  Decimal?  @db.Decimal(12, 2)
-  paymentDate DateTime?
-  dueDate     DateTime
-  isPaid      Boolean   @default(false)
-  receiptUrl  String?
-  notes       String?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  id                   String    @id @default(cuid())
+  tenantId             String
+  propertyId           String
+  year                 Int
+  // Opcional porque el cliente a veces aún no conoce el monto al darlo de
+  // alta (ej. prediales de terceros que llegan con boleta posterior).
+  totalAmount          Decimal?  @db.Decimal(12, 2)
+  paidAmount           Decimal?  @db.Decimal(12, 2)
+  paymentDate          DateTime?
+  dueDate              DateTime
+  isPaid               Boolean   @default(false)
+  // LegalEntity del tenant que efectivamente paga, si difiere del dueño.
+  // Ej: "CAP CARMEN" la paga TSR aunque sea de otra razón social.
+  payerEntityId        String?
+  // Tercero externo al tenant que paga (no es LegalEntity).
+  // Ej: "JC" paga prediales de inmuebles administrados por CRT. Solo aplica cuando no es payerEntityId.
+  paidByThirdPartyName String?
+  notes                String?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
 
-  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  property    Property     @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  payerEntity LegalEntity? @relation("CadastralPayer", fields: [payerEntityId], references: [id])
+  documents   Document[]
 
-  @@unique([propertyId, year, installment])
+  @@unique([propertyId, year])
   @@index([tenantId])
   @@map("cadastral_payments")
 }
@@ -817,16 +826,18 @@ model Document {
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   // Relaciones polimórficas (solo una será no-null)
-  contractId    String?
-  contract      Contract?    @relation(fields: [contractId], references: [id])
-  propertyId    String?
-  property      Property?    @relation(fields: [propertyId], references: [id])
-  unitId        String?
-  unit          Unit?        @relation(fields: [unitId], references: [id])
-  expenseId     String?
-  expense       Expense?     @relation(fields: [expenseId], references: [id])
-  maintenanceId String?
-  maintenance   Maintenance? @relation(fields: [maintenanceId], references: [id])
+  contractId         String?
+  contract           Contract?         @relation(fields: [contractId], references: [id])
+  propertyId         String?
+  property           Property?         @relation(fields: [propertyId], references: [id])
+  unitId             String?
+  unit               Unit?             @relation(fields: [unitId], references: [id])
+  expenseId          String?
+  expense            Expense?          @relation(fields: [expenseId], references: [id])
+  maintenanceId      String?
+  maintenance        Maintenance?      @relation(fields: [maintenanceId], references: [id])
+  cadastralPaymentId String?
+  cadastralPayment   CadastralPayment? @relation(fields: [cadastralPaymentId], references: [id])
 
   @@index([tenantId])
   @@map("documents")
@@ -835,6 +846,7 @@ model Document {
 enum DocumentType {
   CONTRACT_PDF
   PROPERTY_PHOTO
+  UNIT_PHOTO // foto general/showcase de la unidad
   UNIT_PHOTO_INITIAL // foto al entrar el inquilino
   UNIT_PHOTO_FINAL // foto al salir el inquilino
   INVOICE

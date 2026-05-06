@@ -24,6 +24,7 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { LesseeForm } from "@/components/forms/LesseeForm";
+import { EnumSelect } from "@/components/ui/enum-select";
 import { contractTypeLabel, unitStatusLabel } from "@/lib/i18n/enums";
 import { actionCreateContract } from "@/lib/services/contracts";
 import { actionSearchLessees, type LesseeSearchResult } from "@/lib/services/lessees";
@@ -343,6 +344,16 @@ function StepUnit({
   value: string | null;
   onChange: (id: string) => void;
 }) {
+  const unitItems = useMemo<Record<string, string>>(
+    () =>
+      Object.fromEntries(
+        units.map((u) => {
+          const suffix = u.name ? ` (${u.name})` : "";
+          return [u.id, `${u.property.name} · ${u.code}${suffix} [${unitStatusLabel(u.status)}]`];
+        }),
+      ),
+    [units],
+  );
   if (units.length === 0) {
     return (
       <div className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
@@ -353,8 +364,12 @@ function StepUnit({
   return (
     <div className="space-y-2">
       <Label>Unidad disponible</Label>
-      <Select value={value ?? ""} onValueChange={(v) => v !== null && onChange(v)}>
-        <SelectTrigger>
+      <Select
+        value={value ?? ""}
+        onValueChange={(v) => v !== null && onChange(v)}
+        items={unitItems}
+      >
+        <SelectTrigger className="w-full">
           <SelectValue placeholder="Selecciona la unidad a rentar" />
         </SelectTrigger>
         <SelectContent>
@@ -402,7 +417,6 @@ function StepLessee({
           <Input
             value={search}
             onChange={(e) => onSearch(e.target.value)}
-            placeholder="Razón social, contacto o RFC..."
           />
         </div>
         <Button variant="secondary" onClick={onCreateNew}>
@@ -465,18 +479,13 @@ function StepTerms({
     <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
       <div className="space-y-1">
         <Label>Tipo de contrato</Label>
-        <Select value={terms.type} onValueChange={(v) => set("type", v as ContractType)}>
-          <SelectTrigger>
-            <SelectValue placeholder="Tipo" />
-          </SelectTrigger>
-          <SelectContent>
-            {CONTRACT_TYPES.map((t) => (
-              <SelectItem key={t} value={t}>
-                {contractTypeLabel(t)}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <EnumSelect
+          values={CONTRACT_TYPES}
+          labelFor={contractTypeLabel}
+          value={terms.type}
+          onValueChange={(v) => set("type", v)}
+          placeholder="Tipo"
+        />
       </div>
       <div className="space-y-1">
         <Label>Día de pago (1-28)</Label>
@@ -576,7 +585,6 @@ function StepTerms({
           rows={3}
           value={terms.notes}
           onChange={(e) => set("notes", e.target.value)}
-          placeholder="Particularidades del contrato, acuerdos verbales, etc."
         />
       </div>
     </div>
