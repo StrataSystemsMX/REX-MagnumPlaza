@@ -99,54 +99,203 @@ async function dispatchRentPaidEvent(tenantId: string, paymentId: string): Promi
   }
 }
 
+/**
+ * Aplicación automática de sobrante: si el monto registrado supera el saldo de
+ * la renta seleccionada, el excedente se reparte sobre las rentas futuras del
+ * mismo contrato en orden cronológico hasta agotarse. Si tras cubrir todas las
+ * futuras todavía sobra, el remanente queda en la renta original como ABONO.
+ */
+export interface RegisterPaymentResult {
+  payment: PaymentModel;
+  rentStatus: string;
+  cascade: Array<{ rentId: string; period: Date; amount: number; status: string }>;
+  remainderApplied: number;
+}
+
 export async function actionRegisterPayment(
   input: RegisterPaymentInput,
-): Promise<{ payment: PaymentModel; rentStatus: string }> {
+): Promise<RegisterPaymentResult> {
   const { tenantId, dbUser } = await requireAuth();
   await requirePermission(dbUser.id, "payment.register");
 
   const data = registerPaymentSchema.parse(input);
 
-  // Verificar que el Rent pertenece al tenant.
+  // Verificar que el Rent pertenece al tenant + obtener contractId/period/saldo.
   const rent = await prisma.rent.findFirst({
     where: { id: data.rentId, tenantId },
-    select: { id: true },
+    select: {
+      id: true,
+      contractId: true,
+      period: true,
+      amountDue: true,
+      amountPaid: true,
+    },
   });
   if (!rent) {
     throw new Error("Renta no encontrada o fuera de tu tenant.");
   }
 
+  const balance = new Prisma.Decimal(rent.amountDue).minus(
+    new Prisma.Decimal(rent.amountPaid),
+  );
+  const total = new Prisma.Decimal(data.amount);
+  const excess = total.greaterThan(balance)
+    ? total.minus(balance)
+    : new Prisma.Decimal(0);
+  const primaryAmount = excess.greaterThan(0) ? balance : total;
+
+  // Si hay sobrante, prefetch de rentas futuras del mismo contrato (no PAID/WAIVED).
+  const futureRents = excess.greaterThan(0)
+    ? await prisma.rent.findMany({
+        where: {
+          tenantId,
+          contractId: rent.contractId,
+          period: { gt: rent.period },
+          status: { notIn: ["PAID", "WAIVED"] },
+        },
+        orderBy: { period: "asc" },
+        select: { id: true, period: true, amountDue: true, amountPaid: true },
+      })
+    : [];
+
   const now = new Date();
   const result = await prisma.$transaction(async (tx) => {
-    const payment = await tx.payment.create({
+    // 1. Pago primario sobre la renta seleccionada (capped al saldo si hubo sobrante).
+    const primary = await tx.payment.create({
       data: {
         tenantId,
         rentId: data.rentId,
-        amount: decimal(data.amount),
+        amount: primaryAmount,
         paymentDate: data.paymentDate,
         method: data.method,
         reference: data.reference,
         notes: data.notes,
       },
     });
-    const recalc = await recalcRentInTx(tx, tenantId, data.rentId, now);
-    return { payment, rentStatus: recalc.status };
+    const primaryRecalc = await recalcRentInTx(tx, tenantId, data.rentId, now);
+
+    // 2. Cascada del sobrante sobre rentas futuras del mismo contrato.
+    let remaining = excess;
+    const cascade: Array<{
+      paymentId: string;
+      rentId: string;
+      period: Date;
+      amount: Prisma.Decimal;
+      status: string;
+    }> = [];
+
+    for (const fr of futureRents) {
+      if (remaining.lessThanOrEqualTo(0)) break;
+      const frBalance = new Prisma.Decimal(fr.amountDue).minus(
+        new Prisma.Decimal(fr.amountPaid),
+      );
+      if (frBalance.lessThanOrEqualTo(0)) continue;
+      const apply = Prisma.Decimal.min(remaining, frBalance);
+      const noteSuffix = `Aplicado automáticamente desde sobrante de la renta de ${formatPeriodEs(rent.period)}.`;
+      const cascadePayment = await tx.payment.create({
+        data: {
+          tenantId,
+          rentId: fr.id,
+          amount: apply,
+          paymentDate: data.paymentDate,
+          method: data.method,
+          reference: data.reference,
+          notes: data.notes ? `${data.notes}\n${noteSuffix}` : noteSuffix,
+        },
+      });
+      const recalc = await recalcRentInTx(tx, tenantId, fr.id, now);
+      cascade.push({
+        paymentId: cascadePayment.id,
+        rentId: fr.id,
+        period: fr.period,
+        amount: apply,
+        status: recalc.status,
+      });
+      remaining = remaining.minus(apply);
+    }
+
+    // 3. Si tras todas las futuras sigue sobrando, el remanente queda en la renta
+    //    original como ABONO (no había más mensualidades a cubrir).
+    let remainderAmount = new Prisma.Decimal(0);
+    if (remaining.greaterThan(0)) {
+      const remainderNote =
+        "Sobrante a favor: no hay más mensualidades pendientes en este contrato.";
+      await tx.payment.create({
+        data: {
+          tenantId,
+          rentId: data.rentId,
+          amount: remaining,
+          paymentDate: data.paymentDate,
+          method: data.method,
+          reference: data.reference,
+          notes: data.notes ? `${data.notes}\n${remainderNote}` : remainderNote,
+        },
+      });
+      await recalcRentInTx(tx, tenantId, data.rentId, now);
+      remainderAmount = remaining;
+    }
+
+    return {
+      primary,
+      primaryStatus: primaryRecalc.status,
+      cascade,
+      remainderAmount,
+    };
   });
 
-  await logAudit(tenantId, dbUser.id, "CREATE", result.payment.id, {
+  // Audit log por cada Payment creado.
+  await logAudit(tenantId, dbUser.id, "CREATE", result.primary.id, {
     rentId: data.rentId,
-    amount: data.amount,
+    amount: primaryAmount.toString(),
     method: data.method,
     paymentDate: data.paymentDate.toISOString(),
-    rentStatusAfter: result.rentStatus,
+    rentStatusAfter: result.primaryStatus,
   });
+  for (const c of result.cascade) {
+    await logAudit(tenantId, dbUser.id, "CREATE", c.paymentId, {
+      rentId: c.rentId,
+      amount: c.amount.toString(),
+      method: data.method,
+      paymentDate: data.paymentDate.toISOString(),
+      cascadedFrom: data.rentId,
+      rentStatusAfter: c.status,
+    });
+  }
 
-  if (result.rentStatus === "PAID") {
-    await dispatchRentPaidEvent(tenantId, result.payment.id);
+  // Notificar por cada renta que quedó PAID.
+  if (result.primaryStatus === "PAID") {
+    await dispatchRentPaidEvent(tenantId, result.primary.id);
+  }
+  for (const c of result.cascade) {
+    if (c.status === "PAID") {
+      await dispatchRentPaidEvent(tenantId, c.paymentId);
+    }
   }
 
   revalidatePath("/collections");
-  return result;
+  revalidatePath("/ingresos");
+
+  return {
+    payment: result.primary,
+    rentStatus: result.primaryStatus,
+    cascade: result.cascade.map((c) => ({
+      rentId: c.rentId,
+      period: c.period,
+      amount: c.amount.toNumber(),
+      status: c.status,
+    })),
+    remainderApplied: result.remainderAmount.toNumber(),
+  };
+}
+
+const PERIOD_ES = new Intl.DateTimeFormat("es-MX", {
+  month: "long",
+  year: "numeric",
+  timeZone: "UTC",
+});
+
+function formatPeriodEs(d: Date): string {
+  return PERIOD_ES.format(d);
 }
 
 export async function actionRegisterBulkPayment(input: BulkPaymentInput): Promise<{

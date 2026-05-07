@@ -394,7 +394,7 @@ const ROW_BG_BY_STATUS: Record<MonthlyUnitStatus, string> = {
   PARTIAL: "bg-amber-50/50 dark:bg-amber-950/20",
   SIN_PAGO: "bg-red-50/50 dark:bg-red-950/20",
   PRE_PAGADO: "bg-blue-50/40 dark:bg-blue-950/20",
-  ABONO: "bg-amber-50/50 dark:bg-amber-950/20",
+  ABONO: "bg-sky-50/60 dark:bg-sky-950/20",
   VACANT: "bg-muted/30",
 };
 
@@ -427,7 +427,7 @@ function CobradoCell({ row }: { row: MonthlyUnitRow }) {
   }
   if (row.status === "ABONO") {
     return (
-      <span className="font-semibold text-amber-700 dark:text-amber-300">
+      <span className="font-semibold text-sky-600 dark:text-sky-300">
         {MXN.format(Number(row.amountPaid))}
       </span>
     );
@@ -460,7 +460,7 @@ function StatusPill({ row }: { row: MonthlyUnitRow }) {
       );
     case "ABONO":
       return (
-        <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200">
+        <span className="inline-flex items-center gap-1 rounded-full border border-sky-200 bg-sky-50 px-2 py-0.5 text-xs font-medium text-sky-800 dark:border-sky-900 dark:bg-sky-950 dark:text-sky-200">
           <ArrowUpRight className="size-3" />
           Abono
         </span>

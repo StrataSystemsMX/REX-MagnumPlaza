@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  CircleDot,
   ExternalLink,
   FileText,
   Images,
@@ -10,6 +11,7 @@ import {
   Pencil,
   Plus,
   Receipt,
+  Sparkles,
   Table2,
   Trash2,
   User,
@@ -307,6 +309,7 @@ interface InmuebleSnapshot {
   lesseeId: string | null;
   lesseeName: string | null;
   monthly: number | null;
+  estimatedRent: number | null;
 }
 
 function inmuebleSnapshot(p: PropertyListItem): InmuebleSnapshot {
@@ -318,6 +321,7 @@ function inmuebleSnapshot(p: PropertyListItem): InmuebleSnapshot {
     lesseeId: contract?.lessee.id ?? null,
     lesseeName: contract?.lessee.legalName ?? null,
     monthly: contract ? Number(contract.monthlyAmount) : null,
+    estimatedRent: unit?.estimatedRent != null ? Number(unit.estimatedRent) : null,
   };
 }
 
@@ -394,11 +398,26 @@ function InmuebleCard({
 }) {
   const { coverPhotoUrl, name, address, type, ownerEntity, managerEntity } = inmueble;
   const snap = inmuebleSnapshot(inmueble);
+  const isAvailable = snap.lesseeName === null;
 
   return (
-    <Card className="group flex h-full flex-col overflow-hidden p-0">
+    <Card
+      className={
+        "group flex h-full flex-col overflow-hidden p-0 " +
+        (isAvailable
+          ? "ring-1 ring-emerald-200 dark:ring-emerald-900/60"
+          : "")
+      }
+    >
       <Link href={`/properties/${inmueble.id}`} className="block">
-        <div className="relative aspect-video w-full overflow-hidden bg-muted">
+        <div
+          className={
+            "relative aspect-video w-full overflow-hidden " +
+            (isAvailable
+              ? "bg-gradient-to-br from-emerald-50 via-emerald-50/60 to-teal-50 dark:from-emerald-950/40 dark:via-emerald-950/20 dark:to-teal-950/30"
+              : "bg-muted")
+          }
+        >
           {coverPhotoUrl ? (
             <Image
               src={coverPhotoUrl}
@@ -408,15 +427,28 @@ function InmuebleCard({
               className="object-cover transition-transform group-hover:scale-105"
               loading="lazy"
             />
+          ) : isAvailable ? (
+            <div className="flex h-full flex-col items-center justify-center gap-1 text-emerald-700 dark:text-emerald-400">
+              <Sparkles className="size-8" />
+              <span className="text-xs font-medium uppercase tracking-wide">
+                Listo para rentar
+              </span>
+            </div>
           ) : (
             <div className="flex h-full items-center justify-center text-muted-foreground">
               <ImageOff className="size-8" />
             </div>
           )}
-          <div className="absolute top-2 left-2">
+          <div className="absolute top-2 left-2 flex flex-wrap gap-1.5">
             <Badge variant="secondary" className="shadow-sm">
               {propertyTypeLabel(type)}
             </Badge>
+            {isAvailable ? (
+              <Badge className="border-transparent bg-emerald-500 text-white shadow-sm hover:bg-emerald-500 dark:bg-emerald-600">
+                <CircleDot className="size-3" />
+                Disponible
+              </Badge>
+            ) : null}
           </div>
         </div>
       </Link>
@@ -453,27 +485,58 @@ function InmuebleCard({
 
         <div className="mt-auto space-y-2 border-t pt-3 text-sm">
           {snap.lesseeName ? (
-            <p className="truncate font-medium">{snap.lesseeName}</p>
+            <>
+              <p className="truncate font-medium">{snap.lesseeName}</p>
+              {snap.monthly !== null ? (
+                <p className="tabular-nums text-sm">
+                  {MXN.format(snap.monthly)}
+                  <span className="text-xs text-muted-foreground"> / mes</span>
+                </p>
+              ) : null}
+              {snap.lesseeId ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full"
+                  render={<Link href={`/lessees/${snap.lesseeId}`} />}
+                >
+                  <User className="size-4" />
+                  Ver inquilino
+                </Button>
+              ) : null}
+            </>
           ) : (
-            <p className="text-muted-foreground">Disponible</p>
+            <>
+              <div className="flex items-center gap-2">
+                <span className="relative flex size-2">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
+                  <span className="relative inline-flex size-2 rounded-full bg-emerald-500" />
+                </span>
+                <p className="font-medium text-emerald-700 dark:text-emerald-400">
+                  Disponible para renta
+                </p>
+              </div>
+              {snap.estimatedRent !== null ? (
+                <p className="tabular-nums text-sm">
+                  {MXN.format(snap.estimatedRent)}
+                  <span className="text-xs text-muted-foreground"> / mes estimado</span>
+                </p>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  Sin renta estimada definida.
+                </p>
+              )}
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full border-emerald-200 text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800 dark:border-emerald-900 dark:text-emerald-400 dark:hover:bg-emerald-950/40"
+                render={<Link href={`/properties/${inmueble.id}`} />}
+              >
+                <Plus className="size-4" />
+                Asignar inquilino
+              </Button>
+            </>
           )}
-          {snap.monthly !== null ? (
-            <p className="tabular-nums text-sm">
-              {MXN.format(snap.monthly)}
-              <span className="text-xs text-muted-foreground"> / mes</span>
-            </p>
-          ) : null}
-          {snap.lesseeId ? (
-            <Button
-              variant="outline"
-              size="sm"
-              className="w-full"
-              render={<Link href={`/lessees/${snap.lesseeId}`} />}
-            >
-              <User className="size-4" />
-              Ver inquilino
-            </Button>
-          ) : null}
         </div>
       </CardContent>
     </Card>
@@ -539,11 +602,25 @@ function InmueblesTableView({
                       snap.lesseeName
                     )
                   ) : (
-                    <span className="text-muted-foreground">Disponible</span>
+                    <Badge
+                      variant="outline"
+                      className="border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-400"
+                    >
+                      <CircleDot className="size-3" />
+                      Disponible
+                    </Badge>
                   )}
                 </TableCell>
                 <TableCell className="text-right tabular-nums text-sm">
-                  {snap.monthly !== null ? MXN.format(snap.monthly) : "—"}
+                  {snap.monthly !== null ? (
+                    MXN.format(snap.monthly)
+                  ) : snap.estimatedRent !== null ? (
+                    <span className="text-muted-foreground">
+                      ~{MXN.format(snap.estimatedRent)}
+                    </span>
+                  ) : (
+                    "—"
+                  )}
                 </TableCell>
                 <TableCell className="text-right">
                   <InmuebleActionsMenu

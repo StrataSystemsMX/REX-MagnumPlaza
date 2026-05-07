@@ -55,6 +55,7 @@ model Tenant {
   payments          Payment[]
   expenses          Expense[]
   expenseCategories ExpenseCategory[]
+  payrolls          Payroll[]
   maintenances      Maintenance[]
   promoters         Promoter[]
   promoterLinks     PromoterLink[]
@@ -618,7 +619,8 @@ model Payroll {
   createdAt        DateTime    @default(now())
   updatedAt        DateTime    @updatedAt
 
-  legalEntity LegalEntity @relation(fields: [legalEntityId], references: [id])
+  tenant      Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  legalEntity LegalEntity @relation(fields: [legalEntityId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
   @@index([period])

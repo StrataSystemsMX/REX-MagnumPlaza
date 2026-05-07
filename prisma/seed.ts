@@ -36,7 +36,7 @@ const CONTRACT_START = utcDate(YEAR, 0, 1); // 2026-01-01
 const CONTRACT_END = utcDate(YEAR, 11, 31); // 2026-12-31
 const SIGNED = utcDate(2025, 11, 15); // diciembre 2025
 
-type EntityCode = "CRT" | "TSR" | "QHS" | "JCL";
+type EntityCode = "CRT" | "TSR" | "QHS" | "JCL" | "CLICK";
 
 type PaymentEntry =
   | { kind: "paid"; amount?: number }
@@ -169,7 +169,7 @@ async function main(): Promise<void> {
     },
   });
 
-  // -- 4. LegalEntities (CRT / TSR / QHS / JCL) -----------------------------
+  // -- 4. LegalEntities (CRT / TSR / QHS / JCL / CLICK) ---------------------
   const crt = await prisma.legalEntity.create({
     data: {
       tenantId: tenant.id,
@@ -194,8 +194,8 @@ async function main(): Promise<void> {
       isOperator: false,
     },
   });
-  // JCL = Juan Carlos L (persona física, dueño de La Jolla y Bodega).
-  // CRT administra operacionalmente; JCL aparece como owner formal.
+  // JCL = Juan Carlos L (persona física). Razón social registrada por
+  // completitud; sus propiedades personales no se administran en Rex.
   const jcl = await prisma.legalEntity.create({
     data: {
       tenantId: tenant.id,
@@ -204,11 +204,22 @@ async function main(): Promise<void> {
       isOperator: false,
     },
   });
+  // CLICK: razón social satélite usada en el bloque de nóminas del Excel.
+  // Factura servicios administrativos (OSC) y paga "Nómina Vinculación".
+  const click = await prisma.legalEntity.create({
+    data: {
+      tenantId: tenant.id,
+      code: "CLICK",
+      legalName: "Click S.A. de C.V.",
+      isOperator: true,
+    },
+  });
   const entities: Record<EntityCode, { id: string }> = {
     CRT: crt,
     TSR: tsr,
     QHS: qhs,
     JCL: jcl,
+    CLICK: click,
   };
 
   // -- 5. ExpenseCategories -------------------------------------------------
@@ -241,6 +252,7 @@ async function main(): Promise<void> {
     // Vehículos
     { code: "FINANCIAMIENTO_TOYOTA", name: "Financiamiento Toyota", type: ExpenseType.VEHICLE, isRecurring: true },
     { code: "FINANCIAMIENTO_EXPEDITION", name: "Financiamiento Expedition", type: ExpenseType.VEHICLE, isRecurring: true },
+    { code: "FINANCIAMIENTO_BMW", name: "Financiamiento BMW", type: ExpenseType.VEHICLE, isRecurring: true },
     { code: "GASOLINA", name: "Gasolina", type: ExpenseType.VEHICLE, isRecurring: true },
     { code: "SERVICIOS_AUTOS", name: "Servicios de autos", type: ExpenseType.VEHICLE, isRecurring: false },
     // Otros
@@ -481,35 +493,11 @@ async function main(): Promise<void> {
       ],
     },
 
-    // 10. Bodega — propiedad de JCL (Juan Carlos L), administrada por CRT.
+    // 10. Maria Escriba — propiedad CRT cuyo predial paga JC.
     {
-      name: "Bodega",
-      type: PropertyType.BODEGA,
-      address: "Bodega, Hermosillo",
-      cadastralKey: "02074018",
-      notes: "Propiedad de Juan Carlos L (JCL). CRT administra; predial lo paga el dueño.",
-      owner: "JCL",
-      manager: "CRT",
-      units: [],
-    },
-
-    // 11. La Jolla — propiedad de JCL (Juan Carlos L), administrada por CRT.
-    {
-      name: "La Jolla",
+      name: "Maria Escriba",
       type: PropertyType.OTRO,
-      address: "La Jolla, Hermosillo",
-      cadastralKey: "14333037",
-      notes: "Propiedad de Juan Carlos L (JCL). CRT administra; predial lo paga el dueño.",
-      owner: "JCL",
-      manager: "CRT",
-      units: [],
-    },
-
-    // 12. Ma Escriba — propiedad CRT cuyo predial paga JC.
-    {
-      name: "Ma Escriba",
-      type: PropertyType.OTRO,
-      address: "Ma Escriba, Hermosillo",
+      address: "Maria Escriba, Hermosillo",
       cadastralKey: "30204003",
       notes: "Predial pagado por terceros (JC).",
       owner: "CRT",
@@ -517,7 +505,7 @@ async function main(): Promise<void> {
       units: [],
     },
 
-    // 13. Serdán — dueña real Cecilia, predial lo paga CRT.
+    // 11. Serdán — dueña real Cecilia, predial lo paga CRT.
     {
       name: "Serdán",
       type: PropertyType.OTRO,
@@ -527,6 +515,26 @@ async function main(): Promise<void> {
       owner: "CRT",
       manager: "CRT",
       units: [],
+    },
+
+    // 12. La Jolla — propiedad personal de Juan Carlos L (JCL); CRT administra.
+    // Actualmente sin contrato activo: aparece como Disponible para renta.
+    {
+      name: "La Jolla",
+      type: PropertyType.CASA,
+      address: "La Jolla, Hermosillo",
+      notes: "Propiedad personal de Juan Carlos L. CRT administra; sin contrato activo.",
+      owner: "JCL",
+      manager: "CRT",
+      units: [
+        {
+          code: "U1",
+          name: "Casa La Jolla",
+          vacant: true,
+          monthlyAmount: 25000,
+          unitNotes: "Disponible para renta. Renta estimada $25,000 / mes.",
+        },
+      ],
     },
   ];
 
@@ -703,9 +711,7 @@ async function main(): Promise<void> {
     { cadastralKey: "51007086", totalAmount: 24881.00, paidMonth: 3 }, // Plaza Quiroga — pagado, sin mes; asumimos abril.
     { cadastralKey: "01179002", totalAmount: 805.00, paidMonth: 3, payer: "TSR" }, // Capilla del Carmen (CLICK) — paga TSR
     { cadastralKey: "01173002", totalAmount: 5277.00, paidMonth: 3, payer: "CRT", notes: "Dueña real: Cecilia." }, // Serdán — paga CRT
-    { cadastralKey: "02074018", totalAmount: null, paidMonth: null, payer: "JCL" }, // Bodega — paga el dueño JCL
-    { cadastralKey: "14333037", totalAmount: null, paidMonth: null, payer: "JCL" }, // La Jolla — paga el dueño JCL
-    { cadastralKey: "30204003", totalAmount: null, paidMonth: null, paidByThirdPartyName: "JC" }, // Ma Escriba — propiedad CRT, predial lo paga JC como tercero
+    { cadastralKey: "30204003", totalAmount: null, paidMonth: null, paidByThirdPartyName: "JC" }, // Maria Escriba — propiedad CRT, predial lo paga JC como tercero
   ];
 
   const dueDate2026 = utcDate(YEAR, 2, 31); // 31 de marzo del año fiscal
@@ -735,6 +741,264 @@ async function main(): Promise<void> {
       },
     });
   }
+
+  // -- 6.7. Egresos 2026 ---------------------------------------------------
+  // Datos del Excel "PRESUPUESTO_INMOBILIARIAS_2026" del cliente.
+  // Se genera un Expense por mes con monto > 0. Meses pasados (Ene-Abr) se
+  // marcan como pagados; mayo en adelante quedan pendientes (presupuesto).
+  type Months12 = readonly [
+    number, number, number, number, number, number,
+    number, number, number, number, number, number,
+  ];
+  type EgresoDef = {
+    entity: EntityCode;
+    category: string;
+    description: string;
+    amounts: Months12;
+  };
+
+  // Helper: idéntico a 12-array pero con valores constantes.
+  const same = (n: number): Months12 => [n, n, n, n, n, n, n, n, n, n, n, n];
+
+  const egresosDef: EgresoDef[] = [
+    // ---------------- CRT ----------------
+    { entity: "CRT", category: "NOMINA_DIRECCION", description: "Nómina dirección",
+      amounts: [35000, 35000, 35000, 35000, 35000, 35000, 35000, 35000, 35000, 35000, 35000, 52500] },
+    { entity: "CRT", category: "NOMINA_GENERAL", description: "Nómina general",
+      amounts: [61106.90, 36478.51, 47122.50, 39528, 46878, 39528, 39528, 35000, 39528, 35000, 46878, 59292] },
+    { entity: "CRT", category: "PREDIAL", description: "Predial impuestos",
+      amounts: [0, 0, 0, 9745, 0, 0, 0, 0, 0, 0, 0, 0] },
+    { entity: "CRT", category: "PLACAS", description: "Placas, licencias y otros",
+      amounts: [3498, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] },
+    { entity: "CRT", category: "SAT", description: "SAT impuestos",
+      amounts: [23305, 28907, 18879, 24000, 24000, 24000, 24000, 24000, 24000, 24000, 24000, 24000] },
+    { entity: "CRT", category: "IMSS_INFONAVIT", description: "IMSS / Infonavit",
+      amounts: [30622.81, 7073.99, 31846, 6500, 30500, 6500, 30500, 6500, 30500, 6500, 30500, 6500] },
+    { entity: "CRT", category: "ISRTP", description: "ISR sobre Producto del Trabajo (3%)",
+      amounts: [1670, 800, 1012, 1200, 1200, 1200, 1200, 1200, 1200, 1200, 1200, 1200] },
+    { entity: "CRT", category: "HONORARIOS", description: "Honorarios",
+      amounts: [5552.16, 5270.34, 5252.94, 5316, 5316, 5316, 5316, 5316, 5316, 5316, 5316, 5316] },
+    { entity: "CRT", category: "COMISIONES_BANCARIAS", description: "Comisiones bancarias",
+      amounts: [388, 388, 395.56, 405, 405, 405, 405, 405, 405, 405, 405, 405] },
+    { entity: "CRT", category: "MANTENIMIENTO_PLAZAS", description: "Mantenimiento plazas / limpieza / Casa JC",
+      amounts: [47558.02, 25931.31, 7756.30, 10000, 10000, 10000, 10000, 10000, 10000, 10000, 10000, 10000] },
+    { entity: "CRT", category: "PAPELERIA", description: "Consumo oficina / papelería",
+      amounts: [630, 1495, 2090, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000] },
+    { entity: "CRT", category: "SERVICIOS_AUTOS", description: "Servicios, lavado y GPS Saveiro",
+      amounts: [786, 8670.36, 0, 1500, 1500, 1500, 1500, 1500, 1500, 1500, 1500, 1500] },
+    { entity: "CRT", category: "FINANCIAMIENTO_TOYOTA", description: "Financiamiento Toyota (CRT)",
+      amounts: same(6644.10) },
+    { entity: "CRT", category: "FINANCIAMIENTO_EXPEDITION", description: "Financiamiento Expedition (CRT)",
+      amounts: same(25711.92) },
+    { entity: "CRT", category: "SEGUROS_INMUEBLES", description: "Seguros inmuebles / Saveiro",
+      amounts: [7134.48, 0, 10345.29, 3939, 0, 0, 5345, 0, 6063, 4425, 0, 0] },
+    { entity: "CRT", category: "ALARMA", description: "Alarma — Serdán / Bodega",
+      amounts: same(960) },
+    { entity: "CRT", category: "SANISO_BASURA", description: "Saniso — recolección basura",
+      amounts: [5930.36, 6133.69, 6133.69, 5930.36, 5930.36, 5930.36, 5930.36, 5930.36, 5930.36, 5930.36, 5930.36, 5930.36] },
+    { entity: "CRT", category: "CFE", description: "CFE — Serdán / Progreso / Bodega / Quiroga",
+      amounts: [5448, 0, 4375, 8500, 8500, 8500, 8500, 8500, 8500, 8500, 8500, 8500] },
+    { entity: "CRT", category: "AGUA", description: "Agua — Serdán / Bodega",
+      amounts: [630, 3721, 5781, 5000, 5000, 5000, 5000, 5000, 5000, 5000, 5000, 5000] },
+    { entity: "CRT", category: "TELMEX", description: "Telmex — bar / oficinas",
+      amounts: [2496, 4104, 2097, 2197, 2197, 2197, 2197, 2197, 2197, 2197, 2197, 2197] },
+    { entity: "CRT", category: "TELCEL", description: "Telcel 2 líneas",
+      amounts: [399, 399, 712, 399, 399, 399, 399, 399, 399, 399, 399, 399] },
+    { entity: "CRT", category: "GASOLINA", description: "Gasolina Casa JC",
+      amounts: [7900, 9889.46, 13500, 6000, 6000, 6000, 6000, 6000, 6000, 6000, 6000, 6000] },
+    { entity: "CRT", category: "OTROS", description: "Otros y comisiones",
+      amounts: [12661, 12886.64, 14200, 5000, 5000, 5000, 5000, 5000, 5000, 5000, 5000, 5000] },
+
+    // ---------------- TSR ----------------
+    { entity: "TSR", category: "NOMINA_DIRECCION", description: "Nómina dirección",
+      amounts: [25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 37500] },
+    { entity: "TSR", category: "NOMINA_GENERAL", description: "Nómina general",
+      amounts: [15000, 15000, 15000, 15000, 15000, 15000, 15000, 15000, 15000, 15000, 15000, 25000] },
+    { entity: "TSR", category: "PREDIAL", description: "Predial impuestos",
+      amounts: [0, 14785, 0, 8221, 0, 0, 0, 0, 0, 0, 0, 0] },
+    { entity: "TSR", category: "PLACAS", description: "Placas, licencias y otros",
+      amounts: [3498, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] },
+    { entity: "TSR", category: "SAT", description: "SAT impuestos",
+      amounts: [3142, 0, 14293, 5200, 5200, 5200, 5200, 5200, 5200, 5200, 5200, 5200] },
+    { entity: "TSR", category: "HONORARIOS", description: "Honorarios",
+      amounts: [3173.67, 3167.67, 3179.27, 3138.67, 3138.67, 3138.67, 3138.67, 3138.67, 3138.67, 3138.67, 3138.67, 3138.67] },
+    { entity: "TSR", category: "COMISIONES_BANCARIAS", description: "Comisiones bancarias",
+      amounts: [347.70, 333.50, 343.36, 370, 370, 370, 370, 370, 370, 370, 370, 370] },
+    { entity: "TSR", category: "MANTENIMIENTO_PLAZAS", description: "Mantenimiento y otros",
+      amounts: [0, 1911.54, 10588, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000] },
+    { entity: "TSR", category: "PAPELERIA", description: "Papelería oficina (impresiones)",
+      amounts: [0, 0, 0, 1615, 0, 0, 0, 0, 1196, 0, 0, 1197] },
+    { entity: "TSR", category: "PAPELERIA", description: "Consumo oficina (bebidas, botanas, limpieza)",
+      amounts: [2778, 1909, 1468, 2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000] },
+    { entity: "TSR", category: "OTROS", description: "Lic, alcohol, permisos y comisiones",
+      amounts: [0, 0, 0, 62125, 0, 0, 0, 0, 0, 0, 0, 0] },
+    { entity: "TSR", category: "SEGUROS_INMUEBLES", description: "Seguro automotriz",
+      amounts: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 8553.72] },
+    { entity: "TSR", category: "SERVICIOS_AUTOS", description: "Servicios y otros (autos)",
+      amounts: [0, 0, 4073, 500, 500, 500, 500, 500, 500, 500, 500, 500] },
+    { entity: "TSR", category: "FINANCIAMIENTO_BMW", description: "Financiamiento BMW (TSR)",
+      amounts: [23752.01, 23752.01, 23156.98, 23752.01, 23752.01, 23752.01, 23752.01, 23752.01, 23752.01, 23752.01, 23752.01, 23752.01] },
+    { entity: "TSR", category: "GASOLINA", description: "Gasolina",
+      amounts: [4914.84, 5000, 5300, 4000, 4000, 4000, 4000, 4000, 4000, 4000, 4000, 4000] },
+    { entity: "TSR", category: "OTROS", description: "Caja chica",
+      amounts: [2000, 1600, 1600, 1500, 1500, 1500, 1500, 1500, 1500, 1500, 1500, 1500] },
+    { entity: "TSR", category: "OTROS", description: "Otros y comisiones",
+      amounts: [55900, 20900, 22014, 5000, 5000, 5000, 5000, 5000, 5000, 5000, 5000, 5000] },
+
+    // ---------------- QHS ----------------
+    { entity: "QHS", category: "HONORARIOS", description: "Contabilidad (honorarios)",
+      amounts: same(1300) },
+    { entity: "QHS", category: "COMISIONES_BANCARIAS", description: "Comisiones bancarias",
+      amounts: same(655.40) },
+  ];
+
+  // Cargar el id de cada categoría una sola vez.
+  const expenseCategoriesByCode = new Map<string, string>();
+  const allCats = await prisma.expenseCategory.findMany({
+    where: { tenantId: tenant.id },
+    select: { id: true, code: true },
+  });
+  for (const c of allCats) expenseCategoriesByCode.set(c.code, c.id);
+
+  // Mes actual en YEAR — meses anteriores se consideran ya pagados.
+  const currentMonth =
+    TODAY.getUTCFullYear() > YEAR ? 12 : TODAY.getUTCMonth();
+
+  let expensesCreated = 0;
+  for (const def of egresosDef) {
+    const categoryId = expenseCategoriesByCode.get(def.category);
+    if (!categoryId) {
+      console.warn(`⚠️  Egreso: categoría ${def.category} no existe, se omite "${def.description}".`);
+      continue;
+    }
+    const legalEntityId = entities[def.entity].id;
+    for (let m = 0; m < 12; m++) {
+      const amount = def.amounts[m];
+      if (!amount || amount <= 0) continue;
+      const isPaid = m < currentMonth;
+      await prisma.expense.create({
+        data: {
+          tenantId: tenant.id,
+          legalEntityId,
+          categoryId,
+          amount: decimal(amount),
+          expenseDate: utcDate(YEAR, m, 15),
+          description: def.description,
+          paymentMethod: isPaid ? PaymentMethod.TRANSFER : null,
+          isPaid,
+        },
+      });
+      expensesCreated++;
+    }
+  }
+  console.log(`Egresos ${YEAR} creados: ${expensesCreated}`);
+
+  // -- 6.8. Nóminas 2026 ---------------------------------------------------
+  // Datos del bloque "Estrategia Nómina" del Excel del cliente. Cubre
+  // Ene–Jun 2026: facturas de servicios administrativos (Audazon/OSC),
+  // nómina directa por razón social y nómina estratégica fiscal.
+  type PayrollDef = {
+    entity: EntityCode;
+    type: "ADMIN_SERVICE_INVOICE" | "DIRECT_PAYROLL" | "STRATEGY_NOMINA";
+    description: string;
+    amount: number;
+    amountWithoutTax?: number;
+    taxAmount?: number;
+  };
+
+  const PAYROLL_MONTHS = [1, 2, 3, 4, 5, 6] as const; // Ene–Jun 2026
+  const payrollDef: PayrollDef[] = [
+    // ---------------- CRT (Audazon) ----------------
+    {
+      entity: "CRT",
+      type: "ADMIN_SERVICE_INVOICE",
+      description: "Factura Serv. Adm. (Audazon)",
+      amount: 50627.04,
+      amountWithoutTax: 43644.0,
+      taxAmount: 6983.04,
+    },
+    {
+      entity: "CRT",
+      type: "DIRECT_PAYROLL",
+      description: "Nómina Dirección",
+      amount: 40000.0,
+    },
+    {
+      entity: "CRT",
+      type: "STRATEGY_NOMINA",
+      description: "Impuestos y comisión estrategia nómina",
+      amount: 3644.0,
+    },
+
+    // ---------------- TSR (OSC) ----------------
+    {
+      entity: "TSR",
+      type: "ADMIN_SERVICE_INVOICE",
+      description: "Factura Serv. Adm. (OSC)",
+      amount: 44298.66,
+      amountWithoutTax: 38188.5,
+      taxAmount: 6110.16,
+    },
+    {
+      entity: "TSR",
+      type: "DIRECT_PAYROLL",
+      description: "Nómina Dirección",
+      amount: 20000.0,
+    },
+    {
+      entity: "TSR",
+      type: "DIRECT_PAYROLL",
+      description: "Nómina Gerencia",
+      amount: 15000.0,
+    },
+    {
+      entity: "TSR",
+      type: "STRATEGY_NOMINA",
+      description: "Impuestos y comisión estrategia nómina",
+      amount: 3188.5,
+    },
+
+    // ---------------- CLICK (OSC + vinculación) ----------------
+    {
+      entity: "CLICK",
+      type: "ADMIN_SERVICE_INVOICE",
+      description: "Factura Serv. Adm. (OSC)",
+      amount: 6328.38,
+      amountWithoutTax: 5455.5,
+      taxAmount: 872.88,
+    },
+    {
+      entity: "CLICK",
+      type: "DIRECT_PAYROLL",
+      description: "Nómina Vinculación",
+      amount: 5000.0,
+    },
+  ];
+
+  let payrollsCreated = 0;
+  for (const def of payrollDef) {
+    const legalEntityId = entities[def.entity].id;
+    for (const m of PAYROLL_MONTHS) {
+      await prisma.payroll.create({
+        data: {
+          tenantId: tenant.id,
+          legalEntityId,
+          period: utcDate(YEAR, m - 1, 1),
+          type: def.type,
+          amount: decimal(def.amount),
+          amountWithoutTax:
+            def.amountWithoutTax !== undefined
+              ? decimal(def.amountWithoutTax)
+              : null,
+          taxAmount:
+            def.taxAmount !== undefined ? decimal(def.taxAmount) : null,
+          description: def.description,
+        },
+      });
+      payrollsCreated++;
+    }
+  }
+  console.log(`Nóminas ${YEAR} creadas: ${payrollsCreated}`);
 
   // -- 7. Usuario admin de prueba ------------------------------------------
   const masterRole = await prisma.role.findUnique({
@@ -773,8 +1037,11 @@ async function main(): Promise<void> {
     paymentsCount,
     guaranteesCount,
     expenseCategoriesCount,
+    expensesCount,
+    expensesPaid,
     cadastralCount,
     cadastralPaid,
+    payrollsCount,
     usersCount,
   ] = await Promise.all([
     prisma.tenant.count({ where: { slug: TENANT_SLUG } }),
@@ -805,10 +1072,13 @@ async function main(): Promise<void> {
     prisma.payment.count(tenantWhere),
     prisma.guarantee.count(tenantWhere),
     prisma.expenseCategory.count(tenantWhere),
+    prisma.expense.count(tenantWhere),
+    prisma.expense.count({ where: { tenantId: tenant.id, isPaid: true } }),
     prisma.cadastralPayment.count(tenantWhere),
     prisma.cadastralPayment.count({
       where: { tenantId: tenant.id, isPaid: true },
     }),
+    prisma.payroll.count(tenantWhere),
     prisma.user.count(tenantWhere),
   ]);
 
@@ -816,7 +1086,7 @@ async function main(): Promise<void> {
   console.log("✅ Seed completado: Plazas Magnum");
   console.log("========================================");
   console.log(`Tenants:                ${tenantsCount}`);
-  console.log(`Razones sociales:       ${legalEntitiesCount}  (CRT, TSR, QHS, JCL)`);
+  console.log(`Razones sociales:       ${legalEntitiesCount}  (CRT, TSR, QHS, JCL, CLICK)`);
   console.log(`Inmuebles (Property):   ${propertiesCount}`);
   console.log(`Unidades:               ${unitsTotal}  (${unitsRented} rentadas, ${unitsAvailable} disponibles)`);
   console.log(`Inquilinos (Lessee):    ${lesseesCount}`);
@@ -825,7 +1095,9 @@ async function main(): Promise<void> {
   console.log(`Pagos registrados:      ${paymentsCount}`);
   console.log(`Depósitos en garantía:  ${guaranteesCount}`);
   console.log(`Categorías de gasto:    ${expenseCategoriesCount}`);
+  console.log(`Egresos ${YEAR}:             ${expensesCount}  (${expensesPaid} pagados)`);
   console.log(`Prediales ${YEAR}:           ${cadastralCount}  (${cadastralPaid} pagados)`);
+  console.log(`Nóminas ${YEAR}:             ${payrollsCount}`);
   console.log(`Usuarios:               ${usersCount}`);
   console.log("========================================");
   console.log(`Login demo: crm.inmobiliaria02@gmail.com (rol MASTER)\n`);
