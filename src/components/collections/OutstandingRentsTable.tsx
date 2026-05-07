@@ -33,6 +33,8 @@ import {
   type RegisterPaymentDialogContext,
 } from "@/components/collections/RegisterPaymentDialog";
 import { RentStatusBadge } from "@/components/shared/RentStatusBadge";
+import { OUTSTANDING_STATUSES } from "@/lib/constants/rent-statuses";
+import { rentStatusLabel } from "@/lib/i18n/enums";
 import type { OutstandingRent } from "@/lib/services/payments-queries";
 import type { RentStatus } from "@/generated/prisma/enums";
 
@@ -50,17 +52,9 @@ const PERIOD = new Intl.DateTimeFormat("es-MX", {
 
 type StatusFilter = RentStatus | "ALL";
 
-const STATUS_OPTIONS: ReadonlyArray<RentStatus> = [
-  "DUE",
-  "PARTIAL",
-  "OVERDUE_1M",
-  "OVERDUE_2M",
-  "OVERDUE_3M",
-];
-
 const statusFilterItems: Record<string, string> = {
   ALL: "Todos los estados",
-  ...Object.fromEntries(STATUS_OPTIONS.map((s) => [s, s])),
+  ...Object.fromEntries(OUTSTANDING_STATUSES.map((s) => [s, rentStatusLabel(s)])),
 };
 
 interface OutstandingRentsTableProps {

@@ -13,7 +13,7 @@ export const createUnitSchema = z.object({
   code: z
     .string()
     .trim()
-    .min(1, "El código es requerido.")
+    .min(1, "El identificador es requerido.")
     .max(20, "Máximo 20 caracteres."),
   name: z
     .string()

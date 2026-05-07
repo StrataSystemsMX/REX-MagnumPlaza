@@ -67,7 +67,7 @@ export default async function CollectionsPage() {
             <span className="font-semibold">{MXN.format(collectedThisMonth)}</span>
           </p>
         </div>
-        <Button variant="outline" render={<Link href="/collections/yearly" />}>
+        <Button variant="outline" render={<Link href="/ingresos" />}>
           <CalendarRange className="size-4" />
           Vista anual
         </Button>

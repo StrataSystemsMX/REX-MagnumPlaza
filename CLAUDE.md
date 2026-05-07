@@ -18,11 +18,12 @@
 
 ## 2. Razones sociales del cliente (importante)
 
-El cliente opera bajo **3 razones sociales** simultáneas, parte de su estrategia fiscal. El sistema debe permitir que un inmueble pertenezca legalmente a una entidad pero sea administrado y facturado por otra.
+El cliente opera bajo **3 razones sociales** simultáneas, parte de su estrategia fiscal, más **1 persona física** registrada como entidad propietaria. El sistema debe permitir que un inmueble pertenezca legalmente a una entidad pero sea administrado y facturado por otra.
 
 - **CRT** — Inmobiliaria principal. Dueña de la mayoría de inmuebles.
 - **TSR** — Factura activos como Inbursa, La Chila Garmendia, Capilla del Carmen, Nayarit 52.
 - **QHS** — Dueña legal del terreno de Plaza Quiroga, administrada por CRT.
+- **JCL** — Juan Carlos L (persona física). Dueño de **Bodega** y **La Jolla**; CRT administra. `isOperator: false` — no factura, sólo aparece como owner formal.
 
 > ⚠️ En la transcripción de la junta inicial estos acrónimos aparecen como TCR y UHS (error de transcripción). El Excel real del cliente confirma CRT, TSR, QHS.
 
@@ -201,7 +202,7 @@ export async function actionCreateContract(input: CreateContractInput) {
 El cliente tiene un Excel real (`PRESUPUESTO_INMOBILIARIAS_2026_ANALISIS_2025.xlsx`) con datos reales de 30+ inquilinos. La función seed (`prisma/seed.ts`) debe crear:
 
 - 1 Tenant: "Plazas Magnum"
-- 3 LegalEntities: CRT, TSR, QHS
+- 4 LegalEntities: CRT, TSR, QHS, JCL (persona física dueña de Bodega y La Jolla)
 - 4 Properties principales: Plaza Progreso, Plaza Olivares, Plaza Quiroga 1, Plaza Quiroga 2
 - 5 Properties individuales: Inbursa Blvd Kino, La Chila Garmendia, Capilla del Carmen, Oficina Elias Piso 2, Nayarit 52
 - ~30 Units con sus inquilinos actuales y montos

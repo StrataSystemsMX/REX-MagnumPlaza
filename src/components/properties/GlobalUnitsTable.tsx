@@ -97,7 +97,9 @@ export function GlobalUnitsTable({ groups }: GlobalUnitsTableProps) {
   const router = useRouter();
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [propertyFilter, setPropertyFilter] = useState<string>("all");
-  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const [collapsed, setCollapsed] = useState<Set<string>>(
+    () => new Set(groups.map((g) => g.property.id)),
+  );
 
   const [createOpen, setCreateOpen] = useState(false);
   const [createPropertyId, setCreatePropertyId] = useState<string>("");
@@ -270,7 +272,7 @@ export function GlobalUnitsTable({ groups }: GlobalUnitsTableProps) {
                   onValueChange={(v) => setCreatePropertyId(v ?? "")}
                   items={createPropertyItems}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger className="w-full">
                     <SelectValue placeholder="Selecciona plaza o inmueble" />
                   </SelectTrigger>
                   <SelectContent>
@@ -309,7 +311,7 @@ export function GlobalUnitsTable({ groups }: GlobalUnitsTableProps) {
                 <button
                   type="button"
                   onClick={() => toggleGroup(g.property.id)}
-                  className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-muted/50"
+                  className="flex w-full items-center gap-3 px-4 py-3.5 text-left hover:bg-muted/50"
                   aria-expanded={!isCollapsed}
                 >
                   {isCollapsed ? (
@@ -318,8 +320,10 @@ export function GlobalUnitsTable({ groups }: GlobalUnitsTableProps) {
                     <ChevronDown className="size-4 text-muted-foreground" />
                   )}
                   <div className="flex-1">
-                    <p className="font-semibold">{g.property.name}</p>
-                    <p className="text-xs text-muted-foreground">
+                    <p className="text-base font-semibold leading-tight">
+                      {g.property.name}
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">
                       {propertyTypeLabel(g.property.type)} ·{" "}
                       {g.property.ownerEntity.code}
                       {g.property.ownerEntity.id !== g.property.managerEntity.id ? (
@@ -431,9 +435,8 @@ function UnitsSection({
             <TableHead className="h-9 w-14 pl-4">
               <span className="sr-only">Foto</span>
             </TableHead>
-            <TableHead className="h-9">Código</TableHead>
+            <TableHead className="h-9">Identificador</TableHead>
             <TableHead className="h-9">Nombre</TableHead>
-            <TableHead className="h-9 text-right">Área (m²)</TableHead>
             <TableHead className="h-9">Estado</TableHead>
             <TableHead className="h-9">Inquilino</TableHead>
             <TableHead className="h-9 text-right">Renta</TableHead>
@@ -481,9 +484,6 @@ function UnitsSection({
                 <TableCell className="font-mono text-sm">{u.code}</TableCell>
                 <TableCell className="text-sm">
                   {u.name ?? <span className="text-muted-foreground">—</span>}
-                </TableCell>
-                <TableCell className="text-right tabular-nums text-sm">
-                  {u.area !== null ? Number(u.area).toLocaleString("es-MX") : "—"}
                 </TableCell>
                 <TableCell>
                   <Badge variant={unitStatusVariant(u.status)}>

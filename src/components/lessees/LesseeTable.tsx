@@ -63,7 +63,7 @@ interface LesseeTableProps {
 export function LesseeTable({ lessees }: LesseeTableProps) {
   const router = useRouter();
   const [search, setSearch] = useState("");
-  const [view, setView] = useState<"table" | "cards">("table");
+  const [view, setView] = useState<"table" | "cards">("cards");
   const [createOpen, setCreateOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<LesseeListItem | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<LesseeListItem | null>(null);

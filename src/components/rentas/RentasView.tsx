@@ -318,85 +318,50 @@ export function RentasView({ tableData }: { tableData: RentasTableData }) {
           </div>
         </div>
 
-        <div className="grid gap-0 lg:grid-cols-[1fr_22rem]">
-          <div className="p-5 sm:p-6">
-            <div className="max-w-2xl">
-              <p className="text-muted-foreground text-xs font-medium tracking-wider uppercase">
-                {selectedProperty?.propertyName ?? "Vista mensual"}
-              </p>
-              <h2 className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">
-                Renta total
-              </h2>
-              <p className="mt-3 text-3xl font-semibold tracking-tight tabular-nums">
-                {MXN.format(expected)}
-              </p>
-              <p className="text-muted-foreground mt-2 text-sm">
-                Pendiente {MXN.format(pendingAmount)}
-              </p>
-            </div>
-
-            <div className="mt-6 space-y-3">
-              <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
-                <p className="text-sm font-medium">Progreso de cobranza</p>
-                <p className="text-muted-foreground text-sm tabular-nums">
-                  <span className={toneTextClass(periodTone)}>{MXN.format(collected)}</span> /{" "}
-                  {MXN.format(expected)}
-                </p>
-              </div>
-              <div className="bg-muted h-4 overflow-hidden rounded-full">
-                <div
-                  className={cn("h-full rounded-full transition-all", toneBarClass(periodTone))}
-                  style={{ width: `${Math.min(pctValue, 100)}%` }}
-                />
-              </div>
-              <div className="grid gap-3 sm:grid-cols-3">
-                <DigestMetric label="Cobrado" value={MXN.format(collected)} tone="positive" />
-                <DigestMetric
-                  label="Pendiente"
-                  value={MXN.format(pendingAmount)}
-                  tone={pendingAmount > 0 ? "warning" : "positive"}
-                />
-                <DigestMetric label="Avance" value={`${pctValue}%`} tone={periodTone} />
-              </div>
-            </div>
+        <div className="p-5 sm:p-6">
+          <div className="max-w-2xl">
+            <p className="text-muted-foreground text-xs font-medium tracking-wider uppercase">
+              {selectedProperty?.propertyName ?? "Vista mensual"}
+            </p>
+            <h2 className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">
+              Renta total
+            </h2>
+            <p className="mt-3 text-3xl font-semibold tracking-tight tabular-nums">
+              {MXN.format(expected)}
+            </p>
+            <p className="text-muted-foreground mt-2 text-sm">
+              Pendiente {MXN.format(pendingAmount)}
+            </p>
           </div>
 
-          <div className="bg-primary/[0.035] border-t p-5 sm:p-6 lg:border-t-0 lg:border-l">
-            <div className="flex h-full flex-col justify-between gap-5">
-              <div>
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="text-muted-foreground text-xs font-medium tracking-wider uppercase">
-                      Cobranza
-                    </p>
-                    <p
-                      className={cn(
-                        "mt-2 text-5xl font-semibold tabular-nums",
-                        toneTextClass(periodTone),
-                      )}
-                    >
-                      {pctValue}%
-                    </p>
-                  </div>
-                </div>
-                <div className="bg-background ring-border mt-4 h-3 overflow-hidden rounded-full ring-1">
-                  <div
-                    className={cn("h-full rounded-full transition-all", toneBarClass(periodTone))}
-                    style={{ width: `${Math.min(pctValue, 100)}%` }}
-                  />
-                </div>
-                <div className="text-muted-foreground mt-2 flex items-center justify-between gap-3 text-xs">
-                  <span>{MXN.format(collected)}</span>
-                  <span>{MXN.format(expected)}</span>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-4 gap-2 text-center text-xs">
-                <StatusCount label="Pag." value={paidCount} tone="positive" />
-                <StatusCount label="Parc." value={partialCount} tone="warning" />
-                <StatusCount label="Pend." value={pendingCount} tone="neutral" />
-                <StatusCount label="Venc." value={overdueCount} tone="danger" />
-              </div>
+          <div className="mt-6 space-y-3">
+            <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+              <p className="text-sm font-medium">Progreso de cobranza</p>
+              <p className="text-muted-foreground text-sm tabular-nums">
+                <span className={toneTextClass(periodTone)}>{MXN.format(collected)}</span> /{" "}
+                {MXN.format(expected)}
+              </p>
+            </div>
+            <div className="bg-muted h-4 overflow-hidden rounded-full">
+              <div
+                className={cn("h-full rounded-full transition-all", toneBarClass(periodTone))}
+                style={{ width: `${Math.min(pctValue, 100)}%` }}
+              />
+            </div>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <DigestMetric label="Cobrado" value={MXN.format(collected)} tone="positive" />
+              <DigestMetric
+                label="Pendiente"
+                value={MXN.format(pendingAmount)}
+                tone={pendingAmount > 0 ? "warning" : "positive"}
+              />
+              <DigestMetric label="Avance" value={`${pctValue}%`} tone={periodTone} />
+            </div>
+            <div className="grid grid-cols-4 gap-2 pt-1 text-center text-xs">
+              <StatusCount label="Pag." value={paidCount} tone="positive" />
+              <StatusCount label="Parc." value={partialCount} tone="warning" />
+              <StatusCount label="Pend." value={pendingCount} tone="neutral" />
+              <StatusCount label="Venc." value={overdueCount} tone="danger" />
             </div>
           </div>
         </div>

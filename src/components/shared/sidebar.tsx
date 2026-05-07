@@ -47,8 +47,8 @@ const GROUPS: ReadonlyArray<NavGroup> = [
     label: "Operación Inmobiliaria",
     items: [
       { href: "/plazas",      label: "Plazas",     icon: Building2 },
-      { href: "/inmuebles",   label: "Inmuebles",  icon: Home },
       { href: "/units",       label: "Locales",    icon: DoorOpen },
+      { href: "/inmuebles",   label: "Inmuebles",  icon: Home },
       { href: "/lessees",     label: "Inquilinos", icon: Users },
       { href: "/rentas",      label: "Rentas",     icon: CalendarDays },
       { href: "/collections", label: "Cobranza",   icon: HandCoins },

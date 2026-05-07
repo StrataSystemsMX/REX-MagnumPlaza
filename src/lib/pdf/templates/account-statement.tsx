@@ -1,5 +1,7 @@
 import React from "react";
 import { Document, Page, Text, View } from "@react-pdf/renderer";
+import { rentStatusLabel } from "@/lib/i18n/enums";
+import type { RentStatus } from "@/generated/prisma/enums";
 import {
   DocFooter,
   DocHeader,
@@ -135,7 +137,9 @@ export function AccountStatementPdf(props: AccountStatementProps) {
                     {MXN.format(Number(r.amountPaid))}
                   </Text>
                   <Text style={cell.bal}>{MXN.format(balance)}</Text>
-                  <Text style={cell.status}>{r.status}</Text>
+                  <Text style={cell.status}>
+                    {rentStatusLabel(r.status as RentStatus)}
+                  </Text>
                 </View>
               );
             })}

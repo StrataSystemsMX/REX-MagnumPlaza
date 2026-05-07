@@ -1,16 +1,11 @@
 import { Prisma } from "@/generated/prisma/client";
 import { requireAuth } from "@/lib/auth/get-session";
+import { OUTSTANDING_STATUSES } from "@/lib/constants/rent-statuses";
 import { prisma } from "@/lib/prisma/client";
 import { serializeDecimals } from "@/lib/utils/serialize-decimals";
 import type { PaymentMethod, RentStatus } from "@/generated/prisma/enums";
 
-const OUTSTANDING_STATUSES: RentStatus[] = [
-  "DUE",
-  "PARTIAL",
-  "OVERDUE_1M",
-  "OVERDUE_2M",
-  "OVERDUE_3M",
-];
+export { OUTSTANDING_STATUSES };
 
 export interface OutstandingFilters {
   statuses?: RentStatus[];
@@ -361,8 +356,9 @@ export type CalendarRent = Awaited<ReturnType<typeof getAllRentsForCalendar>>[nu
  * un estado derivado: PAID / PARTIAL / SIN_PAGO / PRE_PAGADO / ABONO / VACANT.
  *
  * El periodo se interpreta en UTC (matches Rent.period que es el primer día
- * del mes UTC). PRE_PAGADO se deriva de Contract.paidInAdvance + advancePaidUntil.
- * ABONO indica sobrepago (amountPaid > amountDue).
+ * del mes UTC). El estado depende del periodo vs. la fecha actual:
+ *   - Periodo pasado o actual: PAID (cubierto) / PARTIAL (pago insuficiente) / SIN_PAGO.
+ *   - Periodo futuro:          PRE_PAGADO (cubierto) / ABONO (pago insuficiente) / SIN_PAGO.
  */
 export type MonthlyUnitStatus =
   | "PAID"
@@ -371,6 +367,30 @@ export type MonthlyUnitStatus =
   | "PRE_PAGADO"
   | "ABONO"
   | "VACANT";
+
+/**
+ * Deriva el estado de una renta a partir de los montos y la posición del
+ * periodo respecto al mes actual. Centralizado para que monthly y yearly
+ * coincidan.
+ */
+function deriveMonthlyStatus(
+  period: Date,
+  amountPaid: Prisma.Decimal,
+  amountDue: Prisma.Decimal,
+  now: Date,
+): MonthlyUnitStatus {
+  const currentMonthStart = new Date(
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1),
+  );
+  const isFuture = period.getTime() > currentMonthStart.getTime();
+  const fullyPaid =
+    amountPaid.greaterThanOrEqualTo(amountDue) && amountDue.greaterThan(0);
+  const hasPayment = amountPaid.greaterThan(0);
+
+  if (fullyPaid) return isFuture ? "PRE_PAGADO" : "PAID";
+  if (hasPayment) return isFuture ? "ABONO" : "PARTIAL";
+  return "SIN_PAGO";
+}
 
 export interface MonthlyUnitRow {
   unitId: string;
@@ -418,6 +438,7 @@ export interface MonthlyCollections {
 export async function getMonthlyCollectionsByProperty(period: Date): Promise<MonthlyCollections> {
   const { tenantId } = await requireAuth();
 
+  const now = new Date();
   const periodStart = new Date(
     Date.UTC(period.getUTCFullYear(), period.getUTCMonth(), 1),
   );
@@ -519,33 +540,18 @@ export async function getMonthlyCollectionsByProperty(period: Date): Promise<Mon
       const amountPaid = rent ? new Prisma.Decimal(rent.amountPaid) : new Prisma.Decimal(0);
       expected = expected.plus(amountDue);
 
-      // PRE_PAGADO: contrato marcado paidInAdvance y la fecha límite de
-      // anticipo cubre o pasa este periodo.
-      const prePaid =
-        contract.paidInAdvance &&
-        contract.advancePaidUntil !== null &&
-        contract.advancePaidUntil >= periodEnd;
-      const prePaidMonths = prePaid && contract.advancePaidUntil
-        ? Math.max(
-            0,
-            (contract.advancePaidUntil.getUTCFullYear() - period.getUTCFullYear()) * 12 +
-              (contract.advancePaidUntil.getUTCMonth() - period.getUTCMonth()),
-          )
-        : null;
+      const status = deriveMonthlyStatus(period, amountPaid, amountDue, now);
 
-      // Estado derivado: el orden importa — PRE_PAGADO gana sobre todo.
-      let status: MonthlyUnitStatus;
-      if (prePaid) {
-        status = "PRE_PAGADO";
-      } else if (amountPaid.greaterThan(amountDue)) {
-        status = "ABONO";
-      } else if (amountPaid.equals(amountDue) && amountDue.greaterThan(0)) {
-        status = "PAID";
-      } else if (amountPaid.greaterThan(0)) {
-        status = "PARTIAL";
-      } else {
-        status = "SIN_PAGO";
-      }
+      // Meses pre-pagados (para tooltip): solo aplica si el contrato fue
+      // marcado con paidInAdvance/advancePaidUntil. Es metadata informativa.
+      const prePaidMonths =
+        status === "PRE_PAGADO" && contract.paidInAdvance && contract.advancePaidUntil
+          ? Math.max(
+              0,
+              (contract.advancePaidUntil.getUTCFullYear() - period.getUTCFullYear()) * 12 +
+                (contract.advancePaidUntil.getUTCMonth() - period.getUTCMonth()),
+            )
+          : null;
 
       switch (status) {
         case "PAID":
@@ -660,6 +666,7 @@ export interface YearlyCollections {
 export async function getYearlyCollectionsMatrix(year: number): Promise<YearlyCollections> {
   const { tenantId } = await requireAuth();
 
+  const now = new Date();
   const yearStart = new Date(Date.UTC(year, 0, 1));
   const yearEnd = new Date(Date.UTC(year + 1, 0, 1));
 
@@ -764,33 +771,16 @@ export async function getYearlyCollectionsMatrix(year: number): Promise<YearlyCo
         monthlyAgg[i]!.expected = monthlyAgg[i]!.expected.plus(amountDue);
         monthlyAgg[i]!.paid = monthlyAgg[i]!.paid.plus(amountPaid);
 
-        const periodEnd = new Date(
-          Date.UTC(period.getUTCFullYear(), period.getUTCMonth() + 1, 1),
-        );
-        const prePaid =
-          contract.paidInAdvance &&
-          contract.advancePaidUntil !== null &&
-          contract.advancePaidUntil >= periodEnd;
-        const prePaidMonths = prePaid && contract.advancePaidUntil
-          ? Math.max(
-              0,
-              (contract.advancePaidUntil.getUTCFullYear() - period.getUTCFullYear()) * 12 +
-                (contract.advancePaidUntil.getUTCMonth() - period.getUTCMonth()),
-            )
-          : null;
+        const status = deriveMonthlyStatus(period, amountPaid, amountDue, now);
 
-        let status: MonthlyUnitStatus;
-        if (prePaid) {
-          status = "PRE_PAGADO";
-        } else if (amountPaid.greaterThan(amountDue)) {
-          status = "ABONO";
-        } else if (amountPaid.equals(amountDue) && amountDue.greaterThan(0)) {
-          status = "PAID";
-        } else if (amountPaid.greaterThan(0)) {
-          status = "PARTIAL";
-        } else {
-          status = "SIN_PAGO";
-        }
+        const prePaidMonths =
+          status === "PRE_PAGADO" && contract.paidInAdvance && contract.advancePaidUntil
+            ? Math.max(
+                0,
+                (contract.advancePaidUntil.getUTCFullYear() - period.getUTCFullYear()) * 12 +
+                  (contract.advancePaidUntil.getUTCMonth() - period.getUTCMonth()),
+              )
+            : null;
 
         if (status === "PAID" || status === "PRE_PAGADO") monthlyAgg[i]!.paidCount += 1;
         if (status === "SIN_PAGO") monthlyAgg[i]!.sinPagoCount += 1;

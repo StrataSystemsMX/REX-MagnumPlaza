@@ -116,7 +116,7 @@ function AgingTab({ data }: { data: ReportsBundle["aging"] }) {
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
-        <BucketCard label="Vencido" value={data.totals.bucket0to30} tone="default" />
+        <BucketCard label="Mes actual" value={data.totals.bucket0to30} tone="default" />
         <BucketCard label="1 mes vencido" value={data.totals.bucket31to60} tone="warning" />
         <BucketCard label="2 meses vencidos" value={data.totals.bucket61to90} tone="warning" />
         <BucketCard label="3+ meses vencidos" value={data.totals.bucket90plus} tone="danger" />
@@ -139,14 +139,12 @@ function AgingTab({ data }: { data: ReportsBundle["aging"] }) {
               <TableHeader>
                 <TableRow>
                   <TableHead>Inquilino</TableHead>
-                  <TableHead className="text-right">Vencido</TableHead>
+                  <TableHead className="text-right">Mes actual</TableHead>
                   <TableHead className="text-right">1 mes</TableHead>
                   <TableHead className="text-right">2 meses</TableHead>
                   <TableHead className="text-right">3+ meses</TableHead>
                   <TableHead className="text-right">Total</TableHead>
-                  <TableHead>Distribución</TableHead>
                   <TableHead className="text-right">Días máx</TableHead>
-                  <TableHead className="text-right">Rentas</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -180,15 +178,11 @@ function AgingTab({ data }: { data: ReportsBundle["aging"] }) {
                     <TableCell className="text-right font-semibold tabular-nums">
                       {moneyZero(row.total)}
                     </TableCell>
-                    <TableCell>
-                      <AgingBar row={row} />
-                    </TableCell>
                     <TableCell className="text-right">
                       <Badge variant={row.oldestDaysOverdue > 90 ? "destructive" : "secondary"}>
                         {row.oldestDaysOverdue}d
                       </Badge>
                     </TableCell>
-                    <TableCell className="text-right">{row.rentsOverdueCount}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -230,37 +224,6 @@ function BucketCard({
         </p>
       </CardContent>
     </Card>
-  );
-}
-
-function AgingBar({
-  row,
-}: {
-  row: ReportsBundle["aging"]["rows"][number];
-}) {
-  const total = Number(row.total);
-  if (!Number.isFinite(total) || total <= 0) return null;
-  const pct = (v: string) => Math.max(0, (Number(v) / total) * 100);
-  const segments: Array<{ label: string; value: number; className: string }> = [
-    { label: "Vencido", value: pct(row.bucket0to30), className: "bg-slate-400" },
-    { label: "1 mes", value: pct(row.bucket31to60), className: "bg-amber-400" },
-    { label: "2 meses", value: pct(row.bucket61to90), className: "bg-orange-500" },
-    { label: "3+ meses", value: pct(row.bucket90plus), className: "bg-rose-500" },
-  ];
-  return (
-    <div
-      className="flex h-2 w-32 overflow-hidden rounded-full bg-muted"
-      title={segments
-        .filter((s) => s.value > 0)
-        .map((s) => `${s.label}: ${Math.round(s.value)}%`)
-        .join(" · ")}
-    >
-      {segments.map((s, i) =>
-        s.value > 0 ? (
-          <div key={i} className={s.className} style={{ width: `${s.value}%` }} />
-        ) : null,
-      )}
-    </div>
   );
 }
 

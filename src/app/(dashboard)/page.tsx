@@ -121,6 +121,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
     paymentsDetail,
     expensesDetail,
     legalEntities,
+    cobranzaMonthRents,
   ] = await Promise.all([
     // KPI cards — respetan el filtro de LE
     prisma.payment.aggregate({
@@ -217,7 +218,47 @@ export default async function DashboardPage({ searchParams }: PageProps) {
       select: { id: true, code: true },
       orderBy: { code: "asc" },
     }),
+
+    // Cobranza del mes en curso (independiente del periodo del dashboard)
+    prisma.rent.findMany({
+      where: {
+        tenantId: dbUser.tenantId,
+        period: currentMonthStart,
+        ...leFilter,
+      },
+      select: { status: true, amountDue: true, amountPaid: true },
+    }),
   ]);
+
+  // ── Cobranza mes en curso ──────────────────────────────────────────────────
+  const cobranzaExpected  = cobranzaMonthRents.reduce((s, r) => s + Number(r.amountDue), 0);
+  const cobranzaCollected = cobranzaMonthRents.reduce((s, r) => s + Number(r.amountPaid), 0);
+  const cobranzaPct = cobranzaExpected > 0
+    ? Math.round((cobranzaCollected / cobranzaExpected) * 100)
+    : 0;
+  let cobranzaPaid = 0, cobranzaPartial = 0, cobranzaPending = 0, cobranzaOverdue = 0;
+  for (const r of cobranzaMonthRents) {
+    if (r.status === "PAID") cobranzaPaid++;
+    else if (r.status === "PARTIAL") cobranzaPartial++;
+    else if (r.status === "PENDING" || r.status === "DUE") cobranzaPending++;
+    else if (r.status === "OVERDUE_1M" || r.status === "OVERDUE_2M" || r.status === "OVERDUE_3M") cobranzaOverdue++;
+  }
+  const cobranzaTone =
+    cobranzaPct >= 90 ? "emerald" :
+    cobranzaPct >= 70 ? "blue" :
+    cobranzaPct >= 50 ? "amber" : "rose";
+  const cobranzaToneText: Record<string, string> = {
+    emerald: "text-emerald-600",
+    blue:    "text-blue-600",
+    amber:   "text-amber-600",
+    rose:    "text-rose-600",
+  };
+  const cobranzaToneBar: Record<string, string> = {
+    emerald: "bg-emerald-500",
+    blue:    "bg-blue-500",
+    amber:   "bg-amber-500",
+    rose:    "bg-rose-500",
+  };
 
   // ── KPI cards ──────────────────────────────────────────────────────────────
   const ventasTotal  = Number(ventas._sum.amount  ?? 0);
@@ -409,6 +450,53 @@ export default async function DashboardPage({ searchParams }: PageProps) {
         </Card>
       )}
 
+      {/* ── Cobranza mes en curso ── */}
+      <Card>
+        <CardContent className="pt-5">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+                Cobranza
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {MONTHS[currentMonth] ?? ""} {currentYear}
+              </p>
+            </div>
+            <p className={`text-4xl font-bold tabular-nums ${cobranzaToneText[cobranzaTone]}`}>
+              {cobranzaPct}%
+            </p>
+          </div>
+          <div className="mt-4 h-3 w-full overflow-hidden rounded-full bg-muted ring-1 ring-border">
+            <div
+              className={`h-full rounded-full transition-all ${cobranzaToneBar[cobranzaTone]}`}
+              style={{ width: `${Math.min(cobranzaPct, 100)}%` }}
+            />
+          </div>
+          <div className="mt-2 flex items-center justify-between text-xs tabular-nums text-muted-foreground">
+            <span>{MXN.format(cobranzaCollected)}</span>
+            <span>{MXN.format(cobranzaExpected)}</span>
+          </div>
+          <div className="mt-4 grid grid-cols-4 gap-2 text-center">
+            <div className="rounded-lg border bg-background/70 px-2 py-2">
+              <p className="font-semibold tabular-nums text-emerald-600">{cobranzaPaid}</p>
+              <p className="mt-0.5 text-xs text-muted-foreground">Pagado</p>
+            </div>
+            <div className="rounded-lg border bg-background/70 px-2 py-2">
+              <p className="font-semibold tabular-nums text-amber-600">{cobranzaPartial}</p>
+              <p className="mt-0.5 text-xs text-muted-foreground">Parcial</p>
+            </div>
+            <div className="rounded-lg border bg-background/70 px-2 py-2">
+              <p className="font-semibold tabular-nums">{cobranzaPending}</p>
+              <p className="mt-0.5 text-xs text-muted-foreground">Pendiente</p>
+            </div>
+            <div className="rounded-lg border bg-background/70 px-2 py-2">
+              <p className="font-semibold tabular-nums text-rose-600">{cobranzaOverdue}</p>
+              <p className="mt-0.5 text-xs text-muted-foreground">Vencido</p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* ── Resumen por Razón Social + Ranking de Plazas ── */}
       <div className="grid gap-4 lg:grid-cols-2">
 
@@ -426,7 +514,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
                     <th className="pb-2 text-right font-medium">Ingresos</th>
                     <th className="pb-2 text-right font-medium">Egresos</th>
                     <th className="pb-2 text-right font-medium">Utilidad</th>
-                    <th className="pb-2 text-right font-medium">Rent.</th>
+                    <th className="pb-2 text-right font-medium">Rentabilidad</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y">
@@ -460,7 +548,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
         <Card>
           <CardContent className="pt-5">
             <p className="mb-4 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-              Ranking de Plazas — Renta mensual esperada
+              Renta mensual esperada
             </p>
             <div className="space-y-3">
               {rankingPlazas.map((p) => (

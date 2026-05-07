@@ -14,13 +14,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { EnumSelect } from "@/components/ui/enum-select";
 import { Textarea } from "@/components/ui/textarea";
 import { unitStatusLabel } from "@/lib/i18n/enums";
 import {
@@ -100,7 +94,7 @@ export function UnitForm({ initial, onSuccess, submitLabel = "Guardar" }: UnitFo
             name="code"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Código</FormLabel>
+                <FormLabel>Identificador</FormLabel>
                 <FormControl>
                   <Input {...field} />
                 </FormControl>
@@ -116,29 +110,6 @@ export function UnitForm({ initial, onSuccess, submitLabel = "Guardar" }: UnitFo
                 <FormLabel>Nombre / Inquilino actual</FormLabel>
                 <FormControl>
                   <Input {...field} value={field.value ?? ""} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          <FormField
-            control={form.control}
-            name="area"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Área (m²)</FormLabel>
-                <FormControl>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={field.value ?? ""}
-                    onChange={(e) =>
-                      field.onChange(
-                        e.target.value === "" ? undefined : Number(e.target.value),
-                      )
-                    }
-                  />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -173,20 +144,13 @@ export function UnitForm({ initial, onSuccess, submitLabel = "Guardar" }: UnitFo
             render={({ field }) => (
               <FormItem className="md:col-span-2">
                 <FormLabel>Estado</FormLabel>
-                <Select onValueChange={field.onChange} value={field.value}>
-                  <FormControl>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecciona estado" />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    {UNIT_STATUSES.map((s) => (
-                      <SelectItem key={s} value={s}>
-                        {unitStatusLabel(s)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <EnumSelect
+                  values={UNIT_STATUSES}
+                  labelFor={unitStatusLabel}
+                  value={field.value}
+                  onValueChange={field.onChange}
+                  placeholder="Selecciona estado"
+                />
                 <FormMessage />
               </FormItem>
             )}

@@ -14,16 +14,10 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { EnumSelect } from "@/components/ui/enum-select";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
-import { paymentMethodLabel } from "@/lib/i18n/enums";
+import { paymentMethodLabel, rentStatusLabel } from "@/lib/i18n/enums";
 import { actionRegisterPayment } from "@/lib/services/payments";
 import { registerPaymentSchema } from "@/lib/validators/payment";
 import type { PaymentMethod } from "@/generated/prisma/enums";
@@ -116,9 +110,24 @@ export function RegisterPaymentDialog({
     startTransition(async () => {
       try {
         const result = await actionRegisterPayment(parsed.data);
-        toast.success(
-          `Pago de ${MXN.format(parsed.data.amount)} registrado. Renta queda ${result.rentStatus}.`,
-        );
+        const statusLabel = rentStatusLabel(result.rentStatus as Parameters<typeof rentStatusLabel>[0]);
+        const parts = [
+          `Pago de ${MXN.format(parsed.data.amount)} registrado. Renta queda ${statusLabel.toLowerCase()}.`,
+        ];
+        if (result.cascade.length > 0) {
+          const months = result.cascade
+            .map((c) => PERIOD.format(c.period))
+            .join(", ");
+          parts.push(
+            `Sobrante aplicado a ${result.cascade.length} mensualidad${result.cascade.length === 1 ? "" : "es"} (${months}).`,
+          );
+        }
+        if (result.remainderApplied > 0) {
+          parts.push(
+            `Quedó ${MXN.format(result.remainderApplied)} a favor.`,
+          );
+        }
+        toast.success(parts.join(" "));
         onOpenChange(false);
         router.refresh();
       } catch (e) {
@@ -170,18 +179,12 @@ export function RegisterPaymentDialog({
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
               <Label>Método</Label>
-              <Select value={method} onValueChange={(v) => v && setMethod(v as PaymentMethod)}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {METHODS.map((m) => (
-                    <SelectItem key={m} value={m}>
-                      {paymentMethodLabel(m)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <EnumSelect
+                values={METHODS}
+                labelFor={paymentMethodLabel}
+                value={method}
+                onValueChange={(v) => setMethod(v)}
+              />
             </div>
             <div className="space-y-1">
               <Label>Referencia</Label>
@@ -201,10 +204,9 @@ export function RegisterPaymentDialog({
           </div>
 
           {overpay > 0 ? (
-            <div className="rounded-md border border-amber-300 bg-amber-50 p-2 text-xs text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200">
-              <strong>Pago en exceso:</strong> {MXN.format(overpay)} sobre el saldo.
-              La renta quedará en PAID; el sobrante deberá aplicarse manualmente al
-              siguiente Rent del inquilino.
+            <div className="rounded-md border border-sky-200 bg-sky-50 p-2 text-xs text-sky-800 dark:border-sky-900 dark:bg-sky-950 dark:text-sky-200">
+              <strong>Pago en exceso:</strong> {MXN.format(overpay)}. Se aplicará a
+              pagos pendientes; si no hay, se abonara a las siguientes mensualidades.
             </div>
           ) : null}
         </div>

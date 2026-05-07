@@ -172,7 +172,7 @@ export function UnitTable({ propertyId, units }: UnitTableProps) {
                 <TableHead className="w-14">
                   <span className="sr-only">Foto</span>
                 </TableHead>
-                <TableHead>Código</TableHead>
+                <TableHead>Identificador</TableHead>
                 <TableHead>Nombre</TableHead>
                 <TableHead className="text-right">Área (m²)</TableHead>
                 <TableHead className="text-right">Renta estimada</TableHead>
