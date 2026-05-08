@@ -1,95 +1,74 @@
-import { EgresosTable } from "@/components/egresos/EgresosTable";
+import { EgresosYearlyView } from "@/components/egresos/EgresosYearlyView";
 import { requireAuth } from "@/lib/auth/get-session";
 import { hasPermission } from "@/lib/auth/permissions";
+import { prisma } from "@/lib/prisma/client";
 import {
   getExpenseCategories,
-  getExpenseYears,
-  getExpenses,
   getPropertiesForExpenseForm,
+  getYearlyExpensesMatrix,
 } from "@/lib/services/expenses-queries";
 import { getLegalEntities } from "@/lib/services/properties-queries";
 
-interface SearchParams {
-  year?: string;
-  month?: string;
-  legalEntity?: string;
-  category?: string;
+interface PageProps {
+  searchParams: Promise<{ year?: string }>;
 }
 
-export default async function EgresosPage({
-  searchParams,
-}: {
-  searchParams: Promise<SearchParams>;
-}) {
-  const sp = await searchParams;
-  const { dbUser } = await requireAuth();
+export default async function EgresosPage({ searchParams }: PageProps) {
+  const { tenantId, dbUser } = await requireAuth();
+  const params = await searchParams;
 
-  const yearsAvailable = await getExpenseYears();
+  const requestedYear = Number(params.year);
+  const year =
+    Number.isFinite(requestedYear) && requestedYear > 1900
+      ? requestedYear
+      : new Date().getUTCFullYear();
+
+  const oldestExpense = await prisma.expense.findFirst({
+    where: { tenantId, category: { type: { not: "PAYROLL" } } },
+    orderBy: { expenseDate: "asc" },
+    select: { expenseDate: true },
+  });
+  const minYear = oldestExpense
+    ? Math.min(oldestExpense.expenseDate.getUTCFullYear(), year - 1)
+    : year - 1;
   const currentYear = new Date().getUTCFullYear();
-  const fallbackYear = yearsAvailable[0] ?? currentYear;
-  const selectedYear = sp.year
-    ? Number.parseInt(sp.year, 10) || fallbackYear
-    : fallbackYear;
-
-  const monthRaw = sp.month ? Number.parseInt(sp.month, 10) : NaN;
-  const selectedMonth =
-    Number.isFinite(monthRaw) && monthRaw >= 1 && monthRaw <= 12
-      ? monthRaw
-      : null;
-
-  const selectedLegalEntityId =
-    sp.legalEntity && sp.legalEntity !== "ALL" ? sp.legalEntity : null;
-  const selectedCategoryId =
-    sp.category && sp.category !== "ALL" ? sp.category : null;
+  const maxYear = Math.max(currentYear, year) + 1;
+  const availableYears: number[] = [];
+  for (let y = maxYear; y >= minYear; y--) availableYears.push(y);
 
   const [
-    expenses,
+    data,
     legalEntities,
     categories,
     properties,
     canCreate,
     canUpdate,
-    canDelete,
   ] = await Promise.all([
-    getExpenses({
-      year: selectedYear,
-      month: selectedMonth ?? undefined,
-      legalEntityId: selectedLegalEntityId ?? undefined,
-      categoryId: selectedCategoryId ?? undefined,
-    }),
+    getYearlyExpensesMatrix(year),
     getLegalEntities(),
     getExpenseCategories(),
     getPropertiesForExpenseForm(),
     hasPermission(dbUser.id, "expense.create"),
     hasPermission(dbUser.id, "expense.update"),
-    hasPermission(dbUser.id, "expense.delete"),
   ]);
 
   return (
-    <div className="space-y-6">
+    <div className="-m-8 space-y-6 bg-gradient-to-b from-red-400/22 to-transparent bg-[length:100%_180px] bg-no-repeat p-8 dark:from-red-800/18">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Egresos</h1>
         <p className="text-sm text-muted-foreground">
-          Gastos por razón social: nóminas, impuestos, servicios,
-          mantenimiento, financiamientos y comisiones.
+          Egresos anuales desglosados por razón social y concepto.
         </p>
       </div>
 
-      <EgresosTable
-        expenses={expenses}
+      <EgresosYearlyView
+        data={data}
+        availableYears={availableYears}
         legalEntities={legalEntities}
         categories={categories}
         properties={properties}
-        yearsAvailable={
-          yearsAvailable.length > 0 ? yearsAvailable : [currentYear]
-        }
-        selectedYear={selectedYear}
-        selectedMonth={selectedMonth}
-        selectedLegalEntityId={selectedLegalEntityId}
-        selectedCategoryId={selectedCategoryId}
         canCreate={canCreate}
         canUpdate={canUpdate}
-        canDelete={canDelete}
       />
     </div>
   );

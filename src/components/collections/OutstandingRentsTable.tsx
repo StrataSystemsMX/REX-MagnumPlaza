@@ -37,6 +37,7 @@ import { OUTSTANDING_STATUSES } from "@/lib/constants/rent-statuses";
 import { rentStatusLabel } from "@/lib/i18n/enums";
 import type { OutstandingRent } from "@/lib/services/payments-queries";
 import type { RentStatus } from "@/generated/prisma/enums";
+import { capitalizeFirst } from "@/lib/utils";
 
 const MXN = new Intl.NumberFormat("es-MX", {
   style: "currency",
@@ -140,7 +141,7 @@ export function OutstandingRentsTable({ rents, properties }: OutstandingRentsTab
         accessorKey: "period",
         header: "Periodo",
         cell: ({ row }) => (
-          <span className="text-sm capitalize">{PERIOD.format(row.original.period)}</span>
+          <span className="text-sm">{capitalizeFirst(PERIOD.format(row.original.period))}</span>
         ),
       },
       {

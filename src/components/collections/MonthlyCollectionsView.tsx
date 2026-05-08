@@ -24,7 +24,7 @@ import {
   RegisterPaymentDialog,
   type RegisterPaymentDialogContext,
 } from "@/components/collections/RegisterPaymentDialog";
-import { cn } from "@/lib/utils";
+import { capitalizeFirst, cn } from "@/lib/utils";
 import type {
   MonthlyCollections,
   MonthlyPropertyGroup,
@@ -80,8 +80,8 @@ export function MonthlyCollectionsView({ data }: MonthlyCollectionsViewProps) {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="text-xl font-semibold tracking-tight">Cobros del Mes</h2>
-          <p className="text-sm capitalize text-muted-foreground">
-            {MONTH.format(period)} ·{" "}
+          <p className="text-sm text-muted-foreground">
+            {capitalizeFirst(MONTH.format(period))} ·{" "}
             {propertyFilter === "ALL"
               ? "Todas las plazas"
               : (propertyItems[propertyFilter] ?? "")}

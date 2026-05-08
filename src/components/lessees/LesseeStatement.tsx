@@ -20,6 +20,7 @@ import {
 import { RentStatusBadge } from "@/components/shared/RentStatusBadge";
 import { contractStatusLabel, paymentMethodLabel } from "@/lib/i18n/enums";
 import type { LesseeStatement as LesseeStatementData } from "@/lib/services/payments-queries";
+import { capitalizeFirst } from "@/lib/utils";
 
 const MXN = new Intl.NumberFormat("es-MX", {
   style: "currency",
@@ -75,7 +76,7 @@ export function LesseeStatement({ data }: LesseeStatementProps) {
                 {MXN.format(Number(lastPayment.amount))}
               </span>
               <p className="text-xs text-muted-foreground">
-                {DATE.format(lastPayment.paymentDate)} ·{" "}
+                {capitalizeFirst(DATE.format(lastPayment.paymentDate))} ·{" "}
                 {paymentMethodLabel(lastPayment.method)}
               </p>
             </>
@@ -148,10 +149,10 @@ export function LesseeStatement({ data }: LesseeStatementProps) {
                   const isPayable = balance > 0 && r.status !== "WAIVED";
                   return (
                     <TableRow key={r.id}>
-                      <TableCell className="capitalize text-sm">
-                        {PERIOD.format(r.period)}
+                      <TableCell className="text-sm">
+                        {capitalizeFirst(PERIOD.format(r.period))}
                       </TableCell>
-                      <TableCell className="text-xs">{DATE.format(r.dueDate)}</TableCell>
+                      <TableCell className="text-xs">{capitalizeFirst(DATE.format(r.dueDate))}</TableCell>
                       <TableCell className="text-right tabular-nums">
                         {MXN.format(Number(r.amountDue))}
                       </TableCell>

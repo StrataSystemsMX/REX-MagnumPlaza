@@ -16,6 +16,7 @@ import {
   getDashboardMetrics,
   type DashboardOptions,
 } from "@/lib/services/dashboard-metrics";
+import { capitalizeFirst } from "@/lib/utils";
 
 const DATE = new Intl.DateTimeFormat("es-MX", {
   day: "2-digit",
@@ -126,7 +127,7 @@ export async function generateAccountStatement(
   const asOfDate = new Date();
   const tokens = {
     billingEntityName: billingEntity.legalName,
-    asOfDate: DATE.format(asOfDate),
+    asOfDate: capitalizeFirst(DATE.format(asOfDate)),
     lesseeName: lessee.legalName,
   };
 
@@ -182,7 +183,7 @@ export async function generateAccountStatement(
       mimeType: "application/pdf",
       sizeBytes: buffer.byteLength,
       uploadedById: options.uploadedById ?? null,
-      notes: `Estado de cuenta de ${lessee.legalName} al ${DATE.format(asOfDate)}.`,
+      notes: `Estado de cuenta de ${lessee.legalName} al ${capitalizeFirst(DATE.format(asOfDate))}.`,
     },
   });
 
@@ -262,12 +263,12 @@ export async function generateOverdueReminder(
   const config = reminderConfigByLevel(level);
   const unitLabel = `${rent.contract.unit.property.name} ${rent.contract.unit.code}`;
   const contractSignedDate = rent.contract.signedDate
-    ? DATE.format(rent.contract.signedDate)
-    : DATE.format(rent.contract.startDate);
+    ? capitalizeFirst(DATE.format(rent.contract.signedDate))
+    : capitalizeFirst(DATE.format(rent.contract.startDate));
 
   const tokens: Record<string, string> = {
     lesseeName: lessee.legalName,
-    period: PERIOD_LARGE.format(rent.period),
+    period: capitalizeFirst(PERIOD_LARGE.format(rent.period)),
     unitLabel,
     daysOverdue: String(days(rent.dueDate)),
     balance: MXN.format(Number(balance)),
@@ -345,7 +346,7 @@ export async function generateOverdueReminder(
       sizeBytes: buffer.byteLength,
       uploadedById: options.uploadedById ?? null,
       contractId: rent.contractId,
-      notes: `Aviso ${level} de ${lessee.legalName} — ${PERIOD_LARGE.format(rent.period)}.`,
+      notes: `Aviso ${level} de ${lessee.legalName} — ${capitalizeFirst(PERIOD_LARGE.format(rent.period))}.`,
     },
   });
 

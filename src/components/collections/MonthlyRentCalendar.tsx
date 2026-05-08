@@ -12,6 +12,7 @@ import {
   rentStatusClasses,
 } from "@/components/shared/RentStatusBadge";
 import type { RentStatus } from "@/generated/prisma/enums";
+import { capitalizeFirst } from "@/lib/utils";
 
 const MXN = new Intl.NumberFormat("es-MX", {
   style: "currency",
@@ -106,8 +107,8 @@ export function MonthlyRentCalendar({ rents }: MonthlyRentCalendarProps) {
           >
             <ChevronLeft className="size-4" />
           </Button>
-          <h2 className="text-lg font-semibold capitalize">
-            {MONTH.format(periodDate)}
+          <h2 className="text-lg font-semibold">
+            {capitalizeFirst(MONTH.format(periodDate))}
           </h2>
           <Button
             variant="ghost"

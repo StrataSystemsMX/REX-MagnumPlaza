@@ -21,6 +21,7 @@ import { paymentMethodLabel, rentStatusLabel } from "@/lib/i18n/enums";
 import { actionRegisterPayment } from "@/lib/services/payments";
 import { registerPaymentSchema } from "@/lib/validators/payment";
 import type { PaymentMethod } from "@/generated/prisma/enums";
+import { capitalizeFirst } from "@/lib/utils";
 
 const METHODS: ReadonlyArray<PaymentMethod> = [
   "TRANSFER",
@@ -116,7 +117,7 @@ export function RegisterPaymentDialog({
         ];
         if (result.cascade.length > 0) {
           const months = result.cascade
-            .map((c) => PERIOD.format(c.period))
+            .map((c) => capitalizeFirst(PERIOD.format(c.period)))
             .join(", ");
           parts.push(
             `Sobrante aplicado a ${result.cascade.length} mensualidad${result.cascade.length === 1 ? "" : "es"} (${months}).`,
@@ -143,7 +144,7 @@ export function RegisterPaymentDialog({
           <DialogTitle>Registrar pago</DialogTitle>
           <DialogDescription>
             {context.lesseeName} · {context.unitLabel} ·{" "}
-            {PERIOD.format(context.period)}
+            {capitalizeFirst(PERIOD.format(context.period))}
           </DialogDescription>
         </DialogHeader>
 

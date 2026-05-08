@@ -15,6 +15,7 @@ import {
   type RegisterPaymentInput,
 } from "@/lib/validators/payment";
 import type { PaymentModel } from "@/generated/prisma/models";
+import { capitalizeFirst } from "@/lib/utils";
 
 type TxClient = Parameters<Parameters<typeof prisma.$transaction>[0]>[0];
 
@@ -295,7 +296,7 @@ const PERIOD_ES = new Intl.DateTimeFormat("es-MX", {
 });
 
 function formatPeriodEs(d: Date): string {
-  return PERIOD_ES.format(d);
+  return capitalizeFirst(PERIOD_ES.format(d));
 }
 
 export async function actionRegisterBulkPayment(input: BulkPaymentInput): Promise<{

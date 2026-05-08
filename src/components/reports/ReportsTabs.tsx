@@ -30,6 +30,7 @@ import type {
   UnitStatus,
 } from "@/generated/prisma/enums";
 import type { ReportsBundle } from "@/lib/services/reports-queries";
+import { capitalizeFirst } from "@/lib/utils";
 
 const MXN = new Intl.NumberFormat("es-MX", {
   style: "currency",
@@ -128,7 +129,7 @@ function AgingTab({ data }: { data: ReportsBundle["aging"] }) {
           <CardTitle>Adeudo por inquilino</CardTitle>
           <CardDescription>
             Distribución del saldo pendiente según antigüedad. Corte al{" "}
-            {DATE.format(data.asOf)}.
+            {capitalizeFirst(DATE.format(data.asOf))}.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -681,7 +682,7 @@ function ExpiringTable({
                 · {c.unitCode}
               </TableCell>
               <TableCell>
-                {DATE.format(c.endDate)}
+                {capitalizeFirst(DATE.format(c.endDate))}
                 <span className="ml-2 text-xs text-muted-foreground">
                   ({mode === "upcoming" ? `en ${days}d` : `hace ${days}d`})
                 </span>

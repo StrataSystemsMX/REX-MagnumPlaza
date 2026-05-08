@@ -23,6 +23,7 @@ import { getUserRoleCodes } from "@/lib/auth/permissions";
 import { propertyTypeLabel } from "@/lib/i18n/enums";
 import { getLegalEntityMetrics } from "@/lib/services/legal-entity-queries";
 import type { PropertyType } from "@/generated/prisma/enums";
+import { capitalizeFirst } from "@/lib/utils";
 
 const MXN = new Intl.NumberFormat("es-MX", {
   style: "currency",
@@ -315,7 +316,7 @@ export default async function LegalEntityPage({ params, searchParams }: PageProp
               <TableBody>
                 {data.recentExpenses.map((e) => (
                   <TableRow key={e.id}>
-                    <TableCell className="whitespace-nowrap">{DATE.format(e.expenseDate)}</TableCell>
+                    <TableCell className="whitespace-nowrap">{capitalizeFirst(DATE.format(e.expenseDate))}</TableCell>
                     <TableCell>
                       <Badge variant="outline">{e.category}</Badge>
                     </TableCell>

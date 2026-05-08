@@ -58,13 +58,22 @@ export const deleteExpenseSchema = z.object({
 });
 export type DeleteExpenseInput = z.infer<typeof deleteExpenseSchema>;
 
-export const markExpensePaidSchema = z.object({
+export const registerExpenseSchema = z.object({
   id: z.string().min(1, "id requerido."),
+  amount,
   paymentMethod: paymentMethodSchema.optional().nullable(),
+  notes: z.string().max(500).optional().nullable(),
 });
-export type MarkExpensePaidInput = z.infer<typeof markExpensePaidSchema>;
+export type RegisterExpenseInput = z.infer<typeof registerExpenseSchema>;
 
 export const unmarkExpensePaidSchema = z.object({
   id: z.string().min(1, "id requerido."),
 });
 export type UnmarkExpensePaidInput = z.infer<typeof unmarkExpensePaidSchema>;
+
+export const markExpenseNotRequiredSchema = z.object({
+  id: z.string().min(1, "id requerido."),
+});
+export type MarkExpenseNotRequiredInput = z.infer<
+  typeof markExpenseNotRequiredSchema
+>;
