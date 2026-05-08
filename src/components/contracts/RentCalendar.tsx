@@ -3,6 +3,7 @@
 import { Badge } from "@/components/ui/badge";
 import { rentStatusLabel, rentStatusVariant } from "@/lib/i18n/enums";
 import type { ContractRent } from "@/lib/services/contracts-queries";
+import { capitalizeFirst } from "@/lib/utils";
 
 const MXN = new Intl.NumberFormat("es-MX", {
   style: "currency",
@@ -78,8 +79,8 @@ export function RentCalendar({ rents }: RentCalendarProps) {
                 className={`rounded-md border p-2 text-xs ${bgFor(r.status)}`}
               >
                 <div className="flex items-center justify-between">
-                  <span className="font-medium uppercase">
-                    {SHORT_MONTH.format(r.period)}
+                  <span className="font-medium">
+                    {capitalizeFirst(SHORT_MONTH.format(r.period))}
                   </span>
                   <Badge
                     variant={rentStatusVariant(r.status)}
@@ -98,11 +99,13 @@ export function RentCalendar({ rents }: RentCalendarProps) {
                 ) : null}
                 <p className="text-[10px] text-muted-foreground">
                   Vence{" "}
-                  {r.dueDate.toLocaleDateString("es-MX", {
-                    day: "2-digit",
-                    month: "short",
-                    timeZone: "UTC",
-                  })}
+                  {capitalizeFirst(
+                    r.dueDate.toLocaleDateString("es-MX", {
+                      day: "2-digit",
+                      month: "short",
+                      timeZone: "UTC",
+                    }),
+                  )}
                 </p>
               </div>
             ))}

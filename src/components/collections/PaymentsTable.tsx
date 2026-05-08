@@ -44,6 +44,7 @@ import { paymentMethodLabel } from "@/lib/i18n/enums";
 import { actionDeletePayment } from "@/lib/services/payments";
 import type { PaymentListItem } from "@/lib/services/payments-queries";
 import type { PaymentMethod } from "@/generated/prisma/enums";
+import { capitalizeFirst } from "@/lib/utils";
 
 const MXN = new Intl.NumberFormat("es-MX", {
   style: "currency",
@@ -163,7 +164,7 @@ export function PaymentsTable({ payments, canDelete }: PaymentsTableProps) {
         header: "Fecha",
         cell: ({ row }) => (
           <span className="text-xs tabular-nums">
-            {DATE.format(row.original.paymentDate)}
+            {capitalizeFirst(DATE.format(row.original.paymentDate))}
           </span>
         ),
       },
@@ -192,8 +193,8 @@ export function PaymentsTable({ payments, canDelete }: PaymentsTableProps) {
         id: "period",
         header: "Periodo",
         cell: ({ row }) => (
-          <span className="text-sm capitalize">
-            {PERIOD.format(row.original.rent.period)}
+          <span className="text-sm">
+            {capitalizeFirst(PERIOD.format(row.original.rent.period))}
           </span>
         ),
       },

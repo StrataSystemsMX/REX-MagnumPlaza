@@ -23,6 +23,7 @@ import type { LesseeDetail } from "@/lib/services/lessees-queries";
 import type { NotificationLogRow } from "@/lib/services/notifications-queries";
 import type { LesseePayment, LesseeStatement as LesseeStatementData } from "@/lib/services/payments-queries";
 import type { ContractStatus } from "@/generated/prisma/enums";
+import { capitalizeFirst } from "@/lib/utils";
 
 const MXN = new Intl.NumberFormat("es-MX", {
   style: "currency",
@@ -135,7 +136,7 @@ export function LesseeDetailTabs({
                     </TableCell>
                     <TableCell className="text-sm">{contractTypeLabel(c.type)}</TableCell>
                     <TableCell className="text-xs">
-                      {DATE.format(c.startDate)} → {DATE.format(c.endDate)}
+                      {capitalizeFirst(DATE.format(c.startDate))} → {capitalizeFirst(DATE.format(c.endDate))}
                     </TableCell>
                     <TableCell className="text-right tabular-nums">
                       {MXN.format(Number(c.monthlyAmount))}
@@ -181,7 +182,7 @@ export function LesseeDetailTabs({
                 payments.map((p) => (
                   <TableRow key={p.id}>
                     <TableCell className="text-xs tabular-nums">
-                      {DATE.format(p.paymentDate)}
+                      {capitalizeFirst(DATE.format(p.paymentDate))}
                     </TableCell>
                     <TableCell className="text-sm">
                       {p.rent.contract.unit.property.name} {p.rent.contract.unit.code}

@@ -8,12 +8,14 @@ import { prisma } from "@/lib/prisma/client";
 import {
   createExpenseSchema,
   deleteExpenseSchema,
-  markExpensePaidSchema,
+  markExpenseNotRequiredSchema,
+  registerExpenseSchema,
   unmarkExpensePaidSchema,
   updateExpenseSchema,
   type CreateExpenseInput,
   type DeleteExpenseInput,
-  type MarkExpensePaidInput,
+  type MarkExpenseNotRequiredInput,
+  type RegisterExpenseInput,
   type UnmarkExpensePaidInput,
   type UpdateExpenseInput,
 } from "@/lib/validators/expense";
@@ -160,19 +162,36 @@ export async function actionUpdateExpense(
   revalidatePath("/egresos");
 }
 
-export async function actionMarkExpensePaid(
-  input: MarkExpensePaidInput,
+export async function actionRegisterExpense(
+  input: RegisterExpenseInput,
 ): Promise<void> {
   const { tenantId, dbUser } = await requireAuth();
   await requirePermission(dbUser.id, EXPENSE_PERM.update);
 
-  const data = markExpensePaidSchema.parse(input);
+  const data = registerExpenseSchema.parse(input);
+
+  // Cargar nota previa para concatenar la nueva (no sobrescribir).
+  const existing = await prisma.expense.findFirstOrThrow({
+    where: { id: data.id, tenantId },
+    select: { id: true, notes: true },
+  });
+
+  const mergedNotes =
+    data.notes && data.notes.trim().length > 0
+      ? existing.notes
+        ? `${existing.notes}\n${data.notes.trim()}`
+        : data.notes.trim()
+      : existing.notes;
 
   const result = await prisma.expense.updateMany({
     where: { id: data.id, tenantId },
     data: {
+      amount: decimal(data.amount),
       isPaid: true,
+      // Si estaba marcado "Sin egreso" y ahora se registra pago, lo limpiamos.
+      isNotRequired: false,
       ...(data.paymentMethod ? { paymentMethod: data.paymentMethod } : {}),
+      notes: mergedNotes,
     },
   });
   if (result.count === 0) {
@@ -180,7 +199,8 @@ export async function actionMarkExpensePaid(
   }
 
   await logAudit(tenantId, dbUser.id, "UPDATE", data.id, {
-    action: "MARK_PAID",
+    action: "REGISTER",
+    amount: data.amount,
     paymentMethod: data.paymentMethod ?? null,
   });
 
@@ -205,6 +225,45 @@ export async function actionUnmarkExpensePaid(
 
   await logAudit(tenantId, dbUser.id, "UPDATE", id, {
     action: "UNMARK_PAID",
+  });
+
+  revalidatePath("/egresos");
+}
+
+/**
+ * Marca el egreso como "Sin egreso" — el usuario decide que en este mes
+ * no aplica pagar este concepto. Mutuamente exclusivo con isPaid.
+ * Si el egreso ya está marcado, esto lo desmarca (toggle).
+ */
+export async function actionToggleExpenseNotRequired(
+  input: MarkExpenseNotRequiredInput,
+): Promise<void> {
+  const { tenantId, dbUser } = await requireAuth();
+  await requirePermission(dbUser.id, EXPENSE_PERM.update);
+
+  const { id } = markExpenseNotRequiredSchema.parse(input);
+
+  const existing = await prisma.expense.findFirstOrThrow({
+    where: { id, tenantId },
+    select: { id: true, isNotRequired: true },
+  });
+
+  const next = !existing.isNotRequired;
+
+  const result = await prisma.expense.updateMany({
+    where: { id, tenantId },
+    data: {
+      isNotRequired: next,
+      // Si lo marcamos como "sin egreso", limpiamos isPaid.
+      ...(next ? { isPaid: false } : {}),
+    },
+  });
+  if (result.count === 0) {
+    throw new Error("Egreso no encontrado o fuera de tu tenant.");
+  }
+
+  await logAudit(tenantId, dbUser.id, "UPDATE", id, {
+    action: next ? "MARK_NOT_REQUIRED" : "UNMARK_NOT_REQUIRED",
   });
 
   revalidatePath("/egresos");

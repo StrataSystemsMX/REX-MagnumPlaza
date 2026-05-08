@@ -24,6 +24,7 @@ import type {
   ContractAuditEntry,
   ContractDetail,
 } from "@/lib/services/contracts-queries";
+import { capitalizeFirst } from "@/lib/utils";
 
 const MXN = new Intl.NumberFormat("es-MX", {
   style: "currency",
@@ -94,7 +95,7 @@ export function ContractDetailTabs({
           <Card title="Términos">
             <Row label="Tipo">{contractTypeLabel(contract.type)}</Row>
             <Row label="Vigencia">
-              {DATE.format(contract.startDate)} → {DATE.format(contract.endDate)}
+              {capitalizeFirst(DATE.format(contract.startDate))} → {capitalizeFirst(DATE.format(contract.endDate))}
             </Row>
             <Row label="Renta mensual">{MXN.format(Number(contract.monthlyAmount))}</Row>
             <Row label="Día de cobro">{contract.paymentDay}</Row>
@@ -110,7 +111,7 @@ export function ContractDetailTabs({
               <Row label="Pago adelantado">
                 Sí{" "}
                 {contract.advancePaidUntil
-                  ? `· hasta ${DATE.format(contract.advancePaidUntil)}`
+                  ? `· hasta ${capitalizeFirst(DATE.format(contract.advancePaidUntil))}`
                   : ""}
               </Row>
             ) : null}
@@ -158,7 +159,7 @@ export function ContractDetailTabs({
                     <TableCell className="font-mono text-xs">
                       {r.period.toISOString().slice(0, 7)}
                     </TableCell>
-                    <TableCell className="text-xs">{DATE.format(r.dueDate)}</TableCell>
+                    <TableCell className="text-xs">{capitalizeFirst(DATE.format(r.dueDate))}</TableCell>
                     <TableCell className="text-right tabular-nums">
                       {MXN.format(Number(r.amountDue))}
                     </TableCell>
@@ -174,7 +175,7 @@ export function ContractDetailTabs({
                         : r.payments
                             .map(
                               (p) =>
-                                `${MXN.format(Number(p.amount))} (${DATE.format(p.paymentDate)})`,
+                                `${MXN.format(Number(p.amount))} (${capitalizeFirst(DATE.format(p.paymentDate))})`,
                             )
                             .join(", ")}
                     </TableCell>
@@ -209,8 +210,8 @@ export function ContractDetailTabs({
                     <Badge>{guaranteeStatusLabel(g.status)}</Badge>
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    Recibido: {DATE.format(g.receivedDate)}
-                    {g.returnedDate ? ` · Devuelto: ${DATE.format(g.returnedDate)}` : ""}
+                    Recibido: {capitalizeFirst(DATE.format(g.receivedDate))}
+                    {g.returnedDate ? ` · Devuelto: ${capitalizeFirst(DATE.format(g.returnedDate))}` : ""}
                   </p>
                   {g.notes ? <p className="mt-1 text-xs">{g.notes}</p> : null}
                 </li>
@@ -242,7 +243,7 @@ export function ContractDetailTabs({
                 auditLog.map((a) => (
                   <TableRow key={a.id}>
                     <TableCell className="text-xs tabular-nums">
-                      {DATETIME.format(a.createdAt)}
+                      {capitalizeFirst(DATETIME.format(a.createdAt))}
                     </TableCell>
                     <TableCell className="text-sm">
                       {a.user?.name ?? a.user?.email ?? "—"}

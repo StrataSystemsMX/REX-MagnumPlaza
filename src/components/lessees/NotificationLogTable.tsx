@@ -20,6 +20,7 @@ import {
 import { actionRetryNotification } from "@/lib/services/notifications-actions";
 import type { NotificationLogRow } from "@/lib/services/notifications-queries";
 import type { NotificationStatus } from "@/generated/prisma/enums";
+import { capitalizeFirst } from "@/lib/utils";
 
 const DATETIME = new Intl.DateTimeFormat("es-MX", {
   dateStyle: "medium",
@@ -114,7 +115,7 @@ export function NotificationLogTable({ logs }: NotificationLogTableProps) {
             return (
               <TableRow key={l.id}>
                 <TableCell className="whitespace-nowrap text-xs tabular-nums">
-                  {DATETIME.format(l.createdAt)}
+                  {capitalizeFirst(DATETIME.format(l.createdAt))}
                 </TableCell>
                 <TableCell className="text-sm">
                   {templateLabel(l.templateCode)}

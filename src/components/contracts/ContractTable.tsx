@@ -46,6 +46,7 @@ import type {
   ContractListItem,
 } from "@/lib/services/contracts-queries";
 import type { ContractStatus } from "@/generated/prisma/enums";
+import { capitalizeFirst } from "@/lib/utils";
 
 type StatusFilter = ContractStatus | "ALL";
 type ExpiryFilter = "ALL" | "30" | "60" | "90";
@@ -159,7 +160,7 @@ export function ContractTable({ contracts, availableUnits }: ContractTableProps)
         header: "Vigencia",
         cell: ({ row }) => (
           <span className="text-xs tabular-nums">
-            {DATE.format(row.original.startDate)} → {DATE.format(row.original.endDate)}
+            {capitalizeFirst(DATE.format(row.original.startDate))} → {capitalizeFirst(DATE.format(row.original.endDate))}
           </span>
         ),
       },

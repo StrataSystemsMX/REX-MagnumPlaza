@@ -34,6 +34,7 @@ import {
   MAX_CADASTRAL_RECEIPT_SIZE_BYTES,
   cadastralReceiptFileSchema,
 } from "@/lib/validators/cadastral";
+import { capitalizeFirst } from "@/lib/utils";
 
 const ACCEPT = ALLOWED_CADASTRAL_RECEIPT_MIME_TYPES.join(",");
 const MAX_MB = MAX_CADASTRAL_RECEIPT_SIZE_BYTES / 1024 / 1024;
@@ -203,7 +204,7 @@ export function PredialReceiptsDialog({ target, canEdit, onClose }: Props) {
                       {d.filename}
                     </Link>
                     <p className="text-xs text-muted-foreground">
-                      {DATETIME.format(d.createdAt)} ·{" "}
+                      {capitalizeFirst(DATETIME.format(d.createdAt))} ·{" "}
                       {formatSize(d.sizeBytes)}
                     </p>
                   </div>

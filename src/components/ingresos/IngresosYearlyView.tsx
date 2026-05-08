@@ -15,7 +15,7 @@ import {
   RegisterPaymentDialog,
   type RegisterPaymentDialogContext,
 } from "@/components/collections/RegisterPaymentDialog";
-import { cn } from "@/lib/utils";
+import { capitalizeFirst, cn } from "@/lib/utils";
 import type {
   MonthlyUnitStatus,
   YearlyCell,
@@ -758,7 +758,7 @@ function MatrixCell({ cell, unitCode, propertyName, lesseeName, onClick }: Matri
 }
 
 function buildTooltip(cell: YearlyCell, lesseeName: string | null): string {
-  const period = PERIOD_FULL.format(cell.period);
+  const period = capitalizeFirst(PERIOD_FULL.format(cell.period));
   if (cell.status === "VACANT") {
     return `${period} — Vacío`;
   }
@@ -818,7 +818,7 @@ function MonthlyTotalsBar({
               const fillWidth = expected > 0 ? (paid / expected) * 100 : 0;
               return (
                 <tr key={i} className="border-b last:border-b-0">
-                  <td className="px-3 py-1.5 capitalize">{PERIOD_FULL.format(t.period)}</td>
+                  <td className="px-3 py-1.5">{capitalizeFirst(PERIOD_FULL.format(t.period))}</td>
                   <td className="px-3 py-1.5 text-right tabular-nums">
                     {MXN_INT.format(expected)}
                   </td>

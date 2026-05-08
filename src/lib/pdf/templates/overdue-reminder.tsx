@@ -9,6 +9,7 @@ import {
   type DocumentTenantInfo,
 } from "./shared";
 import type { ReminderLevel, ReminderTextConfig } from "@/lib/pdf/template-config";
+import { capitalizeFirst } from "@/lib/utils";
 
 const MXN = new Intl.NumberFormat("es-MX", {
   style: "currency",
@@ -93,7 +94,7 @@ export function OverdueReminderPdf(props: OverdueReminderProps) {
           {props.texts.title}
         </Text>
         <Text style={sharedStyles.subtitle}>
-          Hermosillo, Sonora · {DATE.format(props.asOfDate)}
+          Hermosillo, Sonora · {capitalizeFirst(DATE.format(props.asOfDate))}
         </Text>
 
         <Text style={[sharedStyles.paragraph, sharedStyles.bold]}>
@@ -125,8 +126,8 @@ export function OverdueReminderPdf(props: OverdueReminderProps) {
             const balance = Number(r.amountDue) - Number(r.amountPaid);
             return (
               <View key={idx} style={sharedStyles.tableRow}>
-                <Text style={[cell.period, { textTransform: "capitalize" }]}>
-                  {PERIOD.format(r.period)}
+                <Text style={cell.period}>
+                  {capitalizeFirst(PERIOD.format(r.period))}
                 </Text>
                 <Text style={cell.due}>
                   {MXN.format(Number(r.amountDue))}

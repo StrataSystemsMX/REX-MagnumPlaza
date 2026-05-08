@@ -33,7 +33,7 @@ export default async function IngresosPage({ searchParams }: PageProps) {
   const data = await getYearlyCollectionsMatrix(year);
 
   return (
-    <div className="space-y-6">
+    <div className="-m-8 space-y-6 bg-gradient-to-b from-green-400/22 to-transparent bg-[length:100%_180px] bg-no-repeat p-8 dark:from-green-800/18">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Ingresos</h1>
         <p className="text-sm text-muted-foreground">

@@ -16,6 +16,7 @@ import { SendWhatsAppButton } from "@/components/collections/SendWhatsAppButton"
 import { RentStatusBadge } from "@/components/shared/RentStatusBadge";
 import type { OutstandingRent } from "@/lib/services/payments-queries";
 import type { ReminderLevel } from "@/lib/pdf/template-config";
+import { capitalizeFirst } from "@/lib/utils";
 
 const MXN = new Intl.NumberFormat("es-MX", {
   style: "currency",
@@ -138,8 +139,8 @@ export function OverdueLevelSection({
                     <TableCell className="text-sm">
                       {r.contract.unit.property.name} {r.contract.unit.code}
                     </TableCell>
-                    <TableCell className="capitalize text-sm">
-                      {PERIOD.format(r.period)}
+                    <TableCell className="text-sm">
+                      {capitalizeFirst(PERIOD.format(r.period))}
                     </TableCell>
                     <TableCell className="text-right tabular-nums font-medium">
                       {MXN.format(Number(r.balance))}
@@ -151,7 +152,7 @@ export function OverdueLevelSection({
                     <TableCell className="text-xs">
                       {lc ? (
                         <>
-                          {DATE.format(lc.sentAt)}
+                          {capitalizeFirst(DATE.format(lc.sentAt))}
                           <p className="text-muted-foreground">{lc.channel}</p>
                         </>
                       ) : (

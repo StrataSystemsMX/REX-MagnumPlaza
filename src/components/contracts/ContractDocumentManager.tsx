@@ -25,6 +25,7 @@ import {
   MAX_CONTRACT_DOCUMENT_SIZE_BYTES,
   contractDocumentFileSchema,
 } from "@/lib/validators/document";
+import { capitalizeFirst } from "@/lib/utils";
 
 interface ContractDocument {
   id: string;
@@ -179,7 +180,7 @@ export function ContractDocumentManager({ contractId, documents, canEdit }: Prop
                     {d.filename}
                   </Link>
                   <p className="text-xs text-muted-foreground">
-                    {DATETIME.format(d.createdAt)} · {formatSize(d.sizeBytes)}
+                    {capitalizeFirst(DATETIME.format(d.createdAt))} · {formatSize(d.sizeBytes)}
                   </p>
                 </div>
                 {canEdit ? (

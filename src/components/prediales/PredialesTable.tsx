@@ -59,6 +59,7 @@ import type {
   CadastralStatus,
 } from "@/lib/services/cadastral-queries";
 import type { LegalEntityOption } from "@/lib/services/properties-queries";
+import { capitalizeFirst } from "@/lib/utils";
 
 type StatusFilter = "ALL" | CadastralStatus;
 
@@ -349,7 +350,7 @@ export function PredialesTable({
                     {p.totalAmount !== null ? MXN.format(p.totalAmount) : "—"}
                   </TableCell>
                   <TableCell className="text-xs">
-                    {DATE.format(p.dueDate)}
+                    {capitalizeFirst(DATE.format(p.dueDate))}
                   </TableCell>
                   <TableCell>{statusBadge(p.status)}</TableCell>
                   <TableCell className="text-right">

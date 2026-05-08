@@ -543,6 +543,9 @@ model Expense {
   invoiceNumber String? // folio fiscal / referencia
   paymentMethod PaymentMethod?
   isPaid        Boolean        @default(true)
+  // "Sin egreso": el usuario decide manualmente que en este mes no aplica
+  // pagar este concepto. Mutuamente exclusivo con isPaid.
+  isNotRequired Boolean        @default(false) @map("is_not_required")
   notes         String?
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt

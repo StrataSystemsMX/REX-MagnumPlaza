@@ -34,6 +34,7 @@ import {
 } from "@/lib/validators/contract";
 import type { AvailableUnit } from "@/lib/services/contracts-queries";
 import type { ContractType } from "@/generated/prisma/enums";
+import { capitalizeFirst } from "@/lib/utils";
 
 const CONTRACT_TYPES: ReadonlyArray<ContractType> = [
   "ARRENDAMIENTO",
@@ -615,8 +616,8 @@ function StepConfirm({
       <Row label="Inquilino">{lesseeLabel}</Row>
       <Row label="Tipo">{contractTypeLabel(terms.type)}</Row>
       <Row label="Vigencia">
-        {terms.startDate ? DATE.format(new Date(terms.startDate)) : "—"} →{" "}
-        {terms.endDate ? DATE.format(new Date(terms.endDate)) : "—"}
+        {terms.startDate ? capitalizeFirst(DATE.format(new Date(terms.startDate))) : "—"} →{" "}
+        {terms.endDate ? capitalizeFirst(DATE.format(new Date(terms.endDate))) : "—"}
       </Row>
       <Row label="Renta mensual">
         {terms.monthlyAmount ? MXN.format(Number(terms.monthlyAmount)) : "—"}
