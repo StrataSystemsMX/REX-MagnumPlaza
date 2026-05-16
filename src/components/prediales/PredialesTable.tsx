@@ -1,14 +1,21 @@
 "use client";
 
 import {
+  CalendarClock,
   CheckCircle2,
+  ChevronDown,
+  ChevronUp,
+  CircleDollarSign,
   FileText,
+  Hourglass,
+  Landmark,
   Loader2,
   MoreHorizontal,
   Pencil,
   Plus,
   RotateCcw,
   Trash2,
+  Users,
 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
@@ -59,7 +66,7 @@ import type {
   CadastralStatus,
 } from "@/lib/services/cadastral-queries";
 import type { LegalEntityOption } from "@/lib/services/properties-queries";
-import { capitalizeFirst } from "@/lib/utils";
+import { capitalizeFirst, cn } from "@/lib/utils";
 
 type StatusFilter = "ALL" | CadastralStatus;
 
@@ -77,12 +84,67 @@ const MXN = new Intl.NumberFormat("es-MX", {
   maximumFractionDigits: 2,
 });
 
+const MXN_INT = new Intl.NumberFormat("es-MX", {
+  style: "currency",
+  currency: "MXN",
+  maximumFractionDigits: 0,
+});
+
 const DATE = new Intl.DateTimeFormat("es-MX", {
   year: "numeric",
   month: "short",
   day: "2-digit",
   timeZone: "UTC",
 });
+
+const ENTITY_THEME: Record<
+  string,
+  { dot: string; ring: string; badge: string; bar: string; soft: string }
+> = {
+  CRT: {
+    dot: "bg-orange-500",
+    ring: "ring-orange-200 dark:ring-orange-900/50",
+    badge:
+      "bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300",
+    bar: "bg-orange-500",
+    soft: "bg-orange-50/40 dark:bg-orange-950/20",
+  },
+  TSR: {
+    dot: "bg-blue-500",
+    ring: "ring-blue-200 dark:ring-blue-900/50",
+    badge:
+      "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300",
+    bar: "bg-blue-500",
+    soft: "bg-blue-50/40 dark:bg-blue-950/20",
+  },
+  QHS: {
+    dot: "bg-emerald-500",
+    ring: "ring-emerald-200 dark:ring-emerald-900/50",
+    badge:
+      "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300",
+    bar: "bg-emerald-500",
+    soft: "bg-emerald-50/40 dark:bg-emerald-950/20",
+  },
+  JCL: {
+    dot: "bg-violet-500",
+    ring: "ring-violet-200 dark:ring-violet-900/50",
+    badge:
+      "bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300",
+    bar: "bg-violet-500",
+    soft: "bg-violet-50/40 dark:bg-violet-950/20",
+  },
+};
+const DEFAULT_THEME = {
+  dot: "bg-slate-500",
+  ring: "ring-slate-200 dark:ring-slate-800",
+  badge:
+    "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200",
+  bar: "bg-slate-500",
+  soft: "bg-slate-50/40 dark:bg-slate-950/20",
+};
+function themeFor(code: string) {
+  return ENTITY_THEME[code] ?? DEFAULT_THEME;
+}
 
 function statusBadge(s: CadastralStatus) {
   switch (s) {
@@ -124,6 +186,15 @@ interface Props {
   canDelete: boolean;
 }
 
+interface OwnerGroup {
+  entityId: string;
+  code: string;
+  items: CadastralListItem[];
+  total: number;
+  paid: number;
+  paidCount: number;
+}
+
 export function PredialesTable({
   payments,
   properties,
@@ -141,6 +212,7 @@ export function PredialesTable({
 
   const [ownerFilter, setOwnerFilter] = useState<string>("ALL");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("ALL");
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
 
   // Dialog states
   const [formMode, setFormMode] = useState<"create" | "edit" | null>(null);
@@ -159,14 +231,43 @@ export function PredialesTable({
 
   const filtered = useMemo(() => {
     return payments.filter((p) => {
-      if (ownerFilter !== "ALL" && p.ownerEntity.id !== ownerFilter) return false;
+      if (ownerFilter !== "ALL" && p.ownerEntity.id !== ownerFilter)
+        return false;
       if (statusFilter !== "ALL" && p.status !== statusFilter) return false;
       return true;
     });
   }, [payments, ownerFilter, statusFilter]);
 
+  const groups = useMemo<OwnerGroup[]>(() => {
+    const map = new Map<string, OwnerGroup>();
+    for (const p of filtered) {
+      const key = p.ownerEntity.id;
+      let g = map.get(key);
+      if (!g) {
+        g = {
+          entityId: key,
+          code: p.ownerEntity.code,
+          items: [],
+          total: 0,
+          paid: 0,
+          paidCount: 0,
+        };
+        map.set(key, g);
+      }
+      g.items.push(p);
+      const amt = p.totalAmount ?? 0;
+      g.total += amt;
+      if (p.isPaid) {
+        g.paid += amt;
+        g.paidCount += 1;
+      }
+    }
+    return [...map.values()].sort((a, b) => a.code.localeCompare(b.code));
+  }, [filtered]);
+
   const yearItems: Record<string, string> = useMemo(
-    () => Object.fromEntries(yearsAvailable.map((y) => [String(y), String(y)])),
+    () =>
+      Object.fromEntries(yearsAvailable.map((y) => [String(y), String(y)])),
     [yearsAvailable],
   );
 
@@ -186,6 +287,15 @@ export function PredialesTable({
     if (p.payerEntity) return p.payerEntity.code;
     if (p.paidByThirdPartyName) return p.paidByThirdPartyName;
     return p.ownerEntity.code;
+  }
+
+  function toggleGroup(entityId: string) {
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      if (next.has(entityId)) next.delete(entityId);
+      else next.add(entityId);
+      return next;
+    });
   }
 
   function confirmUnmark() {
@@ -218,8 +328,14 @@ export function PredialesTable({
     });
   }
 
+  const totalCount = payments.length;
+  const paidCount = payments.filter((p) => p.isPaid).length;
+  const globalProgress =
+    totals.total > 0 ? (totals.paid / totals.total) * 100 : 0;
+
   return (
     <>
+      {/* Filters + create */}
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div className="flex flex-wrap items-end gap-3">
           <FilterField label="Año">
@@ -290,128 +406,69 @@ export function PredialesTable({
         ) : null}
       </div>
 
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <Stat label="Total registrado" value={MXN.format(totals.total)} />
-        <Stat
+      {/* KPI cards */}
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <KpiCard
+          icon={<Landmark className="size-4" />}
+          label="Total registrado"
+          value={MXN_INT.format(totals.total)}
+          sub={`${totalCount} predial${totalCount === 1 ? "" : "es"} · ${selectedYear}`}
+        />
+        <KpiCard
+          icon={<CheckCircle2 className="size-4" />}
           label="Pagado"
-          value={MXN.format(totals.paid)}
-          tone="positive"
+          value={MXN_INT.format(totals.paid)}
+          sub={`${paidCount} de ${totalCount} · ${globalProgress.toFixed(0)}%`}
+          valueClass="text-emerald-700 dark:text-emerald-300"
+          progress={globalProgress}
         />
-        <Stat
+        <KpiCard
+          icon={<Hourglass className="size-4" />}
           label="Pendiente"
-          value={MXN.format(totals.pending)}
-          tone="warning"
+          value={MXN_INT.format(totals.pending)}
+          sub="Por liquidar este año"
+          valueClass="text-amber-700 dark:text-amber-300"
         />
-        <Stat
+        <KpiCard
+          icon={<Users className="size-4" />}
           label="Paga tercero"
-          value={MXN.format(totals.thirdParty)}
-          tone="muted"
+          value={MXN_INT.format(totals.thirdParty)}
+          sub="Cubierto por terceros"
+          valueClass="text-rose-700 dark:text-rose-300"
         />
       </div>
 
-      <div className="rounded-md border bg-card">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Inmueble</TableHead>
-              <TableHead>Clave catastral</TableHead>
-              <TableHead>Dueña</TableHead>
-              <TableHead>Pagador</TableHead>
-              <TableHead className="text-right">Monto</TableHead>
-              <TableHead>Vencimiento</TableHead>
-              <TableHead>Estado</TableHead>
-              <TableHead className="w-12 text-right">
-                <span className="sr-only">Acciones</span>
-              </TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {filtered.length === 0 ? (
-              <TableRow>
-                <TableCell
-                  colSpan={8}
-                  className="text-center text-sm text-muted-foreground"
-                >
-                  Sin prediales que coincidan con los filtros.
-                </TableCell>
-              </TableRow>
-            ) : (
-              filtered.map((p) => (
-                <TableRow key={p.id}>
-                  <TableCell className="font-medium">{p.propertyName}</TableCell>
-                  <TableCell className="font-mono text-xs">
-                    {p.cadastralKey ?? "—"}
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant="secondary">{p.ownerEntity.code}</Badge>
-                  </TableCell>
-                  <TableCell className="text-sm">{payerLabel(p)}</TableCell>
-                  <TableCell className="text-right tabular-nums">
-                    {p.totalAmount !== null ? MXN.format(p.totalAmount) : "—"}
-                  </TableCell>
-                  <TableCell className="text-xs">
-                    {capitalizeFirst(DATE.format(p.dueDate))}
-                  </TableCell>
-                  <TableCell>{statusBadge(p.status)}</TableCell>
-                  <TableCell className="text-right">
-                    <DropdownMenu>
-                      <DropdownMenuTrigger
-                        render={<Button variant="ghost" size="icon" />}
-                      >
-                        <MoreHorizontal className="size-4" />
-                        <span className="sr-only">Acciones</span>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        {canUpdate && !p.isPaid ? (
-                          <DropdownMenuItem
-                            onClick={() => setPaymentTarget(p)}
-                          >
-                            <CheckCircle2 className="size-4" />
-                            Registrar pago
-                          </DropdownMenuItem>
-                        ) : null}
-                        {canUpdate && p.isPaid ? (
-                          <DropdownMenuItem
-                            onClick={() => setUnmarkTarget(p)}
-                          >
-                            <RotateCcw className="size-4" />
-                            Desmarcar pago
-                          </DropdownMenuItem>
-                        ) : null}
-                        <DropdownMenuItem
-                          onClick={() => setReceiptsTarget(p)}
-                        >
-                          <FileText className="size-4" />
-                          Boletas
-                        </DropdownMenuItem>
-                        {canUpdate ? (
-                          <DropdownMenuItem
-                            onClick={() => {
-                              setFormInitial(p);
-                              setFormMode("edit");
-                            }}
-                          >
-                            <Pencil className="size-4" />
-                            Editar
-                          </DropdownMenuItem>
-                        ) : null}
-                        {canDelete ? (
-                          <DropdownMenuItem
-                            onClick={() => setDeleteTarget(p)}
-                          >
-                            <Trash2 className="size-4 text-destructive" />
-                            Eliminar
-                          </DropdownMenuItem>
-                        ) : null}
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </TableCell>
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </div>
+      {/* Owner sections */}
+      {groups.length === 0 ? (
+        <div className="rounded-lg border border-dashed bg-card py-12 text-center">
+          <CircleDollarSign className="mx-auto size-8 text-muted-foreground/40" />
+          <p className="mt-3 text-sm text-muted-foreground">
+            Sin prediales que coincidan con los filtros.
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {groups.map((g) => (
+            <OwnerSection
+              key={g.entityId}
+              group={g}
+              expanded={!collapsed.has(g.entityId)}
+              onToggle={() => toggleGroup(g.entityId)}
+              canUpdate={canUpdate}
+              canDelete={canDelete}
+              onPay={(p) => setPaymentTarget(p)}
+              onUnmark={(p) => setUnmarkTarget(p)}
+              onReceipts={(p) => setReceiptsTarget(p)}
+              onEdit={(p) => {
+                setFormInitial(p);
+                setFormMode("edit");
+              }}
+              onDelete={(p) => setDeleteTarget(p)}
+              payerLabel={payerLabel}
+            />
+          ))}
+        </div>
+      )}
 
       <PredialFormDialog
         mode={formMode}
@@ -497,6 +554,184 @@ export function PredialesTable({
   );
 }
 
+function OwnerSection({
+  group,
+  expanded,
+  onToggle,
+  canUpdate,
+  canDelete,
+  onPay,
+  onUnmark,
+  onReceipts,
+  onEdit,
+  onDelete,
+  payerLabel,
+}: {
+  group: OwnerGroup;
+  expanded: boolean;
+  onToggle: () => void;
+  canUpdate: boolean;
+  canDelete: boolean;
+  onPay: (p: CadastralListItem) => void;
+  onUnmark: (p: CadastralListItem) => void;
+  onReceipts: (p: CadastralListItem) => void;
+  onEdit: (p: CadastralListItem) => void;
+  onDelete: (p: CadastralListItem) => void;
+  payerLabel: (p: CadastralListItem) => string;
+}) {
+  const theme = themeFor(group.code);
+  const count = group.items.length;
+  const progress = group.total > 0 ? (group.paid / group.total) * 100 : 0;
+
+  return (
+    <div className="overflow-hidden rounded-lg border bg-card shadow-sm">
+      <button
+        type="button"
+        onClick={onToggle}
+        className={cn(
+          "flex w-full items-center gap-4 px-4 py-3 text-left transition-colors hover:bg-muted/30",
+          theme.soft,
+        )}
+      >
+        <span
+          className={cn("size-2.5 shrink-0 rounded-full", theme.dot)}
+          aria-hidden
+        />
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="font-semibold">{group.code}</span>
+            <span
+              className={cn(
+                "rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider",
+                theme.badge,
+              )}
+            >
+              {count} inmueble{count === 1 ? "" : "s"}
+            </span>
+            <span className="text-xs text-muted-foreground">
+              · {group.paidCount} de {count} pagado
+              {count === 1 ? "" : "s"}
+            </span>
+          </div>
+          <div className="mt-2 flex items-center gap-3">
+            <div className="h-1.5 w-40 overflow-hidden rounded-full bg-muted">
+              <div
+                className={cn("h-full rounded-full transition-all", theme.bar)}
+                style={{ width: `${Math.min(100, Math.max(0, progress))}%` }}
+              />
+            </div>
+            <span className="text-xs text-muted-foreground tabular-nums">
+              {progress.toFixed(0)}%
+            </span>
+          </div>
+        </div>
+        <div className="hidden text-right sm:block">
+          <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
+            Total
+          </div>
+          <div className="font-mono text-sm font-semibold tabular-nums">
+            {MXN_INT.format(group.total)}
+          </div>
+        </div>
+        <div className="shrink-0 rounded p-1 text-muted-foreground">
+          {expanded ? (
+            <ChevronUp className="size-4" />
+          ) : (
+            <ChevronDown className="size-4" />
+          )}
+        </div>
+      </button>
+
+      {expanded ? (
+        <div className="border-t">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Inmueble</TableHead>
+                <TableHead>Clave catastral</TableHead>
+                <TableHead>Pagador</TableHead>
+                <TableHead className="text-right">Monto</TableHead>
+                <TableHead className="text-center">
+                  <span className="inline-flex items-center gap-1">
+                    <CalendarClock className="size-3.5" />
+                    Fecha de pago
+                  </span>
+                </TableHead>
+                <TableHead>Estado</TableHead>
+                <TableHead className="w-12 text-right">
+                  <span className="sr-only">Acciones</span>
+                </TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {group.items.map((p) => (
+                <TableRow key={p.id}>
+                  <TableCell className="font-medium">
+                    {p.propertyName}
+                  </TableCell>
+                  <TableCell className="font-mono text-xs">
+                    {p.cadastralKey ?? "—"}
+                  </TableCell>
+                  <TableCell className="text-sm">{payerLabel(p)}</TableCell>
+                  <TableCell className="text-right font-mono tabular-nums">
+                    {p.totalAmount !== null ? MXN.format(p.totalAmount) : "—"}
+                  </TableCell>
+                  <TableCell className="text-center text-xs text-muted-foreground">
+                    {p.paymentDate
+                      ? capitalizeFirst(DATE.format(p.paymentDate))
+                      : "—"}
+                  </TableCell>
+                  <TableCell>{statusBadge(p.status)}</TableCell>
+                  <TableCell className="text-right">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger
+                        render={<Button variant="ghost" size="icon" />}
+                      >
+                        <MoreHorizontal className="size-4" />
+                        <span className="sr-only">Acciones</span>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        {canUpdate && !p.isPaid ? (
+                          <DropdownMenuItem onClick={() => onPay(p)}>
+                            <CheckCircle2 className="size-4" />
+                            Registrar pago
+                          </DropdownMenuItem>
+                        ) : null}
+                        {canUpdate && p.isPaid ? (
+                          <DropdownMenuItem onClick={() => onUnmark(p)}>
+                            <RotateCcw className="size-4" />
+                            Desmarcar pago
+                          </DropdownMenuItem>
+                        ) : null}
+                        <DropdownMenuItem onClick={() => onReceipts(p)}>
+                          <FileText className="size-4" />
+                          Boletas
+                        </DropdownMenuItem>
+                        {canUpdate ? (
+                          <DropdownMenuItem onClick={() => onEdit(p)}>
+                            <Pencil className="size-4" />
+                            Editar
+                          </DropdownMenuItem>
+                        ) : null}
+                        {canDelete ? (
+                          <DropdownMenuItem onClick={() => onDelete(p)}>
+                            <Trash2 className="size-4 text-destructive" />
+                            Eliminar
+                          </DropdownMenuItem>
+                        ) : null}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function FilterField({
   label,
   children,
@@ -512,29 +747,44 @@ function FilterField({
   );
 }
 
-function Stat({
+function KpiCard({
+  icon,
   label,
   value,
-  tone,
+  sub,
+  progress,
+  valueClass,
 }: {
+  icon: React.ReactNode;
   label: string;
   value: string;
-  tone?: "positive" | "warning" | "muted";
+  sub: string;
+  progress?: number;
+  valueClass?: string;
 }) {
-  const toneClass =
-    tone === "positive"
-      ? "text-emerald-700 dark:text-emerald-300"
-      : tone === "warning"
-        ? "text-amber-700 dark:text-amber-300"
-        : tone === "muted"
-          ? "text-muted-foreground"
-          : "";
   return (
-    <div className="rounded-md border bg-card p-3">
-      <p className="text-xs uppercase text-muted-foreground">{label}</p>
-      <p className={`mt-1 text-lg font-semibold tabular-nums ${toneClass}`}>
+    <div className="rounded-lg border bg-card p-3">
+      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+        <span className="text-muted-foreground/70">{icon}</span>
+        {label}
+      </div>
+      <p
+        className={cn(
+          "mt-2 text-xl font-semibold tabular-nums leading-none",
+          valueClass,
+        )}
+      >
         {value}
       </p>
+      {typeof progress === "number" ? (
+        <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-muted">
+          <div
+            className="h-full rounded-full bg-emerald-500 transition-all"
+            style={{ width: `${Math.min(100, Math.max(0, progress))}%` }}
+          />
+        </div>
+      ) : null}
+      <p className="mt-2 text-xs text-muted-foreground">{sub}</p>
     </div>
   );
 }

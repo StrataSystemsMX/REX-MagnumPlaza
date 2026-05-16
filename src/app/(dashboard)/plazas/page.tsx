@@ -18,7 +18,7 @@ export default async function PlazasPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Plazas</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Plazas y Locales</h1>
         <p className="text-sm text-muted-foreground">
           {plazas.length} plaza{plazas.length === 1 ? "" : "s"} comercial
           {plazas.length === 1 ? "" : "es"} activa{plazas.length === 1 ? "" : "s"}.

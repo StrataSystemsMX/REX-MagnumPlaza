@@ -49,5 +49,5 @@ export async function actionMarkLoanPaymentPaid({
     });
   }
 
-  revalidatePath("/inversiones");
+  revalidatePath("/prestamos");
 }

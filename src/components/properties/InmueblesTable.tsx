@@ -255,6 +255,7 @@ export function InmueblesTable({ inmuebles, legalEntities }: InmueblesTableProps
                 id: editTarget.id,
                 name: editTarget.name,
                 type: editTarget.type,
+                status: editTarget.status,
                 address: editTarget.address,
                 ownerEntityId: editTarget.ownerEntity.id,
                 managerEntityId: editTarget.managerEntity.id,
@@ -396,9 +397,11 @@ function InmuebleCard({
   onEdit: () => void;
   onDelete: () => void;
 }) {
-  const { coverPhotoUrl, name, address, type, ownerEntity, managerEntity } = inmueble;
+  const { coverPhotoUrl, name, address, type, ownerEntity, managerEntity, status } =
+    inmueble;
+  const isBlocked = status === "BLOQUEADO";
   const snap = inmuebleSnapshot(inmueble);
-  const isAvailable = snap.lesseeName === null;
+  const isAvailable = !isBlocked && snap.lesseeName === null;
 
   return (
     <Card
@@ -419,14 +422,26 @@ function InmuebleCard({
           }
         >
           {coverPhotoUrl ? (
-            <Image
-              src={coverPhotoUrl}
-              alt={name}
-              fill
-              sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
-              className="object-cover transition-transform group-hover:scale-105"
-              loading="lazy"
-            />
+            <>
+              <Image
+                src={coverPhotoUrl}
+                alt=""
+                aria-hidden
+                fill
+                sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
+                className="scale-110 object-cover blur-xl"
+                loading="lazy"
+              />
+              <div className="absolute inset-0 bg-background/30" />
+              <Image
+                src={coverPhotoUrl}
+                alt={name}
+                fill
+                sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
+                className="object-contain transition-transform group-hover:scale-105"
+                loading="lazy"
+              />
+            </>
           ) : isAvailable ? (
             <div className="flex h-full flex-col items-center justify-center gap-1 text-emerald-700 dark:text-emerald-400">
               <Sparkles className="size-8" />
@@ -483,6 +498,7 @@ function InmuebleCard({
           </span>
         </div>
 
+        {isBlocked ? null : (
         <div className="mt-auto space-y-2 border-t pt-3 text-sm">
           {snap.lesseeName ? (
             <>
@@ -538,6 +554,7 @@ function InmuebleCard({
             </>
           )}
         </div>
+        )}
       </CardContent>
     </Card>
   );
@@ -553,12 +570,12 @@ function InmueblesTableView({
   onDelete: (p: PropertyListItem) => void;
 }) {
   return (
-    <div className="rounded-md border bg-card">
-      <Table>
+    <div className="overflow-x-auto rounded-md border bg-card">
+      <Table className="min-w-[720px]">
         <TableHeader>
           <TableRow>
             <TableHead>Nombre</TableHead>
-            <TableHead>Tipo</TableHead>
+            <TableHead className="text-center">Tipo</TableHead>
             <TableHead>Dueña</TableHead>
             <TableHead>Administra</TableHead>
             <TableHead>Inquilino</TableHead>
@@ -571,6 +588,7 @@ function InmueblesTableView({
         <TableBody>
           {inmuebles.map((p) => {
             const snap = inmuebleSnapshot(p);
+            const isBlocked = p.status === "BLOQUEADO";
             return (
               <TableRow key={p.id}>
                 <TableCell>
@@ -584,13 +602,15 @@ function InmueblesTableView({
                     <p className="text-xs text-muted-foreground">{p.address}</p>
                   ) : null}
                 </TableCell>
-                <TableCell>
+                <TableCell className="text-center">
                   <Badge variant="secondary">{propertyTypeLabel(p.type)}</Badge>
                 </TableCell>
                 <TableCell className="text-sm">{p.ownerEntity.code}</TableCell>
                 <TableCell className="text-sm">{p.managerEntity.code}</TableCell>
                 <TableCell className="text-sm">
-                  {snap.lesseeName ? (
+                  {isBlocked ? (
+                    <span className="text-muted-foreground">—</span>
+                  ) : snap.lesseeName ? (
                     snap.lesseeId ? (
                       <Link
                         href={`/lessees/${snap.lesseeId}`}
@@ -612,7 +632,9 @@ function InmueblesTableView({
                   )}
                 </TableCell>
                 <TableCell className="text-right tabular-nums text-sm">
-                  {snap.monthly !== null ? (
+                  {isBlocked ? (
+                    <span className="text-muted-foreground">—</span>
+                  ) : snap.monthly !== null ? (
                     MXN.format(snap.monthly)
                   ) : snap.estimatedRent !== null ? (
                     <span className="text-muted-foreground">

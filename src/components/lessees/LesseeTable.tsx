@@ -122,11 +122,13 @@ export function LesseeTable({ lessees }: LesseeTableProps) {
       },
       {
         accessorKey: "preferredChannel",
-        header: "Canal preferido",
+        header: () => <div className="text-center">Canal preferido</div>,
         cell: ({ row }) => (
-          <Badge variant="secondary">
-            {communicationChannelLabel(row.original.preferredChannel)}
-          </Badge>
+          <div className="text-center">
+            <Badge variant="secondary">
+              {communicationChannelLabel(row.original.preferredChannel)}
+            </Badge>
+          </div>
         ),
       },
       {
@@ -207,13 +209,13 @@ export function LesseeTable({ lessees }: LesseeTableProps) {
 
   return (
     <>
-      <div className="flex items-center justify-between gap-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
         <Input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="max-w-sm"
+          className="w-full sm:max-w-sm"
         />
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <div
             role="group"
             aria-label="Cambiar vista"
@@ -273,8 +275,8 @@ export function LesseeTable({ lessees }: LesseeTableProps) {
       </div>
 
       {view === "table" ? (
-        <div className="rounded-md border bg-card">
-          <Table>
+        <div className="overflow-x-auto rounded-md border bg-card">
+          <Table className="min-w-[760px]">
             <TableHeader>
               {table.getHeaderGroups().map((hg) => (
                 <TableRow key={hg.id}>

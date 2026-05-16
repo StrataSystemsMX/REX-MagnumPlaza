@@ -52,7 +52,12 @@ export async function actionCreateContract(
   // 1. Validar que la unit pertenece al tenant y NO tiene contrato ACTIVE.
   const unit = await prisma.unit.findFirst({
     where: { id: data.unitId, tenantId },
-    select: { id: true, status: true, code: true },
+    select: {
+      id: true,
+      status: true,
+      code: true,
+      property: { select: { status: true, name: true } },
+    },
   });
   if (!unit) {
     throw new Error("Unidad no encontrada o fuera de tu tenant.");
@@ -60,6 +65,11 @@ export async function actionCreateContract(
   if (unit.status === "RENTADA") {
     throw new Error(
       `La unidad ${unit.code} ya está rentada. Termina el contrato vigente antes de crear uno nuevo.`,
+    );
+  }
+  if (unit.property.status === "BLOQUEADO") {
+    throw new Error(
+      `El inmueble "${unit.property.name}" está bloqueado y no puede recibir contratos.`,
     );
   }
 

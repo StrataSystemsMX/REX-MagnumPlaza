@@ -8,18 +8,12 @@ import {
   type ColumnDef,
   useReactTable,
 } from "@tanstack/react-table";
-import { ExternalLink, MoreHorizontal, Plus } from "lucide-react";
-import Link from "next/link";
+import { Plus, Search } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -46,7 +40,7 @@ import type {
   ContractListItem,
 } from "@/lib/services/contracts-queries";
 import type { ContractStatus } from "@/generated/prisma/enums";
-import { capitalizeFirst } from "@/lib/utils";
+import { capitalizeFirst, cn } from "@/lib/utils";
 
 type StatusFilter = ContractStatus | "ALL";
 type ExpiryFilter = "ALL" | "30" | "60" | "90";
@@ -94,44 +88,50 @@ export function ContractTable({ contracts, availableUnits }: ContractTableProps)
   const router = useRouter();
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("ALL");
   const [expiryFilter, setExpiryFilter] = useState<ExpiryFilter>("ALL");
+  const [search, setSearch] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
 
   const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
     return contracts.filter((c) => {
       if (statusFilter !== "ALL" && c.status !== statusFilter) return false;
       if (expiryFilter !== "ALL") {
         const days = Number(expiryFilter);
         if (c.daysToExpire < 0 || c.daysToExpire > days) return false;
       }
+      if (q) {
+        const hay =
+          c.lessee.legalName +
+          " " +
+          (c.lessee.contactName ?? "") +
+          " " +
+          c.unit.property.name +
+          " " +
+          c.unit.code +
+          " " +
+          (c.unit.name ?? "") +
+          " " +
+          c.id.slice(-8);
+        if (!hay.toLowerCase().includes(q)) return false;
+      }
       return true;
     });
-  }, [contracts, statusFilter, expiryFilter]);
+  }, [contracts, statusFilter, expiryFilter, search]);
 
   const columns = useMemo<ColumnDef<ContractListItem>[]>(
     () => [
       {
-        accessorKey: "id",
-        header: "Contrato",
-        cell: ({ row }) => (
-          <Link
-            href={`/contracts/${row.original.id}`}
-            className="font-mono text-xs hover:underline"
-          >
-            {row.original.id.slice(-8)}
-          </Link>
-        ),
-      },
-      {
         id: "lessee",
         header: "Inquilino",
         cell: ({ row }) => (
-          <div className="text-sm">
-            <p className="font-medium">{row.original.lessee.legalName}</p>
-            {row.original.lessee.contactName ? (
-              <p className="text-xs text-muted-foreground">
-                {row.original.lessee.contactName}
-              </p>
-            ) : null}
+          <div className="min-w-0">
+            <p className="truncate font-medium">{row.original.lessee.legalName}</p>
+            <p className="font-mono text-[10px] text-muted-foreground">
+              {row.original.id.slice(-8)}
+              {row.original.lessee.contactName
+                ? ` · ${row.original.lessee.contactName}`
+                : ""}
+            </p>
           </div>
         ),
       },
@@ -139,84 +139,81 @@ export function ContractTable({ contracts, availableUnits }: ContractTableProps)
         id: "unit",
         header: "Unidad",
         cell: ({ row }) => (
-          <div className="text-sm">
-            <p className="font-medium">{row.original.unit.property.name}</p>
-            <p className="text-xs text-muted-foreground">
+          <div className="min-w-0 text-sm">
+            <p className="truncate font-medium">{row.original.unit.property.name}</p>
+            <p className="truncate text-xs text-muted-foreground">
               {row.original.unit.code}
               {row.original.unit.name ? ` — ${row.original.unit.name}` : ""}
+              {" · "}
+              {contractTypeLabel(row.original.type)}
             </p>
           </div>
         ),
       },
       {
-        accessorKey: "type",
-        header: "Tipo",
-        cell: ({ row }) => (
-          <span className="text-sm">{contractTypeLabel(row.original.type)}</span>
-        ),
-      },
-      {
         id: "vigency",
-        header: "Vigencia",
+        header: () => <div className="text-center">Vigencia</div>,
         cell: ({ row }) => (
-          <span className="text-xs tabular-nums">
-            {capitalizeFirst(DATE.format(row.original.startDate))} → {capitalizeFirst(DATE.format(row.original.endDate))}
-          </span>
+          <div className="text-center text-xs tabular-nums text-muted-foreground">
+            {capitalizeFirst(DATE.format(row.original.startDate))}
+            <span className="mx-1 text-foreground/30">→</span>
+            {capitalizeFirst(DATE.format(row.original.endDate))}
+          </div>
         ),
       },
       {
         accessorKey: "monthlyAmount",
-        header: () => <span className="text-right">Renta</span>,
+        header: () => <div className="text-right">Renta</div>,
         cell: ({ row }) => (
-          <span className="text-right tabular-nums">
+          <div className="text-right font-medium tabular-nums">
             {MXN.format(Number(row.original.monthlyAmount))}
-          </span>
+          </div>
         ),
       },
       {
         accessorKey: "status",
-        header: "Estado",
+        header: () => <div className="text-center">Estado</div>,
         cell: ({ row }) => (
-          <Badge variant={contractStatusVariant(row.original.status)}>
-            {contractStatusLabel(row.original.status)}
-          </Badge>
+          <div className="text-center">
+            <Badge variant={contractStatusVariant(row.original.status)}>
+              {contractStatusLabel(row.original.status)}
+            </Badge>
+          </div>
         ),
       },
       {
         accessorKey: "daysToExpire",
-        header: "Vence",
+        header: () => <div className="text-center">Vence</div>,
         cell: ({ row }) => {
           const d = row.original.daysToExpire;
           if (row.original.status !== "ACTIVE") {
-            return <span className="text-xs text-muted-foreground">—</span>;
+            return <div className="text-center text-xs text-muted-foreground">—</div>;
           }
-          if (d < 0) return <span className="text-xs text-destructive">Vencido</span>;
-          if (d <= 30)
-            return <span className="text-xs font-medium text-destructive">{d}d</span>;
-          if (d <= 60)
-            return <span className="text-xs font-medium">{d}d</span>;
-          return <span className="text-xs text-muted-foreground">{d}d</span>;
+          if (d < 0)
+            return (
+              <div className="text-center text-xs font-medium text-destructive">
+                Vencido
+              </div>
+            );
+          const tone =
+            d <= 30
+              ? "bg-rose-50 text-rose-700 ring-rose-200"
+              : d <= 60
+                ? "bg-amber-50 text-amber-700 ring-amber-200"
+                : "bg-muted text-muted-foreground ring-foreground/10";
+          return (
+            <div className="text-center">
+              <span
+                className={cn(
+                  "inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium tabular-nums ring-1",
+                  tone,
+                )}
+              >
+                {d}d
+              </span>
+            </div>
+          );
         },
-      },
-      {
-        id: "actions",
-        header: () => <span className="sr-only">Acciones</span>,
-        cell: ({ row }) => (
-          <div className="text-right">
-            <DropdownMenu>
-              <DropdownMenuTrigger render={<Button variant="ghost" size="icon" />}>
-                <MoreHorizontal className="size-4" />
-                <span className="sr-only">Acciones</span>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem render={<Link href={`/contracts/${row.original.id}`} />}>
-                  <ExternalLink className="size-4" />
-                  Ver detalle
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        ),
       },
     ],
     [],
@@ -232,14 +229,23 @@ export function ContractTable({ contracts, availableUnits }: ContractTableProps)
 
   return (
     <>
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:gap-4">
+        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+          <div className="relative w-full sm:w-64">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Buscar inquilino, unidad o ID..."
+              className="pl-8"
+            />
+          </div>
           <Select
             value={statusFilter}
             onValueChange={(v) => setStatusFilter(v as StatusFilter)}
             items={statusFilterItems}
           >
-            <SelectTrigger className="w-48">
+            <SelectTrigger className="w-full sm:w-44">
               <SelectValue placeholder="Estado" />
             </SelectTrigger>
             <SelectContent>
@@ -255,7 +261,7 @@ export function ContractTable({ contracts, availableUnits }: ContractTableProps)
             onValueChange={(v) => setExpiryFilter(v as ExpiryFilter)}
             items={expiryFilterItems}
           >
-            <SelectTrigger className="w-56">
+            <SelectTrigger className="w-full sm:w-52">
               <SelectValue placeholder="Vencimiento" />
             </SelectTrigger>
             <SelectContent>
@@ -268,19 +274,19 @@ export function ContractTable({ contracts, availableUnits }: ContractTableProps)
           </Select>
         </div>
 
-        <Button onClick={() => setCreateOpen(true)}>
+        <Button onClick={() => setCreateOpen(true)} className="w-full sm:w-auto">
           <Plus className="size-4" />
-          Nuevo Contrato
+          Nuevo contrato
         </Button>
       </div>
 
-      <div className="rounded-md border bg-card">
-        <Table>
+      <div className="overflow-hidden rounded-lg border bg-card">
+        <Table className="min-w-[860px]">
           <TableHeader>
             {table.getHeaderGroups().map((hg) => (
-              <TableRow key={hg.id}>
+              <TableRow key={hg.id} className="hover:bg-transparent">
                 {hg.headers.map((h) => (
-                  <TableHead key={h.id}>
+                  <TableHead key={h.id} className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                     {h.isPlaceholder
                       ? null
                       : flexRender(h.column.columnDef.header, h.getContext())}
@@ -294,16 +300,29 @@ export function ContractTable({ contracts, availableUnits }: ContractTableProps)
               <TableRow>
                 <TableCell
                   colSpan={columns.length}
-                  className="text-center text-sm text-muted-foreground"
+                  className="py-10 text-center text-sm text-muted-foreground"
                 >
                   No hay contratos para los filtros seleccionados.
                 </TableCell>
               </TableRow>
             ) : (
               table.getRowModel().rows.map((row) => (
-                <TableRow key={row.id}>
+                <TableRow
+                  key={row.id}
+                  tabIndex={0}
+                  role="link"
+                  aria-label={`Ver contrato ${row.original.id.slice(-8)}`}
+                  className="group cursor-pointer transition-colors hover:bg-muted/40 focus-visible:bg-muted/60 focus-visible:outline-none"
+                  onClick={() => router.push(`/contracts/${row.original.id}`)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      router.push(`/contracts/${row.original.id}`);
+                    }
+                  }}
+                >
                   {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id}>
+                    <TableCell key={cell.id} className="py-3">
                       {flexRender(cell.column.columnDef.cell, cell.getContext())}
                     </TableCell>
                   ))}
@@ -313,6 +332,12 @@ export function ContractTable({ contracts, availableUnits }: ContractTableProps)
           </TableBody>
         </Table>
       </div>
+
+      <p className="text-xs text-muted-foreground">
+        {filtered.length === contracts.length
+          ? `${contracts.length} contratos`
+          : `${filtered.length} de ${contracts.length} contratos`}
+      </p>
 
       <ContractWizard
         availableUnits={availableUnits}

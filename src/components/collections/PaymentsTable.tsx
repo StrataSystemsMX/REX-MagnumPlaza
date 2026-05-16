@@ -161,11 +161,11 @@ export function PaymentsTable({ payments, canDelete }: PaymentsTableProps) {
     () => [
       {
         accessorKey: "paymentDate",
-        header: "Fecha",
+        header: () => <div className="text-center">Fecha</div>,
         cell: ({ row }) => (
-          <span className="text-xs tabular-nums">
+          <div className="text-center text-xs tabular-nums">
             {capitalizeFirst(DATE.format(row.original.paymentDate))}
-          </span>
+          </div>
         ),
       },
       {
@@ -191,11 +191,11 @@ export function PaymentsTable({ payments, canDelete }: PaymentsTableProps) {
       },
       {
         id: "period",
-        header: "Periodo",
+        header: () => <div className="text-center">Periodo</div>,
         cell: ({ row }) => (
-          <span className="text-sm">
+          <div className="text-center text-sm">
             {capitalizeFirst(PERIOD.format(row.original.rent.period))}
-          </span>
+          </div>
         ),
       },
       {
@@ -209,9 +209,11 @@ export function PaymentsTable({ payments, canDelete }: PaymentsTableProps) {
       },
       {
         accessorKey: "method",
-        header: "Método",
+        header: () => <div className="text-center">Método</div>,
         cell: ({ row }) => (
-          <Badge variant="secondary">{paymentMethodLabel(row.original.method)}</Badge>
+          <div className="text-center">
+            <Badge variant="secondary">{paymentMethodLabel(row.original.method)}</Badge>
+          </div>
         ),
       },
       {
@@ -268,19 +270,19 @@ export function PaymentsTable({ payments, canDelete }: PaymentsTableProps) {
 
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
           <Input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="max-w-xs"
+            className="w-full sm:max-w-xs"
           />
           <Select
             value={methodFilter}
             onValueChange={(v) => v && setMethodFilter(v as PaymentMethod | "ALL")}
             items={methodFilterItems}
           >
-            <SelectTrigger className="w-40">
+            <SelectTrigger className="w-full sm:w-40">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -291,21 +293,23 @@ export function PaymentsTable({ payments, canDelete }: PaymentsTableProps) {
               ))}
             </SelectContent>
           </Select>
-          <Input
-            type="date"
-            value={from}
-            onChange={(e) => setFrom(e.target.value)}
-            className="w-40"
-          />
-          <Input
-            type="date"
-            value={to}
-            onChange={(e) => setTo(e.target.value)}
-            className="w-40"
-          />
+          <div className="flex flex-col gap-2 sm:flex-row sm:gap-2">
+            <Input
+              type="date"
+              value={from}
+              onChange={(e) => setFrom(e.target.value)}
+              className="w-full sm:w-40"
+            />
+            <Input
+              type="date"
+              value={to}
+              onChange={(e) => setTo(e.target.value)}
+              className="w-full sm:w-40"
+            />
+          </div>
         </div>
-        <div className="flex items-center gap-3">
-          <div className="text-right">
+        <div className="flex items-center justify-between gap-3 sm:justify-end">
+          <div className="text-left sm:text-right">
             <p className="text-xs text-muted-foreground">
               {filtered.length} pago{filtered.length === 1 ? "" : "s"}
             </p>
@@ -320,8 +324,8 @@ export function PaymentsTable({ payments, canDelete }: PaymentsTableProps) {
         </div>
       </div>
 
-      <div className="rounded-md border bg-card">
-        <Table>
+      <div className="overflow-x-auto rounded-md border bg-card">
+        <Table className="min-w-[820px]">
           <TableHeader>
             {table.getHeaderGroups().map((hg) => (
               <TableRow key={hg.id}>

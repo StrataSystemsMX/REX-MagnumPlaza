@@ -145,11 +145,17 @@ export async function getContractsExpiringSoon(daysAhead = 60) {
   return getContracts({ statuses: ["ACTIVE"], expiresInDays: daysAhead });
 }
 
-/** Unidades disponibles del tenant — para el formulario de nuevo contrato. */
+/** Unidades disponibles del tenant — para el formulario de nuevo contrato.
+ *  Excluye unidades cuyo inmueble está BLOQUEADO (no rentable). */
 export async function getAvailableUnits() {
   const { tenantId } = await requireAuth();
   const units = await prisma.unit.findMany({
-    where: { tenantId, isActive: true, status: { in: ["DISPONIBLE", "APARTADA"] } },
+    where: {
+      tenantId,
+      isActive: true,
+      status: { in: ["DISPONIBLE", "APARTADA"] },
+      property: { status: "ACTIVO" },
+    },
     orderBy: [{ property: { name: "asc" } }, { code: "asc" }],
     select: {
       id: true,
@@ -157,7 +163,7 @@ export async function getAvailableUnits() {
       name: true,
       status: true,
       estimatedRent: true,
-      property: { select: { id: true, name: true } },
+      property: { select: { id: true, name: true, type: true } },
     },
   });
   return units.map((u) => ({

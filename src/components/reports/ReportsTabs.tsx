@@ -78,13 +78,15 @@ interface ReportsTabsProps {
 export function ReportsTabs({ bundle }: ReportsTabsProps) {
   return (
     <Tabs defaultValue="aging" className="w-full">
-      <TabsList>
-        <TabsTrigger value="aging">Cartera vencida</TabsTrigger>
-        <TabsTrigger value="occupancy">Ocupación</TabsTrigger>
-        <TabsTrigger value="income">Ingresos por inmueble</TabsTrigger>
-        <TabsTrigger value="expenses">Egresos por categoría</TabsTrigger>
-        <TabsTrigger value="contracts">Contratos</TabsTrigger>
-      </TabsList>
+      <div className="-mx-1 overflow-x-auto px-1">
+        <TabsList>
+          <TabsTrigger value="aging">Cartera vencida</TabsTrigger>
+          <TabsTrigger value="occupancy">Ocupación</TabsTrigger>
+          <TabsTrigger value="income">Ingresos por inmueble</TabsTrigger>
+          <TabsTrigger value="expenses">Egresos por categoría</TabsTrigger>
+          <TabsTrigger value="contracts">Contratos</TabsTrigger>
+        </TabsList>
+      </div>
 
       <TabsContent value="aging" className="mt-4">
         <AgingTab data={bundle.aging} />
@@ -136,7 +138,7 @@ function AgingTab({ data }: { data: ReportsBundle["aging"] }) {
           {data.rows.length === 0 ? (
             <EmptyState message="¡Sin cartera vencida!" />
           ) : (
-            <Table>
+            <Table className="min-w-[820px]">
               <TableHeader>
                 <TableRow>
                   <TableHead>Inquilino</TableHead>
@@ -268,7 +270,7 @@ function OccupancyTab({ data }: { data: ReportsBundle["occupancy"] }) {
           {data.rows.length === 0 ? (
             <EmptyState message="Aún no hay inmuebles activos." />
           ) : (
-            <Table>
+            <Table className="min-w-[920px]">
               <TableHeader>
                 <TableRow>
                   <TableHead>Inmueble</TableHead>
@@ -341,7 +343,7 @@ function OccupancyTab({ data }: { data: ReportsBundle["occupancy"] }) {
                 <TableRow>
                   <TableHead>Inmueble</TableHead>
                   <TableHead>Unidad</TableHead>
-                  <TableHead>Estado</TableHead>
+                  <TableHead className="text-center">Estado</TableHead>
                   <TableHead className="text-right">Renta estimada</TableHead>
                 </TableRow>
               </TableHeader>
@@ -362,7 +364,7 @@ function OccupancyTab({ data }: { data: ReportsBundle["occupancy"] }) {
                         <span className="text-xs text-muted-foreground"> · {u.unitName}</span>
                       ) : null}
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="text-center">
                       <Badge variant="outline">
                         {unitStatusLabel(u.status as UnitStatus)}
                       </Badge>
@@ -555,7 +557,7 @@ function ContractsTab({ data }: { data: ReportsBundle["contracts"] }) {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Estado</TableHead>
+                    <TableHead className="text-center">Estado</TableHead>
                     <TableHead className="text-right">Cantidad</TableHead>
                     <TableHead className="text-right">Monto mensual</TableHead>
                   </TableRow>
@@ -563,7 +565,7 @@ function ContractsTab({ data }: { data: ReportsBundle["contracts"] }) {
                 <TableBody>
                   {data.byStatus.map((row) => (
                     <TableRow key={row.status}>
-                      <TableCell>
+                      <TableCell className="text-center">
                         <Badge variant={statusVariant(row.status)}>
                           {contractStatusLabel(row.status)}
                         </Badge>
@@ -658,7 +660,7 @@ function ExpiringTable({
         <TableRow>
           <TableHead>Inquilino</TableHead>
           <TableHead>Local</TableHead>
-          <TableHead>{mode === "upcoming" ? "Vence" : "Venció"}</TableHead>
+          <TableHead className="text-center">{mode === "upcoming" ? "Vence" : "Venció"}</TableHead>
           <TableHead className="text-right">Renta / mes</TableHead>
         </TableRow>
       </TableHeader>
@@ -681,7 +683,7 @@ function ExpiringTable({
                 </Link>{" "}
                 · {c.unitCode}
               </TableCell>
-              <TableCell>
+              <TableCell className="text-center">
                 {capitalizeFirst(DATE.format(c.endDate))}
                 <span className="ml-2 text-xs text-muted-foreground">
                   ({mode === "upcoming" ? `en ${days}d` : `hace ${days}d`})

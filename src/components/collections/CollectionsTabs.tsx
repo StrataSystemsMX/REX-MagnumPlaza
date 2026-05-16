@@ -33,16 +33,18 @@ export function CollectionsTabs({
 }: CollectionsTabsProps) {
   return (
     <Tabs defaultValue="monthly" className="w-full">
-      <TabsList>
-        <TabsTrigger value="monthly">Cobros del mes</TabsTrigger>
-        <TabsTrigger value="outstanding">
-          Por cobrar ({outstanding.length})
-        </TabsTrigger>
-        <TabsTrigger value="payments">
-          Pagos recibidos ({payments.length})
-        </TabsTrigger>
-        <TabsTrigger value="calendar">Calendario</TabsTrigger>
-      </TabsList>
+      <div className="-mx-1 overflow-x-auto px-1">
+        <TabsList>
+          <TabsTrigger value="monthly">Cobros del mes</TabsTrigger>
+          <TabsTrigger value="outstanding">
+            Por cobrar ({outstanding.length})
+          </TabsTrigger>
+          <TabsTrigger value="payments">
+            Pagos recibidos ({payments.length})
+          </TabsTrigger>
+          <TabsTrigger value="calendar">Calendario</TabsTrigger>
+        </TabsList>
+      </div>
 
       <TabsContent value="monthly" className="mt-4">
         <MonthlyCollectionsView data={monthly} />

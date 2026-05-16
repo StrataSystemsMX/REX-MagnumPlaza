@@ -16,7 +16,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { actionMarkLoanPaymentPaid } from "@/lib/services/inversiones-actions";
+import { actionMarkLoanPaymentPaid } from "@/lib/services/prestamos-actions";
 import { capitalizeFirst } from "@/lib/utils";
 
 export interface LoanPaymentTarget {

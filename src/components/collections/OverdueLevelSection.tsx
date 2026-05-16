@@ -94,17 +94,17 @@ export function OverdueLevelSection({
         </div>
       ) : null}
 
-      <div className="rounded-md border bg-card">
-        <Table>
+      <div className="overflow-x-auto rounded-md border bg-card">
+        <Table className="min-w-[920px]">
           <TableHeader>
             <TableRow>
               <TableHead>Inquilino</TableHead>
               <TableHead>Unidad</TableHead>
-              <TableHead>Periodo</TableHead>
+              <TableHead className="text-center">Periodo</TableHead>
               <TableHead className="text-right">Saldo</TableHead>
               <TableHead>Días vencido</TableHead>
-              <TableHead>Estado</TableHead>
-              <TableHead>Último contacto</TableHead>
+              <TableHead className="text-center">Estado</TableHead>
+              <TableHead className="text-center">Último contacto</TableHead>
               <TableHead className="text-right">Acción</TableHead>
             </TableRow>
           </TableHeader>
@@ -139,17 +139,17 @@ export function OverdueLevelSection({
                     <TableCell className="text-sm">
                       {r.contract.unit.property.name} {r.contract.unit.code}
                     </TableCell>
-                    <TableCell className="text-sm">
+                    <TableCell className="text-center text-sm">
                       {capitalizeFirst(PERIOD.format(r.period))}
                     </TableCell>
                     <TableCell className="text-right tabular-nums font-medium">
                       {MXN.format(Number(r.balance))}
                     </TableCell>
                     <TableCell className="text-xs">{r.daysOverdue}d</TableCell>
-                    <TableCell>
+                    <TableCell className="text-center">
                       <RentStatusBadge status={r.status} />
                     </TableCell>
-                    <TableCell className="text-xs">
+                    <TableCell className="text-center text-xs">
                       {lc ? (
                         <>
                           {capitalizeFirst(DATE.format(lc.sentAt))}

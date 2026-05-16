@@ -24,6 +24,7 @@ export function calculateLateFee(
   rent: {
     amountDue: Prisma.Decimal | number | string;
     amountPaid: Prisma.Decimal | number | string;
+    amountWaived?: Prisma.Decimal | number | string;
     dueDate: Date;
     status: RentStatus;
   },
@@ -42,9 +43,10 @@ export function calculateLateFee(
   const days = daysOverdue(rent.dueDate, asOfDate);
   if (days <= 0) return { daysOverdue: 0, amount: ZERO };
 
-  const outstanding = new Prisma.Decimal(rent.amountDue).minus(
-    new Prisma.Decimal(rent.amountPaid),
-  );
+  const waived = new Prisma.Decimal(rent.amountWaived ?? 0);
+  const outstanding = new Prisma.Decimal(rent.amountDue)
+    .minus(new Prisma.Decimal(rent.amountPaid))
+    .minus(waived);
   if (outstanding.lte(0)) return { daysOverdue: days, amount: ZERO };
 
   const monthlyRate = new Prisma.Decimal(contract.lateFeePercentage).div(100);

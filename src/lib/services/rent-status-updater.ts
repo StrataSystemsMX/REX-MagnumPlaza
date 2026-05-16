@@ -86,6 +86,7 @@ export async function updateRentStatuses(
       contractId: true,
       amountDue: true,
       amountPaid: true,
+      amountWaived: true,
       dueDate: true,
       status: true,
     },
@@ -96,7 +97,13 @@ export async function updateRentStatuses(
   let overdueTransitions = 0;
 
   for (const r of rents) {
-    const newStatus = computeRentStatus(r.amountPaid, r.amountDue, r.dueDate, now);
+    const newStatus = computeRentStatus(
+      r.amountPaid,
+      r.amountDue,
+      r.dueDate,
+      now,
+      r.amountWaived,
+    );
     if (newStatus === r.status) continue;
 
     await prisma.rent.updateMany({
