@@ -209,6 +209,7 @@ model Property {
   managerEntityId String // quién factura/administra (puede ser CRT)
   name            String // "Plaza Magnum Progreso"
   type            PropertyType
+  status          PropertyStatus @default(ACTIVO) // BLOQUEADO = no se renta (ej. casa del dueño)
   address         String
   cadastralKey    String? // clave catastral
   latitude        Float?
@@ -242,6 +243,11 @@ enum PropertyType {
   BODEGA // Bodega CRT
   ESPECTACULAR // Renta de espacio para anuncio
   OTRO
+}
+
+enum PropertyStatus {
+  ACTIVO // estado normal: rentable / con contrato
+  BLOQUEADO // no se renta (ej. casa del dueño); UI oculta renta/inquilino
 }
 
 model Unit {
@@ -395,6 +401,7 @@ model Rent {
   period        DateTime // primer día del mes que cubre (ej. 2026-04-01)
   amountDue     Decimal    @db.Decimal(12, 2)
   amountPaid    Decimal    @default(0) @db.Decimal(12, 2)
+  amountWaived  Decimal    @default(0) @db.Decimal(12, 2) // monto condonado (parcial o total)
   status        RentStatus @default(PENDING)
   dueDate       DateTime
   notes         String?
@@ -813,7 +820,9 @@ enum BudgetConceptType {
   INCOME_BILLBOARD // espectacular
   INCOME_GUARANTEE // depósitos en garantía recibidos
   INCOME_OTHER
-  EXPENSE // egresos (categoryId obligatorio)
+  EXPENSE // egresos operativos (categoryId obligatorio)
+  TAX_STRATEGY // sueldos adicionales / estrategia fiscal (debajo de utilidad operativa)
+  DEBT_SERVICE // hipotecas y préstamos (debajo de utilidad operativa)
 }
 
 // ============================================================================

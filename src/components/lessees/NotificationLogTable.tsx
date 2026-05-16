@@ -96,14 +96,14 @@ export function NotificationLogTable({ logs }: NotificationLogTableProps) {
   }
 
   return (
-    <div className="rounded-md border bg-card">
-      <Table>
+    <div className="overflow-x-auto rounded-md border bg-card">
+      <Table className="min-w-[820px]">
         <TableHeader>
           <TableRow>
-            <TableHead>Fecha</TableHead>
+            <TableHead className="text-center">Fecha</TableHead>
             <TableHead>Plantilla</TableHead>
             <TableHead>Canal</TableHead>
-            <TableHead>Estado</TableHead>
+            <TableHead className="text-center">Estado</TableHead>
             <TableHead>Detalle</TableHead>
             <TableHead className="text-right">Acción</TableHead>
           </TableRow>
@@ -114,7 +114,7 @@ export function NotificationLogTable({ logs }: NotificationLogTableProps) {
             const pdfUrl = pdfMatch?.[0] ?? null;
             return (
               <TableRow key={l.id}>
-                <TableCell className="whitespace-nowrap text-xs tabular-nums">
+                <TableCell className="whitespace-nowrap text-center text-xs tabular-nums">
                   {capitalizeFirst(DATETIME.format(l.createdAt))}
                 </TableCell>
                 <TableCell className="text-sm">
@@ -123,7 +123,7 @@ export function NotificationLogTable({ logs }: NotificationLogTableProps) {
                 <TableCell className="text-xs">
                   {communicationChannelLabel(l.channel)}
                 </TableCell>
-                <TableCell>
+                <TableCell className="text-center">
                   <Badge variant={statusVariant(l.status)}>
                     {notificationStatusLabel(l.status)}
                   </Badge>

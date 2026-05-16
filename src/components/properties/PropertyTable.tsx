@@ -426,6 +426,7 @@ export function PropertyTable({ properties, legalEntities }: PropertyTableProps)
                 id: editTarget.id,
                 name: editTarget.name,
                 type: editTarget.type,
+                status: editTarget.status,
                 address: editTarget.address,
                 ownerEntityId: editTarget.ownerEntity.id,
                 managerEntityId: editTarget.managerEntity.id,

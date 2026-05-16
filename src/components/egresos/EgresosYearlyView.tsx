@@ -222,13 +222,13 @@ export function EgresosYearlyView({
           </Button>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap sm:items-center">
           <Select
             value={entityFilter}
             onValueChange={(v) => v && setEntityFilter(v)}
             items={entityItems}
           >
-            <SelectTrigger className="w-56">
+            <SelectTrigger className="w-full sm:w-56">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -245,7 +245,7 @@ export function EgresosYearlyView({
             onValueChange={(v) => v && setCategoryFilter(v)}
             items={categoryItems}
           >
-            <SelectTrigger className="w-56">
+            <SelectTrigger className="w-full sm:w-56">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -258,7 +258,7 @@ export function EgresosYearlyView({
           </Select>
 
           {canCreate ? (
-            <Button onClick={() => setFormMode("create")}>
+            <Button onClick={() => setFormMode("create")} className="w-full sm:w-auto">
               <Plus className="size-4" />
               Nuevo egreso
             </Button>
@@ -616,7 +616,7 @@ function ConceptMatrix({ group, canUpdate, onCellClick }: ConceptMatrixProps) {
           </colgroup>
           <thead>
             <tr className="border-b bg-muted/10">
-              <th className="sticky left-0 z-10 bg-muted/10 px-3 py-2 text-left font-medium">
+              <th className="sticky left-0 z-20 border-r border-border bg-card px-3 py-2 text-left font-medium">
                 Concepto
               </th>
               <th className="px-3 py-2 text-left font-medium text-muted-foreground">
@@ -644,7 +644,7 @@ function ConceptMatrix({ group, canUpdate, onCellClick }: ConceptMatrixProps) {
               />
             ))}
             <tr className="border-t bg-muted/20 font-medium">
-              <td className="sticky left-0 z-10 bg-muted/20 px-3 py-2 text-xs uppercase tracking-wider text-muted-foreground">
+              <td className="sticky left-0 z-20 border-r border-border bg-card px-3 py-2 text-xs uppercase tracking-wider text-muted-foreground">
                 Subtotal
               </td>
               <td className="px-3 py-2" />
@@ -711,7 +711,7 @@ interface ConceptRowProps {
 function ConceptRow({ entity, row, canUpdate, onCellClick }: ConceptRowProps) {
   return (
     <tr className="border-b last:border-b-0 hover:bg-muted/20">
-      <td className="sticky left-0 z-10 bg-card px-3 py-1.5">
+      <td className="sticky left-0 z-20 border-r border-border bg-card px-3 py-1.5">
         <div className="truncate text-sm font-medium" title={row.description}>
           {row.description}
         </div>

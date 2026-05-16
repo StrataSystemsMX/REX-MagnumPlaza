@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronLeft, ChevronRight, TrendingUp, Wallet, AlertTriangle, Percent } from "lucide-react";
+import { ChevronLeft, ChevronRight, TrendingUp, Wallet, AlertTriangle, Percent, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -201,13 +201,13 @@ export function IngresosYearlyView({ data, availableYears }: IngresosYearlyViewP
           </Button>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap sm:items-center">
           <Select
             value={entityFilter}
             onValueChange={(v) => v && setEntityFilter(v)}
             items={entityItems}
           >
-            <SelectTrigger className="w-56">
+            <SelectTrigger className="w-full sm:w-56">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -224,7 +224,7 @@ export function IngresosYearlyView({ data, availableYears }: IngresosYearlyViewP
             onValueChange={(v) => v && setPropertyFilter(v)}
             items={propertyItems}
           >
-            <SelectTrigger className="w-56">
+            <SelectTrigger className="w-full sm:w-56">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -428,6 +428,12 @@ function Legend() {
           {i.label}
         </div>
       ))}
+      <div className="flex items-center gap-1.5">
+        <span className="relative size-3 rounded ring-1 ring-black">
+          <X className="absolute inset-0 m-auto size-3 text-black" strokeWidth={3.5} />
+        </span>
+        Condonado
+      </div>
     </div>
   );
 }
@@ -571,7 +577,7 @@ function PropertyMatrix({ group, onCellClick }: PropertyMatrixProps) {
           </colgroup>
           <thead>
             <tr className="border-b bg-muted/10">
-              <th className="sticky left-0 z-10 bg-muted/10 px-3 py-2 text-left font-medium">
+              <th className="sticky left-0 z-20 border-r border-border bg-card px-3 py-2 text-left font-medium">
                 Local
               </th>
               <th className="px-3 py-2 text-left font-medium">Inquilino</th>
@@ -594,7 +600,7 @@ function PropertyMatrix({ group, onCellClick }: PropertyMatrixProps) {
               />
             ))}
             <tr className="border-t bg-muted/20 font-medium">
-              <td className="sticky left-0 z-10 bg-muted/20 px-3 py-2 text-xs uppercase tracking-wider text-muted-foreground">
+              <td className="sticky left-0 z-20 border-r border-border bg-card px-3 py-2 text-xs uppercase tracking-wider text-muted-foreground">
                 Subtotal
               </td>
               <td className="px-3 py-2" />
@@ -659,7 +665,7 @@ function UnitMatrixRow({ row, propertyName, onCellClick }: UnitMatrixRowProps) {
   );
   return (
     <tr className="border-b last:border-b-0 hover:bg-muted/20">
-      <td className="sticky left-0 z-10 bg-card px-3 py-1.5 font-mono text-xs">
+      <td className="sticky left-0 z-20 border-r border-border bg-card px-3 py-1.5 font-mono text-xs">
         {row.unitCode}
       </td>
       <td className="max-w-[200px] truncate px-3 py-1.5">
@@ -705,6 +711,7 @@ const CELL_BG: Record<MonthlyUnitStatus, string> = {
   ABONO: "bg-sky-300 hover:bg-sky-400 dark:bg-sky-400 dark:hover:bg-sky-300",
   PRE_PAGADO: "bg-blue-500 hover:bg-blue-600 dark:bg-blue-600",
   SIN_PAGO: "bg-red-500 hover:bg-red-600 dark:bg-red-600",
+  WAIVED: "bg-blue-300 hover:bg-blue-400 dark:bg-blue-400 dark:hover:bg-blue-300",
   VACANT: "bg-muted hover:bg-muted-foreground/20",
 };
 
@@ -719,18 +726,28 @@ interface MatrixCellProps {
 function MatrixCell({ cell, unitCode, propertyName, lesseeName, onClick }: MatrixCellProps) {
   const tooltip = buildTooltip(cell, lesseeName);
   const clickable = cell.rentId !== null;
+  // Mostrar cruz si la renta tiene cualquier monto condonado (parcial o total).
+  const hasWaiver = Number(cell.amountWaived) > 0;
 
   if (!clickable) {
     return (
       <div
         title={tooltip}
         className={cn(
-          "mx-auto h-6 w-6 rounded transition-colors",
+          "relative mx-auto h-6 w-6 rounded transition-colors",
           CELL_BG[cell.status],
           cell.status === "PRE_PAGADO" && "ring-1 ring-blue-300",
           cell.overdueLevel === 3 && "ring-2 ring-red-700",
+          hasWaiver && "ring-2 ring-black",
         )}
-      />
+      >
+        {hasWaiver ? (
+          <X
+            className="absolute inset-0 m-auto size-5 text-black"
+            strokeWidth={3.5}
+          />
+        ) : null}
+      </div>
     );
   }
 
@@ -743,17 +760,26 @@ function MatrixCell({ cell, unitCode, propertyName, lesseeName, onClick }: Matri
           rentId: cell.rentId!,
           amountDue: cell.amountDue,
           amountPaid: cell.amountPaid,
+          amountWaived: cell.amountWaived,
           period: cell.period,
           lesseeName: lesseeName ?? "",
           unitLabel: `${propertyName} ${unitCode}`,
         })
       }
       className={cn(
-        "mx-auto block h-6 w-6 rounded transition-colors",
+        "relative mx-auto block h-6 w-6 rounded transition-colors",
         CELL_BG[cell.status],
         cell.overdueLevel === 3 && "ring-2 ring-red-700",
+        hasWaiver && "ring-2 ring-black",
       )}
-    />
+    >
+      {hasWaiver ? (
+        <X
+          className="pointer-events-none absolute inset-0 m-auto size-5 text-black"
+          strokeWidth={3.5}
+        />
+      ) : null}
+    </button>
   );
 }
 
@@ -774,6 +800,8 @@ function buildTooltip(cell: YearlyCell, lesseeName: string | null): string {
       return `${head}\nPre-pagado${cell.prePaidMonths ? ` (+${cell.prePaidMonths} meses)` : ""}`;
     case "SIN_PAGO":
       return `${head}\nSin pago — ${MXN.format(Number(cell.amountDue))}${cell.overdueLevel ? ` · Escalón ${cell.overdueLevel}` : ""}`;
+    case "WAIVED":
+      return `${head}\nCondonado ${MXN.format(Number(cell.amountWaived))}`;
     default:
       return head;
   }

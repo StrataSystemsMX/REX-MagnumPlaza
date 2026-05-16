@@ -10,6 +10,7 @@ import {
   LoanType,
   PaymentMethod,
   Plan,
+  PropertyStatus,
   PropertyType,
   RentStatus,
   RoleCode,
@@ -89,6 +90,7 @@ const PAID_Q1: Partial<Record<number, PaymentEntry>> = {
 interface PropertyDef {
   name: string;
   type: (typeof PropertyType)[keyof typeof PropertyType];
+  status?: (typeof PropertyStatus)[keyof typeof PropertyStatus];
   address: string;
   cadastralKey?: string;
   notes?: string;
@@ -260,8 +262,12 @@ async function main(): Promise<void> {
     { code: "SERVICIOS_AUTOS", name: "Servicios de autos", type: ExpenseType.VEHICLE, isRecurring: false },
     // Otros
     { code: "SEGUROS_INMUEBLES", name: "Seguros de inmuebles", type: ExpenseType.INSURANCE, isRecurring: true },
+    { code: "SEGURO_AUTOMOTRIZ", name: "Seguro automotriz", type: ExpenseType.INSURANCE, isRecurring: true },
     { code: "COMISIONES_BANCARIAS", name: "Comisiones bancarias", type: ExpenseType.BANK_FEE, isRecurring: true },
     { code: "PAPELERIA", name: "Papelería", type: ExpenseType.OFFICE, isRecurring: false },
+    { code: "CONSUMO_OFICINA", name: "Consumo de oficina (bebidas, botanas, limpieza)", type: ExpenseType.OFFICE, isRecurring: true },
+    { code: "CAJA_CHICA", name: "Caja chica", type: ExpenseType.OFFICE, isRecurring: true },
+    { code: "LICENCIAS_PERMISOS", name: "Licencias, permisos y comisiones", type: ExpenseType.OTHER, isRecurring: false },
     { code: "OTROS", name: "Otros", type: ExpenseType.OTHER, isRecurring: false },
   ];
   for (const c of categoriesData) {
@@ -347,10 +353,10 @@ async function main(): Promise<void> {
             2: { kind: "paid" },
           },
         },
-        { code: "L3", name: "Interio", monthlyAmount: 19755.96, lessee: { legalName: "Interio", contactName: "Denisse Emilia Peñaflor Castellanos" }, payments: PAID_Q1 },
+        { code: "L3", name: "Interior", monthlyAmount: 19755.96, lessee: { legalName: "Interior", contactName: "Denisse Emilia Peñaflor Castellanos" }, payments: PAID_Q1 },
         {
           code: "L4",
-          name: "Interio 2",
+          name: "Interior 2",
           vacant: true,
           unitNotes: "Próximo posible inquilino: Aaron Miranda Salido (en negociación).",
         },
@@ -520,13 +526,14 @@ async function main(): Promise<void> {
       units: [],
     },
 
-    // 12. La Jolla — propiedad personal de Juan Carlos L (JCL); CRT administra.
-    // Actualmente sin contrato activo: aparece como Disponible para renta.
+    // 12. La Jolla — casa personal del dueño Juan Carlos L (JCL); CRT administra.
+    // Bloqueada: no se renta. En la UI no muestra renta, inquilino ni badge "Disponible".
     {
       name: "La Jolla",
       type: PropertyType.CASA,
+      status: PropertyStatus.BLOQUEADO,
       address: "La Jolla, Hermosillo",
-      notes: "Propiedad personal de Juan Carlos L. CRT administra; sin contrato activo.",
+      notes: "Casa personal de Juan Carlos L. No se renta.",
       owner: "JCL",
       manager: "CRT",
       units: [
@@ -534,8 +541,7 @@ async function main(): Promise<void> {
           code: "U1",
           name: "Casa La Jolla",
           vacant: true,
-          monthlyAmount: 25000,
-          unitNotes: "Disponible para renta. Renta estimada $25,000 / mes.",
+          unitNotes: "Casa del dueño. No se renta.",
         },
       ],
     },
@@ -549,6 +555,7 @@ async function main(): Promise<void> {
         managerEntityId: entities[p.manager].id,
         name: p.name,
         type: p.type,
+        status: p.status ?? PropertyStatus.ACTIVO,
         address: p.address,
         cadastralKey: p.cadastralKey,
         notes: p.notes,

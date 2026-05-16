@@ -57,7 +57,9 @@ export const requireAuth = cache(async (): Promise<AuthContext> => {
     }
   }
 
-  // Fallback dev: ningún match. Lo enganchamos al primer Tenant.
+  // Fallback dev: ningún match. Lo enganchamos al primer Tenant y, en dev,
+  // le pegamos rol MASTER para que pueda operar la app. En prod no aplica
+  // porque el alta entrará vía flujo de invitación con rol explícito.
   if (!dbUser) {
     const firstTenant = await prismaUnsafe.tenant.findFirst({
       orderBy: { createdAt: "asc" },
@@ -72,12 +74,19 @@ export const requireAuth = cache(async (): Promise<AuthContext> => {
     }
     const fullName =
       `${clerkUser.firstName ?? ""} ${clerkUser.lastName ?? ""}`.trim() || "Usuario";
+    const masterRoleId =
+      process.env["NODE_ENV"] !== "production"
+        ? (await prismaUnsafe.role.findUnique({ where: { code: "MASTER" } }))?.id
+        : undefined;
     dbUser = await prismaUnsafe.user.create({
       data: {
         tenantId: firstTenant.id,
         clerkId: userId,
         email: primaryEmail,
         name: fullName,
+        ...(masterRoleId
+          ? { roles: { create: [{ roleId: masterRoleId }] } }
+          : {}),
       },
     });
   }

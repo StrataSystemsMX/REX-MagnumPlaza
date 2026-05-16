@@ -22,20 +22,29 @@ export function PropertyDetailTabs({
   canEditPhotos,
   initialTab,
 }: PropertyDetailTabsProps) {
-  const defaultTab = (VALID_TABS as ReadonlyArray<string>).includes(initialTab ?? "")
+  // Sólo las plazas comerciales tienen "unidades" (locales). Los inmuebles
+  // individuales muestran contratos directamente, no locales.
+  const showUnits = property.type === "PLAZA_COMERCIAL";
+  const requestedTab = (VALID_TABS as ReadonlyArray<string>).includes(initialTab ?? "")
     ? (initialTab as (typeof VALID_TABS)[number])
     : "info";
+  const defaultTab = !showUnits && requestedTab === "units" ? "info" : requestedTab;
+
   return (
     <Tabs defaultValue={defaultTab} className="w-full">
-      <TabsList>
-        <TabsTrigger value="info">Información general</TabsTrigger>
-        <TabsTrigger value="units">
-          Unidades ({property.units.length})
-        </TabsTrigger>
-        <TabsTrigger value="photos">
-          Fotos ({property.documents.length})
-        </TabsTrigger>
-      </TabsList>
+      <div className="-mx-1 overflow-x-auto px-1">
+        <TabsList>
+          <TabsTrigger value="info">Información general</TabsTrigger>
+          {showUnits ? (
+            <TabsTrigger value="units">
+              Unidades ({property.units.length})
+            </TabsTrigger>
+          ) : null}
+          <TabsTrigger value="photos">
+            Fotos ({property.documents.length})
+          </TabsTrigger>
+        </TabsList>
+      </div>
       <TabsContent value="info" className="mt-4 rounded-md border bg-card p-6">
         <PropertyForm
           legalEntities={legalEntities}
@@ -43,6 +52,7 @@ export function PropertyDetailTabs({
             id: property.id,
             name: property.name,
             type: property.type,
+            status: property.status,
             address: property.address,
             ownerEntityId: property.ownerEntity.id,
             managerEntityId: property.managerEntity.id,
@@ -55,9 +65,11 @@ export function PropertyDetailTabs({
           submitLabel="Guardar cambios"
         />
       </TabsContent>
-      <TabsContent value="units" className="mt-4 space-y-3">
-        <UnitTable propertyId={property.id} units={property.units} />
-      </TabsContent>
+      {showUnits ? (
+        <TabsContent value="units" className="mt-4 space-y-3">
+          <UnitTable propertyId={property.id} units={property.units} />
+        </TabsContent>
+      ) : null}
       <TabsContent value="photos" className="mt-4 space-y-4">
         <PropertyPhotoGallery
           propertyId={property.id}

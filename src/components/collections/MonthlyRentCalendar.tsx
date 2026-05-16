@@ -97,7 +97,7 @@ export function MonthlyRentCalendar({ rents }: MonthlyRentCalendarProps) {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-2">
           <Button
             variant="ghost"
@@ -119,16 +119,16 @@ export function MonthlyRentCalendar({ rents }: MonthlyRentCalendarProps) {
             <ChevronRight className="size-4" />
           </Button>
         </div>
-        <div className="flex items-center gap-6 text-sm">
-          <div className="text-right">
+        <div className="grid grid-cols-3 gap-3 text-sm sm:flex sm:items-center sm:gap-6">
+          <div className="text-left sm:text-right">
             <p className="text-xs text-muted-foreground">Total cargado</p>
             <p className="font-semibold tabular-nums">{MXN.format(total)}</p>
           </div>
-          <div className="text-right">
+          <div className="text-left sm:text-right">
             <p className="text-xs text-muted-foreground">Cobrado</p>
             <p className="font-semibold tabular-nums">{MXN.format(collected)}</p>
           </div>
-          <div className="text-right">
+          <div className="text-left sm:text-right">
             <p className="text-xs text-muted-foreground">Por cobrar</p>
             <p className="font-semibold tabular-nums text-destructive">
               {MXN.format(total - collected)}

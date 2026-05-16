@@ -139,9 +139,9 @@ export function OutstandingRentsTable({ rents, properties }: OutstandingRentsTab
       },
       {
         accessorKey: "period",
-        header: "Periodo",
+        header: () => <div className="text-center">Periodo</div>,
         cell: ({ row }) => (
-          <span className="text-sm">{capitalizeFirst(PERIOD.format(row.original.period))}</span>
+          <div className="text-center text-sm">{capitalizeFirst(PERIOD.format(row.original.period))}</div>
         ),
       },
       {
@@ -188,8 +188,12 @@ export function OutstandingRentsTable({ rents, properties }: OutstandingRentsTab
       },
       {
         accessorKey: "status",
-        header: "Estado",
-        cell: ({ row }) => <RentStatusBadge status={row.original.status} />,
+        header: () => <div className="text-center">Estado</div>,
+        cell: ({ row }) => (
+          <div className="text-center">
+            <RentStatusBadge status={row.original.status} />
+          </div>
+        ),
       },
       {
         id: "actions",
@@ -230,19 +234,19 @@ export function OutstandingRentsTable({ rents, properties }: OutstandingRentsTab
 
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
           <Input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="max-w-xs"
+            className="w-full sm:max-w-xs"
           />
           <Select
             value={statusFilter}
             onValueChange={(v) => v && setStatusFilter(v as StatusFilter)}
             items={statusFilterItems}
           >
-            <SelectTrigger className="w-44">
+            <SelectTrigger className="w-full sm:w-44">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -258,7 +262,7 @@ export function OutstandingRentsTable({ rents, properties }: OutstandingRentsTab
             onValueChange={(v) => v && setPropertyFilter(v)}
             items={propertyFilterItems}
           >
-            <SelectTrigger className="w-56">
+            <SelectTrigger className="w-full sm:w-56">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -270,8 +274,8 @@ export function OutstandingRentsTable({ rents, properties }: OutstandingRentsTab
             </SelectContent>
           </Select>
         </div>
-        <div className="flex items-center gap-3">
-          <div className="text-right">
+        <div className="flex items-center justify-between gap-3 sm:justify-end">
+          <div className="text-left sm:text-right">
             <p className="text-xs text-muted-foreground">Saldo filtrado</p>
             <p className="text-lg font-semibold tabular-nums">
               {MXN.format(totalBalance)}
@@ -284,8 +288,8 @@ export function OutstandingRentsTable({ rents, properties }: OutstandingRentsTab
         </div>
       </div>
 
-      <div className="rounded-md border bg-card">
-        <Table>
+      <div className="overflow-x-auto rounded-md border bg-card">
+        <Table className="min-w-[820px]">
           <TableHeader>
             {table.getHeaderGroups().map((hg) => (
               <TableRow key={hg.id}>

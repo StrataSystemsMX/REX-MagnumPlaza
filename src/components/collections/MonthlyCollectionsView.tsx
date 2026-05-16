@@ -87,13 +87,13 @@ export function MonthlyCollectionsView({ data }: MonthlyCollectionsViewProps) {
               : (propertyItems[propertyFilter] ?? "")}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
           <Select
             value={propertyFilter}
             onValueChange={(v) => v && setPropertyFilter(v)}
             items={propertyItems}
           >
-            <SelectTrigger className="w-56">
+            <SelectTrigger className="w-full sm:w-56">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -104,7 +104,7 @@ export function MonthlyCollectionsView({ data }: MonthlyCollectionsViewProps) {
               ))}
             </SelectContent>
           </Select>
-          <Button onClick={() => setBulkOpen(true)}>
+          <Button onClick={() => setBulkOpen(true)} className="w-full sm:w-auto">
             <Plus className="size-4" />
             Registrar pago
           </Button>
@@ -284,16 +284,17 @@ function PropertyGroupCard({ group, period, onRegisterPayment }: PropertyGroupCa
         </div>
       </div>
 
-      <Table>
+      <div className="overflow-x-auto">
+      <Table className="min-w-[760px] table-fixed">
         <TableHeader>
           <TableRow className="bg-transparent hover:bg-transparent">
             <TableHead className="w-16">Local</TableHead>
-            <TableHead>Inquilino</TableHead>
-            <TableHead className="text-right">Renta Base</TableHead>
-            <TableHead className="text-right">Cobrado</TableHead>
-            <TableHead>Estado</TableHead>
-            <TableHead>Escalón</TableHead>
-            <TableHead className="text-right">Acción</TableHead>
+            <TableHead className="w-auto">Inquilino</TableHead>
+            <TableHead className="w-32 text-right">Renta Base</TableHead>
+            <TableHead className="w-32 text-right">Cobrado</TableHead>
+            <TableHead className="w-32 text-center">Estado</TableHead>
+            <TableHead className="w-28">Escalón</TableHead>
+            <TableHead className="w-24 text-right">Acción</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -321,6 +322,7 @@ function PropertyGroupCard({ group, period, onRegisterPayment }: PropertyGroupCa
           ) : null}
         </TableBody>
       </Table>
+      </div>
     </div>
   );
 }
@@ -367,7 +369,7 @@ function UnitRow({ row, period, propertyName, onRegisterPayment }: UnitRowProps)
       <TableCell className="text-right tabular-nums">
         <CobradoCell row={row} />
       </TableCell>
-      <TableCell>
+      <TableCell className="text-center">
         <StatusPill row={row} />
       </TableCell>
       <TableCell>
@@ -395,6 +397,7 @@ const ROW_BG_BY_STATUS: Record<MonthlyUnitStatus, string> = {
   SIN_PAGO: "bg-red-50/50 dark:bg-red-950/20",
   PRE_PAGADO: "bg-blue-50/40 dark:bg-blue-950/20",
   ABONO: "bg-sky-50/60 dark:bg-sky-950/20",
+  WAIVED: "bg-blue-50/40 dark:bg-blue-950/20",
   VACANT: "bg-muted/30",
 };
 

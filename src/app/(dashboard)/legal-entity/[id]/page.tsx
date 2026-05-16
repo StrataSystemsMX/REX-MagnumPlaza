@@ -137,7 +137,7 @@ export default async function LegalEntityPage({ params, searchParams }: PageProp
           <CardDescription>Ingresos, egresos y utilidad por mes</CardDescription>
         </CardHeader>
         <CardContent>
-          <Table>
+          <Table className="min-w-[1100px]">
             <TableHeader>
               <TableRow>
                 <TableHead>Concepto</TableHead>

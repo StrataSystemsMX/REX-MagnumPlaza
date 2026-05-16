@@ -15,6 +15,7 @@ import type {
   PaymentMethod,
   PayrollType,
   Plan,
+  PropertyStatus,
   PropertyType,
   RentStatus,
   RoleCode,
@@ -75,6 +76,17 @@ export function propertyTypeLabel(t: PropertyType): string {
       return "Otro";
     default:
       return exhaustive(t);
+  }
+}
+
+export function propertyStatusLabel(s: PropertyStatus): string {
+  switch (s) {
+    case "ACTIVO":
+      return "Activo";
+    case "BLOQUEADO":
+      return "Bloqueado";
+    default:
+      return exhaustive(s);
   }
 }
 

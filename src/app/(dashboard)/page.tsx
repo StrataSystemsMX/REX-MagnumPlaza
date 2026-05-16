@@ -385,7 +385,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
           <p className="text-sm text-muted-foreground">{periodLabel}</p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <div className="flex rounded-lg bg-muted p-1 text-sm">
             <Link
               href="?mode=anual"
@@ -406,7 +406,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
           </div>
 
           {mode === "mensual" && (
-            <div className="flex flex-wrap gap-1">
+            <div className="flex w-full flex-wrap gap-1 sm:w-auto">
               {MONTHS.map((m, i) => (
                 <Link
                   key={m}
@@ -718,15 +718,20 @@ export default async function DashboardPage({ searchParams }: PageProps) {
                 {topOverdue.map((row) => {
                   const badge = overdueBadge(row.worstStatus);
                   return (
-                    <div key={row.legalName} className="flex items-center gap-3 rounded-md px-2 py-1.5 text-sm hover:bg-muted/40">
+                    <div
+                      key={row.legalName}
+                      className="flex flex-col gap-1 rounded-md px-2 py-1.5 text-sm hover:bg-muted/40 sm:flex-row sm:items-center sm:gap-3"
+                    >
                       <span className="min-w-0 flex-1 truncate font-medium">{row.legalName}</span>
-                      <span className="shrink-0 tabular-nums font-semibold text-rose-600">{MXN.format(row.total)}</span>
-                      <span className="w-16 shrink-0 text-right text-xs text-muted-foreground">
-                        {row.count} {row.count === 1 ? "renta" : "rentas"}
-                      </span>
-                      <span className={`w-20 shrink-0 rounded-full px-2 py-0.5 text-center text-xs font-medium ${badge.cls}`}>
-                        {badge.label}
-                      </span>
+                      <div className="flex items-center justify-between gap-3 sm:justify-end">
+                        <span className="shrink-0 tabular-nums font-semibold text-rose-600">{MXN.format(row.total)}</span>
+                        <span className="shrink-0 text-right text-xs text-muted-foreground sm:w-16">
+                          {row.count} {row.count === 1 ? "renta" : "rentas"}
+                        </span>
+                        <span className={`shrink-0 rounded-full px-2 py-0.5 text-center text-xs font-medium sm:w-20 ${badge.cls}`}>
+                          {badge.label}
+                        </span>
+                      </div>
                     </div>
                   );
                 })}

@@ -75,7 +75,9 @@ export async function getOutstandingRents(filters: OutstandingFilters = {}) {
 
   const now = Date.now();
   return rents.map((r) => {
-    const balance = new Prisma.Decimal(r.amountDue).minus(new Prisma.Decimal(r.amountPaid));
+    const balance = new Prisma.Decimal(r.amountDue)
+      .minus(new Prisma.Decimal(r.amountPaid))
+      .minus(new Prisma.Decimal(r.amountWaived));
     const daysOverdue = Math.floor((now - r.dueDate.getTime()) / (1000 * 60 * 60 * 24));
     return serializeDecimals({ ...r, balance: balance.toString(), daysOverdue });
   });
@@ -205,6 +207,7 @@ export async function getOutstandingByLessee(lesseeId: string): Promise<{
     select: {
       amountDue: true,
       amountPaid: true,
+      amountWaived: true,
       status: true,
       dueDate: true,
     },
@@ -213,7 +216,11 @@ export async function getOutstandingByLessee(lesseeId: string): Promise<{
 
   const total = rents.reduce(
     (acc, r) =>
-      acc.plus(new Prisma.Decimal(r.amountDue).minus(new Prisma.Decimal(r.amountPaid))),
+      acc.plus(
+        new Prisma.Decimal(r.amountDue)
+          .minus(new Prisma.Decimal(r.amountPaid))
+          .minus(new Prisma.Decimal(r.amountWaived)),
+      ),
     new Prisma.Decimal(0),
   );
   const overdueCount = rents.filter((r) =>
@@ -308,8 +315,10 @@ export async function getOutstandingRentsForLessee(lesseeId: string) {
     dueDate: r.dueDate,
     amountDue: r.amountDue.toString(),
     amountPaid: r.amountPaid.toString(),
+    amountWaived: r.amountWaived.toString(),
     balance: new Prisma.Decimal(r.amountDue)
       .minus(new Prisma.Decimal(r.amountPaid))
+      .minus(new Prisma.Decimal(r.amountWaived))
       .toString(),
     status: r.status,
     unitCode: r.contract.unit.code,
@@ -319,6 +328,49 @@ export async function getOutstandingRentsForLessee(lesseeId: string) {
 
 export type OutstandingRentLite = Awaited<
   ReturnType<typeof getOutstandingRentsForLessee>
+>[number];
+
+/**
+ * Rents condonables de un contrato — usado por el dialog "Condonar".
+ * Incluye también PENDING (rentas futuras que aún no vencen) para permitir
+ * condonar meses por adelantado. Excluye PAID y WAIVED.
+ */
+export async function getCondonableRentsForContract(contractId: string) {
+  const { tenantId } = await requireAuth();
+  const rents = await prisma.rent.findMany({
+    where: {
+      tenantId,
+      contractId,
+      status: { in: [...OUTSTANDING_STATUSES, "PENDING"] },
+    },
+    orderBy: { dueDate: "asc" },
+    select: {
+      id: true,
+      period: true,
+      dueDate: true,
+      amountDue: true,
+      amountPaid: true,
+      amountWaived: true,
+      status: true,
+    },
+  });
+  return rents.map((r) => ({
+    id: r.id,
+    period: r.period,
+    dueDate: r.dueDate,
+    amountDue: r.amountDue.toString(),
+    amountPaid: r.amountPaid.toString(),
+    amountWaived: r.amountWaived.toString(),
+    balance: new Prisma.Decimal(r.amountDue)
+      .minus(new Prisma.Decimal(r.amountPaid))
+      .minus(new Prisma.Decimal(r.amountWaived))
+      .toString(),
+    status: r.status,
+  }));
+}
+
+export type CondonableRent = Awaited<
+  ReturnType<typeof getCondonableRentsForContract>
 >[number];
 
 /**
@@ -366,25 +418,35 @@ export type MonthlyUnitStatus =
   | "SIN_PAGO"
   | "PRE_PAGADO"
   | "ABONO"
+  | "WAIVED"
   | "VACANT";
 
 /**
  * Deriva el estado de una renta a partir de los montos y la posición del
  * periodo respecto al mes actual. Centralizado para que monthly y yearly
  * coincidan.
+ *
+ * Saldo efectivo = amountDue - amountWaived. Una renta condonada parcialmente
+ * con $X y luego pagada el resto debe mostrarse como PAID, no como PARTIAL.
  */
 function deriveMonthlyStatus(
   period: Date,
   amountPaid: Prisma.Decimal,
   amountDue: Prisma.Decimal,
   now: Date,
+  rentStatus?: RentStatus | null,
+  amountWaived: Prisma.Decimal = new Prisma.Decimal(0),
 ): MonthlyUnitStatus {
+  if (rentStatus === "WAIVED") return "WAIVED";
+
   const currentMonthStart = new Date(
     Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1),
   );
   const isFuture = period.getTime() > currentMonthStart.getTime();
+  const effectiveDue = amountDue.minus(amountWaived);
   const fullyPaid =
-    amountPaid.greaterThanOrEqualTo(amountDue) && amountDue.greaterThan(0);
+    effectiveDue.lessThanOrEqualTo(0) ||
+    (amountPaid.greaterThanOrEqualTo(effectiveDue) && effectiveDue.greaterThan(0));
   const hasPayment = amountPaid.greaterThan(0);
 
   if (fullyPaid) return isFuture ? "PRE_PAGADO" : "PAID";
@@ -538,9 +600,17 @@ export async function getMonthlyCollectionsByProperty(period: Date): Promise<Mon
       const rent = contract.rents[0] ?? null;
       const amountDue = rent ? new Prisma.Decimal(rent.amountDue) : new Prisma.Decimal(contract.monthlyAmount);
       const amountPaid = rent ? new Prisma.Decimal(rent.amountPaid) : new Prisma.Decimal(0);
+      const amountWaived = rent ? new Prisma.Decimal(rent.amountWaived) : new Prisma.Decimal(0);
       expected = expected.plus(amountDue);
 
-      const status = deriveMonthlyStatus(period, amountPaid, amountDue, now);
+      const status = deriveMonthlyStatus(
+        period,
+        amountPaid,
+        amountDue,
+        now,
+        rent?.status,
+        amountWaived,
+      );
 
       // Meses pre-pagados (para tooltip): solo aplica si el contrato fue
       // marcado con paidInAdvance/advancePaidUntil. Es metadata informativa.
@@ -624,6 +694,7 @@ export interface YearlyCell {
   contractId: string | null;
   amountDue: string;
   amountPaid: string;
+  amountWaived: string;
   status: MonthlyUnitStatus;
   prePaidMonths: number | null;
   overdueLevel: 1 | 2 | 3 | null;
@@ -754,6 +825,7 @@ export async function getYearlyCollectionsMatrix(year: number): Promise<YearlyCo
             contractId: null,
             amountDue: "0",
             amountPaid: "0",
+            amountWaived: "0",
             status: "VACANT",
             prePaidMonths: null,
             overdueLevel: null,
@@ -766,12 +838,22 @@ export async function getYearlyCollectionsMatrix(year: number): Promise<YearlyCo
         const amountPaid = rent
           ? new Prisma.Decimal(rent.amountPaid)
           : new Prisma.Decimal(0);
+        const amountWaived = rent
+          ? new Prisma.Decimal(rent.amountWaived)
+          : new Prisma.Decimal(0);
         unitExpected = unitExpected.plus(amountDue);
         unitPaid = unitPaid.plus(amountPaid);
         monthlyAgg[i]!.expected = monthlyAgg[i]!.expected.plus(amountDue);
         monthlyAgg[i]!.paid = monthlyAgg[i]!.paid.plus(amountPaid);
 
-        const status = deriveMonthlyStatus(period, amountPaid, amountDue, now);
+        const status = deriveMonthlyStatus(
+          period,
+          amountPaid,
+          amountDue,
+          now,
+          rent?.status,
+          amountWaived,
+        );
 
         const prePaidMonths =
           status === "PRE_PAGADO" && contract.paidInAdvance && contract.advancePaidUntil
@@ -800,6 +882,7 @@ export async function getYearlyCollectionsMatrix(year: number): Promise<YearlyCo
           contractId: contract.id,
           amountDue: amountDue.toString(),
           amountPaid: amountPaid.toString(),
+          amountWaived: amountWaived.toString(),
           status,
           prePaidMonths,
           overdueLevel,

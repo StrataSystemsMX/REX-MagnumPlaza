@@ -1,6 +1,9 @@
 "use client";
 
 import {
+  ChevronDown,
+  ChevronRight,
+  ChevronUp,
   ExternalLink,
   Images,
   ImageOff,
@@ -9,14 +12,13 @@ import {
   Pencil,
   Plus,
   Receipt,
-  Store,
   Table2,
   Trash2,
 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { Fragment, useState, useTransition } from "react";
 import { toast } from "sonner";
 import {
   AlertDialog,
@@ -54,6 +56,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { PropertyForm } from "@/components/forms/PropertyForm";
+import { UnitCard } from "@/components/properties/UnitCard";
 import { actionDeleteProperty } from "@/lib/services/properties";
 import type {
   LegalEntityOption,
@@ -71,7 +74,17 @@ export function PlazasTable({ plazas, legalEntities }: PlazasTableProps) {
   const [editTarget, setEditTarget] = useState<PropertyListItem | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<PropertyListItem | null>(null);
   const [view, setView] = useState<"cards" | "table">("cards");
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [pending, startTransition] = useTransition();
+
+  function toggleExpanded(id: string) {
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
 
   function confirmDelete() {
     if (!deleteTarget) return;
@@ -150,6 +163,8 @@ export function PlazasTable({ plazas, legalEntities }: PlazasTableProps) {
             <PlazaCard
               key={p.id}
               plaza={p}
+              isExpanded={expanded.has(p.id)}
+              onToggle={() => toggleExpanded(p.id)}
               onEdit={() => setEditTarget(p)}
               onDelete={() => setDeleteTarget(p)}
             />
@@ -158,6 +173,8 @@ export function PlazasTable({ plazas, legalEntities }: PlazasTableProps) {
       ) : (
         <PlazasTableView
           plazas={plazas}
+          expanded={expanded}
+          onToggle={toggleExpanded}
           onEdit={(p) => setEditTarget(p)}
           onDelete={(p) => setDeleteTarget(p)}
         />
@@ -182,6 +199,7 @@ export function PlazasTable({ plazas, legalEntities }: PlazasTableProps) {
                 id: editTarget.id,
                 name: editTarget.name,
                 type: editTarget.type,
+                status: editTarget.status,
                 address: editTarget.address,
                 ownerEntityId: editTarget.ownerEntity.id,
                 managerEntityId: editTarget.managerEntity.id,
@@ -254,12 +272,6 @@ function PlazaActionsMenu({
           Ver detalle
         </DropdownMenuItem>
         <DropdownMenuItem
-          render={<Link href={`/properties/${plaza.id}?tab=units`} />}
-        >
-          <Store className="size-4" />
-          Ver locales
-        </DropdownMenuItem>
-        <DropdownMenuItem
           render={<Link href={`/properties/${plaza.id}?tab=photos`} />}
         >
           <Images className="size-4" />
@@ -288,10 +300,14 @@ function PlazaActionsMenu({
 
 function PlazaCard({
   plaza,
+  isExpanded,
+  onToggle,
   onEdit,
   onDelete,
 }: {
   plaza: PropertyListItem;
+  isExpanded: boolean;
+  onToggle: () => void;
   onEdit: () => void;
   onDelete: () => void;
 }) {
@@ -299,112 +315,183 @@ function PlazaCard({
     plaza;
   const occupancyPct =
     unitCounts.total > 0 ? Math.round((unitCounts.rented / unitCounts.total) * 100) : 0;
+  const activeUnits = plaza.units.filter((u) => u.isActive);
 
   return (
-    <Card className="group flex h-full flex-col overflow-hidden p-0">
-      <Link href={`/properties/${plaza.id}`} className="block">
-        <div className="relative aspect-video w-full overflow-hidden bg-muted">
-          {coverPhotoUrl ? (
-            <Image
-              src={coverPhotoUrl}
-              alt={name}
-              fill
-              sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
-              className="object-cover transition-transform group-hover:scale-105"
-              loading="lazy"
-            />
-          ) : (
-            <div className="flex h-full items-center justify-center text-muted-foreground">
-              <ImageOff className="size-8" />
+    <Card
+      className={`group flex h-full flex-col overflow-hidden p-0 transition-shadow ${
+        isExpanded
+          ? "sm:col-span-2 lg:col-span-3 xl:col-span-4 shadow-lg ring-2 ring-primary/30"
+          : ""
+      }`}
+    >
+      <div className={isExpanded ? "flex flex-col gap-0 sm:flex-row" : ""}>
+        <Link
+          href={`/properties/${plaza.id}`}
+          className={`block ${isExpanded ? "sm:w-1/3 sm:max-w-sm" : ""}`}
+        >
+          <div className="relative aspect-video w-full overflow-hidden bg-muted">
+            {coverPhotoUrl ? (
+              <>
+                <Image
+                  src={coverPhotoUrl}
+                  alt=""
+                  aria-hidden
+                  fill
+                  sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
+                  className="scale-110 object-cover blur-xl"
+                  loading="lazy"
+                />
+                <div className="absolute inset-0 bg-background/30" />
+                <Image
+                  src={coverPhotoUrl}
+                  alt={name}
+                  fill
+                  sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
+                  className="object-contain transition-transform group-hover:scale-105"
+                  loading="lazy"
+                />
+              </>
+            ) : (
+              <div className="flex h-full items-center justify-center text-muted-foreground">
+                <ImageOff className="size-8" />
+              </div>
+            )}
+          </div>
+        </Link>
+        <CardContent className="flex flex-1 flex-col gap-3 p-4">
+          <div className="flex items-start justify-between gap-2">
+            <div className="flex min-w-0 flex-1 items-center gap-2">
+              <Button
+                variant={isExpanded ? "secondary" : "outline"}
+                size="sm"
+                onClick={onToggle}
+                aria-label={isExpanded ? "Colapsar locales" : "Ver locales"}
+                aria-expanded={isExpanded}
+                className={`shrink-0 gap-1 ${
+                  isExpanded ? "" : "border-primary/50 text-primary hover:bg-primary/10"
+                }`}
+              >
+                {isExpanded ? (
+                  <ChevronDown className="size-4" />
+                ) : (
+                  <ChevronRight className="size-4" />
+                )}
+                <span className="text-xs font-medium">
+                  {isExpanded ? "Cerrar" : `Locales (${unitCounts.total})`}
+                </span>
+              </Button>
+              <div className="min-w-0 flex-1">
+                <Link
+                  href={`/properties/${plaza.id}`}
+                  className="block truncate font-semibold hover:underline"
+                >
+                  {name}
+                </Link>
+                {address ? (
+                  <p className="line-clamp-1 text-xs text-muted-foreground">{address}</p>
+                ) : null}
+              </div>
             </div>
-          )}
-        </div>
-      </Link>
-      <CardContent className="flex flex-1 flex-col gap-3 p-4">
-        <div className="flex items-start justify-between gap-2">
-          <div className="min-w-0 flex-1">
-            <Link
-              href={`/properties/${plaza.id}`}
-              className="block truncate font-semibold hover:underline"
+            <PlazaActionsMenu plaza={plaza} onEdit={onEdit} onDelete={onDelete} />
+          </div>
+
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <span>
+              Dueña <span className="font-medium text-foreground">{ownerEntity.code}</span>
+            </span>
+            <span aria-hidden>·</span>
+            <span>
+              Administra{" "}
+              <span className="font-medium text-foreground">{managerEntity.code}</span>
+            </span>
+          </div>
+
+          <div className="mt-auto space-y-1.5 border-t pt-3">
+            <div className="flex items-baseline justify-between text-sm">
+              <span className="font-medium tabular-nums">
+                {unitCounts.rented}
+                <span className="text-muted-foreground"> / {unitCounts.total} ocupados</span>
+              </span>
+              <span className="text-xs tabular-nums text-muted-foreground">
+                {occupancyPct}%
+              </span>
+            </div>
+            <div
+              className="h-1.5 w-full overflow-hidden rounded-full bg-muted"
+              role="progressbar"
+              aria-valuenow={occupancyPct}
+              aria-valuemin={0}
+              aria-valuemax={100}
             >
-              {name}
-            </Link>
-            {address ? (
-              <p className="line-clamp-1 text-xs text-muted-foreground">{address}</p>
+              <div
+                className="h-full rounded-full bg-primary transition-[width]"
+                style={{ width: `${occupancyPct}%` }}
+              />
+            </div>
+            {unitCounts.available > 0 ? (
+              <p className="text-xs text-muted-foreground">
+                {unitCounts.available} disponible
+                {unitCounts.available === 1 ? "" : "s"}
+              </p>
             ) : null}
           </div>
-          <PlazaActionsMenu plaza={plaza} onEdit={onEdit} onDelete={onDelete} />
-        </div>
+        </CardContent>
+      </div>
 
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <span>
-            Dueña <span className="font-medium text-foreground">{ownerEntity.code}</span>
-          </span>
-          <span aria-hidden>·</span>
-          <span>
-            Administra{" "}
-            <span className="font-medium text-foreground">{managerEntity.code}</span>
-          </span>
-        </div>
-
-        <div className="mt-auto space-y-1.5 border-t pt-3">
-          <div className="flex items-baseline justify-between text-sm">
-            <span className="font-medium tabular-nums">
-              {unitCounts.rented}
-              <span className="text-muted-foreground"> / {unitCounts.total} ocupados</span>
-            </span>
-            <span className="text-xs tabular-nums text-muted-foreground">
-              {occupancyPct}%
-            </span>
+      {isExpanded ? (
+        <>
+          <div className="border-t bg-muted/30 px-4 py-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            Locales de {name}
           </div>
-          <div
-            className="h-1.5 w-full overflow-hidden rounded-full bg-muted"
-            role="progressbar"
-            aria-valuenow={occupancyPct}
-            aria-valuemin={0}
-            aria-valuemax={100}
-          >
-            <div
-              className="h-full rounded-full bg-primary transition-[width]"
-              style={{ width: `${occupancyPct}%` }}
-            />
+          <div className="bg-muted/30 p-4">
+            {activeUnits.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                Esta plaza aún no tiene locales activos.
+              </p>
+            ) : (
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                {activeUnits.map((u) => (
+                  <UnitCard key={u.id} unit={u} propertyId={plaza.id} />
+                ))}
+              </div>
+            )}
           </div>
-          {unitCounts.available > 0 ? (
-            <p className="text-xs text-muted-foreground">
-              {unitCounts.available} disponible
-              {unitCounts.available === 1 ? "" : "s"}
-            </p>
-          ) : null}
-        </div>
-
-        <Button
-          variant="outline"
-          size="sm"
-          className="w-full"
-          render={<Link href={`/properties/${plaza.id}?tab=units`} />}
-        >
-          <Store className="size-4" />
-          Ver locales
-        </Button>
-      </CardContent>
+          <div className="flex items-center justify-between gap-2 border-t bg-muted/50 px-4 py-2.5">
+            <span className="text-xs text-muted-foreground">
+              Fin de los locales de{" "}
+              <span className="font-medium text-foreground">{name}</span>
+            </span>
+            <Button variant="ghost" size="sm" onClick={onToggle} className="gap-1">
+              <ChevronUp className="size-4" />
+              Cerrar
+            </Button>
+          </div>
+        </>
+      ) : null}
     </Card>
   );
 }
 
 function PlazasTableView({
   plazas,
+  expanded,
+  onToggle,
   onEdit,
   onDelete,
 }: {
   plazas: ReadonlyArray<PropertyListItem>;
+  expanded: ReadonlySet<string>;
+  onToggle: (id: string) => void;
   onEdit: (p: PropertyListItem) => void;
   onDelete: (p: PropertyListItem) => void;
 }) {
   return (
-    <div className="rounded-md border bg-card">
-      <Table>
+    <div className="overflow-x-auto rounded-md border bg-card">
+      <Table className="min-w-[680px]">
         <TableHeader>
           <TableRow>
+            <TableHead className="w-8" />
             <TableHead>Nombre</TableHead>
             <TableHead>Dueña</TableHead>
             <TableHead>Administra</TableHead>
@@ -421,35 +508,97 @@ function PlazasTableView({
               p.unitCounts.total > 0
                 ? Math.round((p.unitCounts.rented / p.unitCounts.total) * 100)
                 : 0;
+            const isExpanded = expanded.has(p.id);
+            const activeUnits = p.units.filter((u) => u.isActive);
             return (
-              <TableRow key={p.id}>
-                <TableCell>
-                  <Link
-                    href={`/properties/${p.id}`}
-                    className="font-medium hover:underline"
-                  >
-                    {p.name}
-                  </Link>
-                  {p.address ? (
-                    <p className="text-xs text-muted-foreground">{p.address}</p>
-                  ) : null}
-                </TableCell>
-                <TableCell className="text-sm">{p.ownerEntity.code}</TableCell>
-                <TableCell className="text-sm">{p.managerEntity.code}</TableCell>
-                <TableCell className="tabular-nums text-sm">
-                  <span className="font-medium">{p.unitCounts.rented}</span>
-                  <span className="text-muted-foreground"> / {p.unitCounts.total}</span>
-                </TableCell>
-                <TableCell className="tabular-nums text-sm">{occ}%</TableCell>
-                <TableCell className="text-right">
-                  <PlazaActionsMenu
-                    plaza={p}
-                    onEdit={() => onEdit(p)}
-                    onDelete={() => onDelete(p)}
-                    size="icon"
-                  />
-                </TableCell>
-              </TableRow>
+              <Fragment key={p.id}>
+                <TableRow data-state={isExpanded ? "expanded" : undefined}>
+                  <TableCell className="w-8 p-0 pl-2 align-middle">
+                    <Button
+                      variant={isExpanded ? "secondary" : "outline"}
+                      size="icon-sm"
+                      onClick={() => onToggle(p.id)}
+                      aria-label={isExpanded ? "Colapsar locales" : "Ver locales"}
+                      aria-expanded={isExpanded}
+                      className={
+                        isExpanded ? "" : "border-primary/50 text-primary hover:bg-primary/10"
+                      }
+                    >
+                      {isExpanded ? (
+                        <ChevronDown className="size-5" />
+                      ) : (
+                        <ChevronRight className="size-5" />
+                      )}
+                    </Button>
+                  </TableCell>
+                  <TableCell>
+                    <Link
+                      href={`/properties/${p.id}`}
+                      className="font-medium hover:underline"
+                    >
+                      {p.name}
+                    </Link>
+                    {p.address ? (
+                      <p className="text-xs text-muted-foreground">{p.address}</p>
+                    ) : null}
+                  </TableCell>
+                  <TableCell className="text-sm">{p.ownerEntity.code}</TableCell>
+                  <TableCell className="text-sm">{p.managerEntity.code}</TableCell>
+                  <TableCell className="tabular-nums text-sm">
+                    <span className="font-medium">{p.unitCounts.rented}</span>
+                    <span className="text-muted-foreground"> / {p.unitCounts.total}</span>
+                  </TableCell>
+                  <TableCell className="tabular-nums text-sm">{occ}%</TableCell>
+                  <TableCell className="text-right">
+                    <PlazaActionsMenu
+                      plaza={p}
+                      onEdit={() => onEdit(p)}
+                      onDelete={() => onDelete(p)}
+                      size="icon"
+                    />
+                  </TableCell>
+                </TableRow>
+                {isExpanded ? (
+                  <TableRow className="bg-muted/30 hover:bg-muted/30">
+                    <TableCell />
+                    <TableCell colSpan={6} className="p-0">
+                      <div className="border-t border-b-2 border-b-primary/30">
+                        <div className="bg-muted/30 px-4 py-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                          Locales de {p.name}
+                        </div>
+                        <div className="p-4">
+                          {activeUnits.length === 0 ? (
+                            <p className="text-sm text-muted-foreground">
+                              Esta plaza aún no tiene locales activos.
+                            </p>
+                          ) : (
+                            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                              {activeUnits.map((u) => (
+                                <UnitCard key={u.id} unit={u} propertyId={p.id} />
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex items-center justify-between gap-2 border-t bg-muted/50 px-4 py-2.5">
+                          <span className="text-xs text-muted-foreground">
+                            Fin de los locales de{" "}
+                            <span className="font-medium text-foreground">{p.name}</span>
+                          </span>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => onToggle(p.id)}
+                            className="gap-1"
+                          >
+                            <ChevronUp className="size-4" />
+                            Cerrar
+                          </Button>
+                        </div>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ) : null}
+              </Fragment>
             );
           })}
         </TableBody>

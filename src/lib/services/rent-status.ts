@@ -6,28 +6,39 @@ const MS_PER_DAY = 1000 * 60 * 60 * 24;
 /**
  * Calcula el estado de un Rent a partir de los montos y la fecha de vencimiento.
  *
+ * Saldo = amountDue - amountPaid - amountWaived
+ *
  * Reglas (alineadas con la política CRT de 3 avisos antes de desalojo):
- *  - amountPaid >= amountDue → PAID
- *  - 0 < amountPaid < amountDue → PARTIAL
- *  - amountPaid == 0:
+ *  - Si saldo <= 0:
+ *      · y amountWaived > 0 y amountPaid == 0  → WAIVED (condonación pura)
+ *      · cualquier otro caso (hubo pago real)  → PAID
+ *  - amountPaid > 0 y saldo > 0                 → PARTIAL
+ *  - amountPaid == 0 y saldo > 0:
  *      · dueDate en el futuro      → PENDING
  *      · 0..29 días vencido        → DUE
  *      · 30..59 días vencido       → OVERDUE_1M  (dispara aviso 1)
  *      · 60..89 días vencido       → OVERDUE_2M  (dispara aviso 2)
  *      · ≥ 90 días vencido         → OVERDUE_3M  (dispara aviso 3 — desalojo)
  *
- * NO maneja WAIVED: ese estado se marca manualmente y se respeta en el caller.
+ * Si ya estaba en WAIVED y no se ha movido nada, el caller debe respetar
+ * el estado para no resucitarlo desde un recalc; ver payments.recalcRentInTx.
  */
 export function computeRentStatus(
   amountPaid: Prisma.Decimal | number | string,
   amountDue: Prisma.Decimal | number | string,
   dueDate: Date,
   now: Date = new Date(),
+  amountWaived: Prisma.Decimal | number | string = 0,
 ): RentStatus {
   const paid = new Prisma.Decimal(amountPaid);
+  const waived = new Prisma.Decimal(amountWaived);
   const due = new Prisma.Decimal(amountDue);
+  const balance = due.minus(paid).minus(waived);
 
-  if (paid.gte(due)) return "PAID";
+  if (balance.lte(0)) {
+    if (waived.gt(0) && paid.eq(0)) return "WAIVED";
+    return "PAID";
+  }
   if (paid.gt(0)) return "PARTIAL";
 
   const daysOverdue = Math.floor((now.getTime() - dueDate.getTime()) / MS_PER_DAY);

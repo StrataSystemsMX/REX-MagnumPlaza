@@ -15,7 +15,7 @@ const STATUS_CLASSES: Record<RentStatus, string> = {
   PENDING: "border-muted bg-card text-muted-foreground",
   DUE: "border-orange-300 bg-orange-50 text-orange-900 dark:border-orange-900 dark:bg-orange-950 dark:text-orange-200",
   OVERDUE_1M:
-    "border-orange-400 bg-orange-100 text-orange-950 dark:border-orange-800 dark:bg-orange-900 dark:text-orange-100",
+    "border-orange-500 bg-orange-200 text-orange-950 dark:border-orange-700 dark:bg-orange-800 dark:text-orange-50",
   OVERDUE_2M:
     "border-red-400 bg-red-50 text-red-900 dark:border-red-900 dark:bg-red-950 dark:text-red-200",
   OVERDUE_3M:

@@ -53,7 +53,7 @@ export default async function EgresosPage({ searchParams }: PageProps) {
   ]);
 
   return (
-    <div className="-m-8 space-y-6 bg-gradient-to-b from-red-400/22 to-transparent bg-[length:100%_180px] bg-no-repeat p-8 dark:from-red-800/18">
+    <div className="-m-4 space-y-6 bg-gradient-to-b from-red-400/22 to-transparent bg-[length:100%_180px] bg-no-repeat p-4 sm:-m-6 sm:p-6 lg:-m-8 lg:p-8 dark:from-red-800/18">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Egresos</h1>
         <p className="text-sm text-muted-foreground">

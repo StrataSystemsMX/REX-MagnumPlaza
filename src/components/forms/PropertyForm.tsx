@@ -22,7 +22,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { propertyTypeLabel } from "@/lib/i18n/enums";
+import { propertyStatusLabel, propertyTypeLabel } from "@/lib/i18n/enums";
 import {
   createPropertySchema,
   type CreatePropertyInput,
@@ -32,7 +32,7 @@ import {
   actionUpdateProperty,
 } from "@/lib/services/properties";
 import type { LegalEntityOption } from "@/lib/services/properties-queries";
-import type { PropertyType } from "@/generated/prisma/enums";
+import type { PropertyStatus, PropertyType } from "@/generated/prisma/enums";
 
 const PROPERTY_TYPES: ReadonlyArray<PropertyType> = [
   "PLAZA_COMERCIAL",
@@ -45,10 +45,13 @@ const PROPERTY_TYPES: ReadonlyArray<PropertyType> = [
   "OTRO",
 ];
 
+const PROPERTY_STATUSES: ReadonlyArray<PropertyStatus> = ["ACTIVO", "BLOQUEADO"];
+
 export interface PropertyFormInitial {
   id?: string;
   name: string;
   type: PropertyType;
+  status?: PropertyStatus;
   address: string;
   ownerEntityId: string;
   managerEntityId: string;
@@ -97,6 +100,12 @@ export function PropertyForm({
     [availableTypes],
   );
 
+  const statusItems = useMemo<Record<string, string>>(
+    () =>
+      Object.fromEntries(PROPERTY_STATUSES.map((s) => [s, propertyStatusLabel(s)])),
+    [],
+  );
+
   const legalEntityItems = useMemo<Record<string, string>>(
     () => Object.fromEntries(legalEntities.map((e) => [e.id, `${e.code} — ${e.legalName}`])),
     [legalEntities],
@@ -107,6 +116,7 @@ export function PropertyForm({
     defaultValues: {
       name: initial?.name ?? "",
       type: initialType,
+      status: initial?.status ?? "ACTIVO",
       address: initial?.address ?? "",
       ownerEntityId: initial?.ownerEntityId ?? "",
       managerEntityId: initial?.managerEntityId ?? "",
@@ -118,12 +128,13 @@ export function PropertyForm({
   function onSubmit(values: CreatePropertyInput) {
     startTransition(async () => {
       try {
+        const isPlaza = values.type === "PLAZA_COMERCIAL";
         if (isEdit && initial?.id) {
           await actionUpdateProperty(initial.id, values);
-          toast.success("Inmueble actualizado.");
+          toast.success(isPlaza ? "Plaza actualizada." : "Inmueble actualizado.");
         } else {
           await actionCreateProperty(values);
-          toast.success("Inmueble creado.");
+          toast.success(isPlaza ? "Plaza creada." : "Inmueble creado.");
         }
         onSuccess?.();
         form.reset(values);
@@ -258,6 +269,39 @@ export function PropertyForm({
                     ))}
                   </SelectContent>
                 </Select>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="status"
+            render={({ field }) => (
+              <FormItem className="md:col-span-2">
+                <FormLabel>Estado</FormLabel>
+                <Select
+                  onValueChange={field.onChange}
+                  value={field.value}
+                  items={statusItems}
+                >
+                  <FormControl>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Selecciona el estado" />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    {PROPERTY_STATUSES.map((s) => (
+                      <SelectItem key={s} value={s}>
+                        {propertyStatusLabel(s)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Bloqueado oculta renta, badge de disponible e inquilino en la lista de
+                  inmuebles. Úsalo para propiedades que no se rentan (p. ej. casa del
+                  dueño).
+                </p>
                 <FormMessage />
               </FormItem>
             )}
