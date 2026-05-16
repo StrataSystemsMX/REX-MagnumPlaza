@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  BadgeDollarSign,
   Building2,
   ChevronDown,
   ChevronLeft,
