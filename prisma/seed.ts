@@ -5,6 +5,9 @@ import {
   ContractType,
   ExpenseType,
   GuaranteeStatus,
+  InvestmentProjectStatus,
+  LoanStatus,
+  LoanType,
   PaymentMethod,
   Plan,
   PropertyType,
@@ -1000,6 +1003,190 @@ async function main(): Promise<void> {
   }
   console.log(`Nóminas ${YEAR} creadas: ${payrollsCreated}`);
 
+  // -- 6.9. Préstamos (Loans) -----------------------------------------------
+  // Financiamientos vehiculares del Excel. Montos de pago mensual tomados
+  // directamente de la columna de egresos. Saldos y fechas aproximados.
+  type LoanDef = {
+    entity: EntityCode;
+    name: string;
+    lender: string;
+    type: LoanType;
+    originalAmount: number;
+    currentBalance: number;
+    monthlyPayment: number;
+    interestRate: number;
+    startDate: Date;
+    endDate: Date;
+    paymentDay: number;
+    status: LoanStatus;
+    paidMonths?: number[];
+    /** Montos distintos al mensual fijo para meses específicos (0-indexed) */
+    monthAmounts?: Partial<Record<number, number>>;
+  };
+
+  const loansDef: LoanDef[] = [
+    // --- Hipotecas (CRT + TSR) ---
+    // Datos del Excel: "HIPOTECA (CRT & TSR)" — pago mensual $32,430.11 c/u;
+    // meses mar (2) y jul (6) de TSR tienen cuota alternativa $31,182.80.
+    {
+      entity: "CRT",
+      name: "Hipoteca CRT",
+      lender: "Banco (hipoteca)",
+      type: LoanType.MORTGAGE,
+      originalAmount: 3_500_000,
+      currentBalance: 2_100_000,
+      monthlyPayment: 32_430.11,
+      interestRate: 0.1000,
+      startDate: utcDate(2018, 0, 1),
+      endDate: utcDate(2033, 0, 1),
+      paymentDay: 1,
+      status: LoanStatus.ACTIVE,
+      paidMonths: [0, 1, 2, 3],
+    },
+    {
+      entity: "TSR",
+      name: "Hipoteca TSR",
+      lender: "Banco (hipoteca)",
+      type: LoanType.MORTGAGE,
+      originalAmount: 3_500_000,
+      currentBalance: 2_100_000,
+      monthlyPayment: 32_430.11,
+      interestRate: 0.1000,
+      startDate: utcDate(2018, 0, 1),
+      endDate: utcDate(2033, 0, 1),
+      paymentDay: 1,
+      status: LoanStatus.ACTIVE,
+      paidMonths: [0, 1, 2, 3],
+      // Cuota alternativa en marzo y julio (datos del Excel)
+      monthAmounts: { 2: 31_182.80, 6: 31_182.80 },
+    },
+    // --- Préstamo JC ---
+    // "PRESTAMO JC (BANCOS Y PERSONAL)": $11,181.44/mes, Oct 2026 = último pago
+    {
+      entity: "CRT",
+      name: "Préstamo JC (bancos y personal)",
+      lender: "Juan Carlos L / Bancos",
+      type: LoanType.PERSONAL,
+      originalAmount: 500_000,
+      currentBalance: 167_721,   // 15 cuotas restantes × $11,181
+      monthlyPayment: 11_181.44,
+      interestRate: 0.0800,
+      startDate: utcDate(2025, 0, 1),
+      endDate: utcDate(2026, 9, 1), // octubre 2026
+      paymentDay: 1,
+      status: LoanStatus.ACTIVE,
+      paidMonths: [0, 1, 2, 3],
+    },
+  ];
+
+  let loansCreated = 0;
+  for (const def of loansDef) {
+    const loan = await prisma.loan.create({
+      data: {
+        tenantId: tenant.id,
+        legalEntityId: entities[def.entity].id,
+        name: def.name,
+        lender: def.lender,
+        type: def.type,
+        originalAmount: decimal(def.originalAmount),
+        currentBalance: decimal(def.currentBalance),
+        monthlyPayment: decimal(def.monthlyPayment),
+        interestRate: new Prisma.Decimal(def.interestRate.toFixed(4)),
+        startDate: def.startDate,
+        endDate: def.endDate,
+        paymentDay: def.paymentDay,
+        status: def.status,
+      },
+    });
+
+    const paidSet = new Set(def.paidMonths ?? []);
+    // Generamos las 12 cuotas del año completo (futuras con isPaid=false)
+    // para que la matriz anual pueda mostrar el calendario completo.
+    for (let m = 0; m < 12; m++) {
+      // Verificar que el préstamo esté vigente este mes
+      const periodStart = utcDate(YEAR, m, 1);
+      const periodEnd = utcDate(YEAR, m + 1, 1);
+      if (def.startDate >= periodEnd) continue;
+      if (def.endDate && def.endDate <= periodStart) continue;
+
+      const isPaid = paidSet.has(m);
+      const amount = def.monthAmounts?.[m] ?? def.monthlyPayment;
+      await prisma.loanPayment.create({
+        data: {
+          tenantId: tenant.id,
+          loanId: loan.id,
+          period: utcDate(YEAR, m, 1),
+          amount: decimal(amount),
+          paymentDate: isPaid ? utcDate(YEAR, m, def.paymentDay) : null,
+          isPaid,
+        },
+      });
+    }
+    loansCreated++;
+  }
+  console.log(`Préstamos creados: ${loansCreated}`);
+
+  // -- 6.10. Proyectos de Inversión -----------------------------------------
+  // "PAGOS QUIROGA ETAPA FINAL" — datos del Excel del cliente.
+  // Construcción de la etapa final de Plaza Quiroga 2, ~$152k/semana.
+  const quiroganProperty = await prisma.property.findFirst({
+    where: { tenantId: tenant.id, name: { contains: "Quiroga 2" } },
+    select: { id: true },
+  });
+
+  const invProject = await prisma.investmentProject.create({
+    data: {
+      tenantId: tenant.id,
+      legalEntityId: entities["QHS"].id,
+      propertyId: quiroganProperty?.id ?? null,
+      name: "Etapa Final Plaza Quiroga 2",
+      description:
+        "Construcción de la etapa final de Plaza Magnum Quiroga 2. Pagos semanales de obra.",
+      budgetAmount: decimal(1_621_586),  // construcción $1,375,824 + estacionamiento $245,762
+      executedAmount: decimal(1_375_824), // Est.1-9 pagados (todas las estimaciones de construcción)
+      startDate: utcDate(2025, 9, 1),
+      endDate: utcDate(YEAR, 6, 30),
+      status: InvestmentProjectStatus.ACTIVE,
+    },
+  });
+
+  // Pagos del Excel "PAGOS QUIROGA ETAPA FINAL":
+  //   Etapa 2 (Sem 16-24): $150k, $155,762, $152,881, $150k, $149k,
+  //                         $152,881, $152,900, $152,900, $159,500  = $1,375,824
+  //   Estacionamiento (2 pagos): $122,881 + $122,881                 = $245,762
+  //   Total contratado: $1,621,586
+  // Los primeros 7 pagos (hasta ene/feb 2026) se marcan PAID; el resto PENDING.
+  type InvPayDef = { description: string; date: Date; amount: number; isPaid: boolean };
+  const invPaymentsDef: InvPayDef[] = [
+    // Etapa 2 — semanas 16-24
+    { description: "Est.1 Etapa 2 — estructura",       date: utcDate(2025, 9, 10),  amount: 150_000,  isPaid: true  }, // Sem 16: 16-21 Oct
+    { description: "Est.2 Etapa 2 — estructura",       date: utcDate(2025, 9, 24),  amount: 155_762,  isPaid: true  }, // Sem 17: 23-28 Oct
+    { description: "Est.3 Etapa 2 — muros",            date: utcDate(2025, 9, 30),  amount: 152_881,  isPaid: true  }, // Sem 18: 30 Oct-4 Nov
+    { description: "Est.4 Etapa 2 — muros",            date: utcDate(2025, 10, 6),  amount: 150_000,  isPaid: true  }, // Sem 19: 6-11 Nov
+    { description: "Est.5 Etapa 2 — instalaciones",    date: utcDate(2025, 10, 13), amount: 149_000,  isPaid: true  }, // Sem 20: 13-18 Nov
+    { description: "Est.6 Etapa 2 — instalaciones",    date: utcDate(2025, 10, 20), amount: 152_881,  isPaid: true  }, // Sem 21: 20-25 Nov
+    { description: "Est.7 Etapa 2 — acabados",         date: utcDate(2025, 10, 27), amount: 152_900,  isPaid: true  }, // Sem 22: 27 Nov-2 Dic
+    { description: "Est.8 Etapa 2 — acabados",         date: utcDate(2025, 11, 4),  amount: 152_900,  isPaid: true  }, // Sem 23: 4-9 Dic
+    { description: "Est.9 Etapa 2 — ajustes finales",  date: utcDate(2025, 11, 11), amount: 159_500,  isPaid: true  }, // Sem 24: 11-16 Dic
+    // Estacionamiento
+    { description: "Estacionamiento — pago 1",         date: utcDate(YEAR, 3, 11),  amount: 122_881,  isPaid: false },
+    { description: "Estacionamiento — pago 2",         date: utcDate(YEAR, 5, 6),   amount: 122_881,  isPaid: false },
+  ];
+
+  for (const pay of invPaymentsDef) {
+    await prisma.investmentPayment.create({
+      data: {
+        tenantId: tenant.id,
+        projectId: invProject.id,
+        description: pay.description,
+        amount: decimal(pay.amount),
+        paymentDate: pay.date,
+        isPaid: pay.isPaid,
+      },
+    });
+  }
+  console.log("Proyecto de inversión creado: Etapa Final Plaza Quiroga 2");
+
   // -- 7. Usuario admin de prueba ------------------------------------------
   const masterRole = await prisma.role.findUnique({
     where: { code: RoleCode.MASTER },
@@ -1007,16 +1194,34 @@ async function main(): Promise<void> {
   if (!masterRole) {
     throw new Error("Role MASTER no encontrado tras el upsert. Algo salió mal.");
   }
-  await prisma.user.create({
-    data: {
-      tenantId: tenant.id,
-      email: "crm.inmobiliaria02@gmail.com",
-      name: "Admin Demo",
-      phone: "+526621151171",
-      clerkId: null,
-      roles: { create: [{ roleId: masterRole.id }] },
-    },
-  });
+  const devUsers = [
+    { email: "crm.inmobiliaria02@gmail.com", name: "Admin Demo", phone: "+526621151171" },
+    { email: "lr384492@gmail.com", name: "Leonardo Reyes", phone: null },
+  ];
+  for (const u of devUsers) {
+    const existing = await prisma.user.findUnique({
+      where: { tenantId_email: { tenantId: tenant.id, email: u.email } },
+      select: { id: true },
+    });
+    if (existing) {
+      await prisma.userRole.upsert({
+        where: { userId_roleId: { userId: existing.id, roleId: masterRole.id } },
+        update: {},
+        create: { userId: existing.id, roleId: masterRole.id },
+      });
+    } else {
+      await prisma.user.create({
+        data: {
+          tenantId: tenant.id,
+          email: u.email,
+          name: u.name,
+          phone: u.phone,
+          clerkId: null,
+          roles: { create: [{ roleId: masterRole.id }] },
+        },
+      });
+    }
+  }
 
   // -- 8. Resumen ----------------------------------------------------------
   const tenantWhere = { where: { tenantId: tenant.id } };
@@ -1042,6 +1247,8 @@ async function main(): Promise<void> {
     cadastralCount,
     cadastralPaid,
     payrollsCount,
+    loansCount,
+    investmentProjectsCount,
     usersCount,
   ] = await Promise.all([
     prisma.tenant.count({ where: { slug: TENANT_SLUG } }),
@@ -1079,6 +1286,8 @@ async function main(): Promise<void> {
       where: { tenantId: tenant.id, isPaid: true },
     }),
     prisma.payroll.count(tenantWhere),
+    prisma.loan.count(tenantWhere),
+    prisma.investmentProject.count(tenantWhere),
     prisma.user.count(tenantWhere),
   ]);
 
@@ -1098,6 +1307,8 @@ async function main(): Promise<void> {
   console.log(`Egresos ${YEAR}:             ${expensesCount}  (${expensesPaid} pagados)`);
   console.log(`Prediales ${YEAR}:           ${cadastralCount}  (${cadastralPaid} pagados)`);
   console.log(`Nóminas ${YEAR}:             ${payrollsCount}`);
+  console.log(`Préstamos:              ${loansCount}`);
+  console.log(`Proyectos inversión:    ${investmentProjectsCount}`);
   console.log(`Usuarios:               ${usersCount}`);
   console.log("========================================");
   console.log(`Login demo: crm.inmobiliaria02@gmail.com (rol MASTER)\n`);
