@@ -77,7 +77,7 @@ export async function getOutstandingRents(filters: OutstandingFilters = {}) {
   return rents.map((r) => {
     const balance = new Prisma.Decimal(r.amountDue)
       .minus(new Prisma.Decimal(r.amountPaid))
-      .minus(new Prisma.Decimal(r.amountWaived));
+      .minus(new Prisma.Decimal(r.amountWaived ?? 0));
     const daysOverdue = Math.floor((now - r.dueDate.getTime()) / (1000 * 60 * 60 * 24));
     return serializeDecimals({ ...r, balance: balance.toString(), daysOverdue });
   });
@@ -219,7 +219,7 @@ export async function getOutstandingByLessee(lesseeId: string): Promise<{
       acc.plus(
         new Prisma.Decimal(r.amountDue)
           .minus(new Prisma.Decimal(r.amountPaid))
-          .minus(new Prisma.Decimal(r.amountWaived)),
+          .minus(new Prisma.Decimal(r.amountWaived ?? 0)),
       ),
     new Prisma.Decimal(0),
   );
@@ -318,7 +318,7 @@ export async function getOutstandingRentsForLessee(lesseeId: string) {
     amountWaived: r.amountWaived.toString(),
     balance: new Prisma.Decimal(r.amountDue)
       .minus(new Prisma.Decimal(r.amountPaid))
-      .minus(new Prisma.Decimal(r.amountWaived))
+      .minus(new Prisma.Decimal(r.amountWaived ?? 0))
       .toString(),
     status: r.status,
     unitCode: r.contract.unit.code,
@@ -363,7 +363,7 @@ export async function getCondonableRentsForContract(contractId: string) {
     amountWaived: r.amountWaived.toString(),
     balance: new Prisma.Decimal(r.amountDue)
       .minus(new Prisma.Decimal(r.amountPaid))
-      .minus(new Prisma.Decimal(r.amountWaived))
+      .minus(new Prisma.Decimal(r.amountWaived ?? 0))
       .toString(),
     status: r.status,
   }));
@@ -600,7 +600,7 @@ export async function getMonthlyCollectionsByProperty(period: Date): Promise<Mon
       const rent = contract.rents[0] ?? null;
       const amountDue = rent ? new Prisma.Decimal(rent.amountDue) : new Prisma.Decimal(contract.monthlyAmount);
       const amountPaid = rent ? new Prisma.Decimal(rent.amountPaid) : new Prisma.Decimal(0);
-      const amountWaived = rent ? new Prisma.Decimal(rent.amountWaived) : new Prisma.Decimal(0);
+      const amountWaived = rent ? new Prisma.Decimal(rent.amountWaived ?? 0) : new Prisma.Decimal(0);
       expected = expected.plus(amountDue);
 
       const status = deriveMonthlyStatus(
@@ -839,7 +839,7 @@ export async function getYearlyCollectionsMatrix(year: number): Promise<YearlyCo
           ? new Prisma.Decimal(rent.amountPaid)
           : new Prisma.Decimal(0);
         const amountWaived = rent
-          ? new Prisma.Decimal(rent.amountWaived)
+          ? new Prisma.Decimal(rent.amountWaived ?? 0)
           : new Prisma.Decimal(0);
         unitExpected = unitExpected.plus(amountDue);
         unitPaid = unitPaid.plus(amountPaid);

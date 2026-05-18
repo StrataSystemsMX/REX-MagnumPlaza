@@ -82,7 +82,7 @@ async function recalcRentInTx(
   const isFullyWaivedPure =
     rent.status === "WAIVED" &&
     amountPaid.eq(0) &&
-    new Prisma.Decimal(rent.amountWaived).gte(rent.amountDue);
+    new Prisma.Decimal(rent.amountWaived ?? 0).gte(rent.amountDue);
 
   const status = isFullyWaivedPure
     ? "WAIVED"
@@ -161,7 +161,7 @@ export async function actionRegisterPayment(
   // saldo cobrable (si no, el pago se acumula y produce saldo negativo).
   const balance = new Prisma.Decimal(rent.amountDue)
     .minus(new Prisma.Decimal(rent.amountPaid))
-    .minus(new Prisma.Decimal(rent.amountWaived));
+    .minus(new Prisma.Decimal(rent.amountWaived ?? 0));
   const total = new Prisma.Decimal(data.amount);
   const excess = total.greaterThan(balance)
     ? total.minus(balance)
@@ -221,7 +221,7 @@ export async function actionRegisterPayment(
       if (remaining.lessThanOrEqualTo(0)) break;
       const frBalance = new Prisma.Decimal(fr.amountDue)
         .minus(new Prisma.Decimal(fr.amountPaid))
-        .minus(new Prisma.Decimal(fr.amountWaived));
+        .minus(new Prisma.Decimal(fr.amountWaived ?? 0));
       if (frBalance.lessThanOrEqualTo(0)) continue;
       const apply = Prisma.Decimal.min(remaining, frBalance);
       const noteSuffix = `Aplicado automáticamente desde sobrante de la renta de ${formatPeriodEs(rent.period)}.`;

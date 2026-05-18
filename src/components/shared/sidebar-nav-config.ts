@@ -12,11 +12,14 @@ import {
   Landmark,
   LayoutDashboard,
   Receipt,
+  ShieldAlert,
   Target,
   TrendingDown,
   TrendingUp,
+  UserSquare2,
   Users,
   Users2,
+  Wrench,
 } from "lucide-react";
 import type { ComponentType } from "react";
 
@@ -44,8 +47,11 @@ export const NAV_GROUPS: ReadonlyArray<NavGroup> = [
       { href: "/inmuebles",   label: "Inmuebles",  icon: Home },
       { href: "/lessees",     label: "Inquilinos", icon: Users },
       { href: "/contracts",   label: "Contratos",  icon: FileText },
-      { href: "/rentas",      label: "Rentas",     icon: CalendarDays },
-      { href: "/collections", label: "Cobranza",   icon: HandCoins },
+      { href: "/rentas",       label: "Rentas",     icon: CalendarDays },
+      { href: "/collections",  label: "Cobranza",   icon: HandCoins },
+      { href: "/fianzas",         label: "Fianzas",        icon: ShieldAlert },
+      { href: "/mantenimientos", label: "Mantenimientos", icon: Wrench },
+      { href: "/promotores",     label: "Promotores",     icon: UserSquare2 },
     ],
   },
   {

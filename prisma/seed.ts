@@ -1,8 +1,10 @@
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Prisma, PrismaClient } from "../src/generated/prisma/client";
 import {
+  BudgetConceptType,
   ContractStatus,
   ContractType,
+  DocumentType,
   ExpenseType,
   GuaranteeStatus,
   InvestmentProjectStatus,
@@ -119,10 +121,48 @@ async function main(): Promise<void> {
   console.log("🌱 Iniciando seed de Strata Systems MX — Plazas Magnum\n");
 
   // -- 1. Idempotencia: borrar tenant si ya existe --------------------------
+  interface SavedPhoto {
+    url: string;
+    filename: string;
+    mimeType: string | null;
+    sizeBytes: number | null;
+    type: DocumentType;
+  }
+  const savedPropertyPhotos = new Map<string, SavedPhoto[]>();
+  const savedUnitPhotos = new Map<string, SavedPhoto[]>();
+
   const existing = await prisma.tenant.findUnique({
     where: { slug: TENANT_SLUG },
   });
   if (existing) {
+    // Preservar fotos antes de borrar — se reinsertan después con los nuevos IDs
+    const propPhotos = await prisma.document.findMany({
+      where: { tenantId: existing.id, type: DocumentType.PROPERTY_PHOTO, propertyId: { not: null } },
+      select: { url: true, filename: true, mimeType: true, sizeBytes: true, type: true, property: { select: { name: true } } },
+    });
+    for (const doc of propPhotos) {
+      if (!doc.property) continue;
+      const key = doc.property.name;
+      if (!savedPropertyPhotos.has(key)) savedPropertyPhotos.set(key, []);
+      savedPropertyPhotos.get(key)!.push({ url: doc.url, filename: doc.filename, mimeType: doc.mimeType, sizeBytes: doc.sizeBytes, type: doc.type });
+    }
+
+    const unitPhotoTypes = [DocumentType.UNIT_PHOTO, DocumentType.UNIT_PHOTO_INITIAL, DocumentType.UNIT_PHOTO_FINAL] as const;
+    const unitPhotos = await prisma.document.findMany({
+      where: { tenantId: existing.id, type: { in: [...unitPhotoTypes] }, unitId: { not: null } },
+      select: { url: true, filename: true, mimeType: true, sizeBytes: true, type: true, unit: { select: { code: true, property: { select: { name: true } } } } },
+    });
+    for (const doc of unitPhotos) {
+      if (!doc.unit) continue;
+      const key = `${doc.unit.code}|${doc.unit.property.name}`;
+      if (!savedUnitPhotos.has(key)) savedUnitPhotos.set(key, []);
+      savedUnitPhotos.get(key)!.push({ url: doc.url, filename: doc.filename, mimeType: doc.mimeType, sizeBytes: doc.sizeBytes, type: doc.type });
+    }
+
+    const totalSaved = savedPropertyPhotos.size + savedUnitPhotos.size;
+    if (totalSaved > 0)
+      console.log(`Preservando fotos de ${savedPropertyPhotos.size} inmuebles y ${savedUnitPhotos.size} unidades...`);
+
     console.log(`Borrando tenant existente "${TENANT_SLUG}" (${existing.id})...`);
     await prisma.tenant.delete({ where: { id: existing.id } });
   }
@@ -562,6 +602,12 @@ async function main(): Promise<void> {
       },
     });
 
+    for (const photo of savedPropertyPhotos.get(p.name) ?? []) {
+      await prisma.document.create({
+        data: { tenantId: tenant.id, type: photo.type, filename: photo.filename, url: photo.url, mimeType: photo.mimeType, sizeBytes: photo.sizeBytes, propertyId: property.id },
+      });
+    }
+
     for (const u of p.units) {
       const unitStatus = u.vacant ? UnitStatus.DISPONIBLE : UnitStatus.RENTADA;
       const unit = await prisma.unit.create({
@@ -575,6 +621,12 @@ async function main(): Promise<void> {
           estimatedRent: u.monthlyAmount !== undefined ? decimal(u.monthlyAmount) : null,
         },
       });
+
+      for (const photo of savedUnitPhotos.get(`${u.code}|${p.name}`) ?? []) {
+        await prisma.document.create({
+          data: { tenantId: tenant.id, type: photo.type, filename: photo.filename, url: photo.url, mimeType: photo.mimeType, sizeBytes: photo.sizeBytes, unitId: unit.id },
+        });
+      }
 
       if (u.vacant || !u.lessee || u.monthlyAmount === undefined) {
         continue;
@@ -1193,6 +1245,218 @@ async function main(): Promise<void> {
     });
   }
   console.log("Proyecto de inversión creado: Etapa Final Plaza Quiroga 2");
+
+  // -- 6.12. Presupuesto 2026 -----------------------------------------------
+  // Datos del Excel "PRESUPUESTO_INMOBILIARIAS_2026".
+  // Un Budget por razón social (CRT, TSR, QHS) con líneas de ingreso, egreso,
+  // estrategia fiscal y servicio de deuda para cada mes del año.
+
+  type M12 = readonly [
+    number, number, number, number, number, number,
+    number, number, number, number, number, number,
+  ];
+  const s12 = (n: number): M12 => [n, n, n, n, n, n, n, n, n, n, n, n];
+  const jan6 = (n: number): M12 => [n, n, n, n, n, n, 0, 0, 0, 0, 0, 0];
+
+  interface BudgetLineDef {
+    type: BudgetConceptType;
+    label: string;
+    m: M12;
+  }
+
+  async function seedBudgetLines(budgetId: string, lines: BudgetLineDef[]) {
+    for (const l of lines) {
+      await prisma.budgetLine.create({
+        data: {
+          budgetId,
+          conceptType: l.type,
+          conceptLabel: l.label,
+          jan: decimal(l.m[0]),  feb: decimal(l.m[1]),  mar: decimal(l.m[2]),
+          apr: decimal(l.m[3]),  may: decimal(l.m[4]),  jun: decimal(l.m[5]),
+          jul: decimal(l.m[6]),  aug: decimal(l.m[7]),  sep: decimal(l.m[8]),
+          oct: decimal(l.m[9]),  nov: decimal(l.m[10]), dec: decimal(l.m[11]),
+        },
+      });
+    }
+  }
+
+  const IR = BudgetConceptType.INCOME_RENT;
+  const IB = BudgetConceptType.INCOME_BILLBOARD;
+  const EX = BudgetConceptType.EXPENSE;
+  const TS = BudgetConceptType.TAX_STRATEGY;
+  const DS = BudgetConceptType.DEBT_SERVICE;
+
+  // ── CRT ────────────────────────────────────────────────────────────────────
+  // Ingresos: Progreso + Olivares + Quiroga 1 + Quiroga 2 (CRT administra).
+  // Quiroga 2 base 93 058.10 / mes; mar–jun +Cristianos 12 586 = 105 644.10.
+  // Espectaculares: Progreso E y Quiroga 2 E, 2 320 / mes cada uno.
+  // Egresos, nómina estratégica y deuda: tomados del Excel 2026.
+  const crtBudget = await prisma.budget.create({
+    data: { tenantId: tenant.id, legalEntityId: crt.id, year: YEAR },
+  });
+  await seedBudgetLines(crtBudget.id, [
+    // INGRESOS
+    { type: IR, label: "Plaza Progreso",
+      m: s12(89292.38) },
+    { type: IR, label: "Plaza Olivares",
+      m: s12(75022.84) },
+    { type: IR, label: "Plaza Quiroga 1",
+      m: s12(63672.59) },
+    { type: IR, label: "Plaza Quiroga 2",
+      m: [93058.10, 93058.10, 105644.10, 105644.10, 105644.10, 105644.10,
+          93058.10, 93058.10, 93058.10, 93058.10, 93058.10, 93058.10] },
+    { type: IB, label: "Espectacular Progreso",
+      m: s12(2320) },
+    { type: IB, label: "Espectacular Quiroga 2",
+      m: s12(2320) },
+
+    // EGRESOS
+    { type: EX, label: "Nómina Dirección",
+      m: [35000, 35000, 35000, 35000, 35000, 35000, 35000, 35000, 35000, 35000, 35000, 52500] },
+    { type: EX, label: "Nómina General",
+      m: [61106.90, 36478.51, 47122.50, 39528, 46878, 39528, 39528, 35000, 39528, 35000, 46878, 59292] },
+    { type: EX, label: "Honorarios",
+      m: [5552.16, 5270.34, 5252.94, 5316, 5316, 5316, 5316, 5316, 5316, 5316, 5316, 5316] },
+    { type: EX, label: "SAT",
+      m: [23305, 28907, 18879, 24000, 24000, 24000, 24000, 24000, 24000, 24000, 24000, 24000] },
+    { type: EX, label: "IMSS / Infonavit",
+      m: [30622.81, 7073.99, 31846, 6500, 30500, 6500, 30500, 6500, 30500, 6500, 30500, 6500] },
+    { type: EX, label: "ISR s/ Producto del Trabajo",
+      m: [1670, 800, 1012, 1200, 1200, 1200, 1200, 1200, 1200, 1200, 1200, 1200] },
+    { type: EX, label: "Predial (CRT)",
+      m: [0, 0, 0, 9745, 0, 0, 0, 0, 0, 0, 0, 0] },
+    { type: EX, label: "Placas y licencias",
+      m: [3498, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] },
+    { type: EX, label: "Comisiones bancarias",
+      m: [388, 388, 395.56, 405, 405, 405, 405, 405, 405, 405, 405, 405] },
+    { type: EX, label: "Mantenimiento y limpieza",
+      m: [47558.02, 25931.31, 7756.30, 10000, 10000, 10000, 10000, 10000, 10000, 10000, 10000, 10000] },
+    { type: EX, label: "Papelería y consumo de oficina",
+      m: [630, 1495, 2090, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000] },
+    { type: EX, label: "Vehículos — servicios y lavado",
+      m: [786, 8670.36, 0, 1500, 1500, 1500, 1500, 1500, 1500, 1500, 1500, 1500] },
+    { type: EX, label: "Financiamiento Toyota",
+      m: s12(6644.10) },
+    { type: EX, label: "Financiamiento Expedition",
+      m: s12(25711.92) },
+    { type: EX, label: "Seguros",
+      m: [7134.48, 0, 10345.29, 3939, 0, 0, 5345, 0, 6063, 4425, 0, 0] },
+    { type: EX, label: "Alarma — Serdán / Bodega",
+      m: s12(960) },
+    { type: EX, label: "Saniso — recolección de basura",
+      m: [5930.36, 6133.69, 6133.69, 5930.36, 5930.36, 5930.36,
+          5930.36, 5930.36, 5930.36, 5930.36, 5930.36, 5930.36] },
+    { type: EX, label: "CFE",
+      m: [5448, 0, 4375, 8500, 8500, 8500, 8500, 8500, 8500, 8500, 8500, 8500] },
+    { type: EX, label: "Agua",
+      m: [630, 3721, 5781, 5000, 5000, 5000, 5000, 5000, 5000, 5000, 5000, 5000] },
+    { type: EX, label: "Telmex",
+      m: [2496, 4104, 2097, 2197, 2197, 2197, 2197, 2197, 2197, 2197, 2197, 2197] },
+    { type: EX, label: "Telcel",
+      m: [399, 399, 712, 399, 399, 399, 399, 399, 399, 399, 399, 399] },
+    { type: EX, label: "Gasolina",
+      m: [7900, 9889.46, 13500, 6000, 6000, 6000, 6000, 6000, 6000, 6000, 6000, 6000] },
+    { type: EX, label: "Otros y comisiones",
+      m: [12661, 12886.64, 14200, 5000, 5000, 5000, 5000, 5000, 5000, 5000, 5000, 5000] },
+
+    // ESTRATEGIA FISCAL — nómina Audazon (ene–jun)
+    { type: TS, label: "Factura Serv. Adm. Audazon",
+      m: jan6(50627.04) },
+    { type: TS, label: "Nómina Dirección directa",
+      m: jan6(40000) },
+    { type: TS, label: "Impuestos y comisión estrategia",
+      m: jan6(3644) },
+
+    // SERVICIO DE DEUDA
+    { type: DS, label: "Hipoteca CRT",
+      m: s12(32430.11) },
+    { type: DS, label: "Préstamo JC (bancos y personal)",
+      m: [11181.44, 11181.44, 11181.44, 11181.44, 11181.44, 11181.44,
+          11181.44, 11181.44, 11181.44, 11181.44, 0, 0] },
+  ]);
+
+  // ── TSR ────────────────────────────────────────────────────────────────────
+  // Ingresos: Inbursa Kino, La Chila, Capilla del Carmen, Elias (desde mar),
+  //           Nayarit 52.
+  const tsrBudget = await prisma.budget.create({
+    data: { tenantId: tenant.id, legalEntityId: tsr.id, year: YEAR },
+  });
+  await seedBudgetLines(tsrBudget.id, [
+    // INGRESOS
+    { type: IR, label: "Inbursa Blvd Kino",
+      m: s12(86028.56) },
+    { type: IR, label: "La Chila Garmendia",
+      m: s12(30740) },
+    { type: IR, label: "Capilla del Carmen",
+      m: s12(19350.12) },
+    { type: IR, label: "Oficina Elias Piso 2",
+      m: [0, 0, 12500, 12500, 12500, 12500, 12500, 12500, 12500, 12500, 12500, 12500] },
+    { type: IR, label: "Nayarit 52 / Ferretería",
+      m: s12(18560) },
+
+    // EGRESOS
+    { type: EX, label: "Nómina Dirección",
+      m: [25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 37500] },
+    { type: EX, label: "Nómina General",
+      m: [15000, 15000, 15000, 15000, 15000, 15000, 15000, 15000, 15000, 15000, 15000, 25000] },
+    { type: EX, label: "Honorarios",
+      m: [3173.67, 3167.67, 3179.27, 3138.67, 3138.67, 3138.67,
+          3138.67, 3138.67, 3138.67, 3138.67, 3138.67, 3138.67] },
+    { type: EX, label: "SAT",
+      m: [3142, 0, 14293, 5200, 5200, 5200, 5200, 5200, 5200, 5200, 5200, 5200] },
+    { type: EX, label: "Predial (TSR)",
+      m: [0, 14785, 0, 8221, 0, 0, 0, 0, 0, 0, 0, 0] },
+    { type: EX, label: "Placas y licencias",
+      m: [3498, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] },
+    { type: EX, label: "Comisiones bancarias",
+      m: [347.70, 333.50, 343.36, 370, 370, 370, 370, 370, 370, 370, 370, 370] },
+    { type: EX, label: "Mantenimiento y otros",
+      m: [0, 1911.54, 10588, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000] },
+    { type: EX, label: "Papelería y consumo de oficina",
+      m: [2778, 1909, 1468, 3615, 2000, 2000, 2000, 2000, 3196, 2000, 2000, 3197] },
+    { type: EX, label: "Seguro automotriz",
+      m: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 8553.72] },
+    { type: EX, label: "Vehículos — servicios",
+      m: [0, 0, 4073, 500, 500, 500, 500, 500, 500, 500, 500, 500] },
+    { type: EX, label: "Financiamiento BMW",
+      m: [23752.01, 23752.01, 23156.98, 23752.01, 23752.01, 23752.01,
+          23752.01, 23752.01, 23752.01, 23752.01, 23752.01, 23752.01] },
+    { type: EX, label: "Gasolina",
+      m: [4914.84, 5000, 5300, 4000, 4000, 4000, 4000, 4000, 4000, 4000, 4000, 4000] },
+    { type: EX, label: "Otros, caja chica y comisiones",
+      m: [57900, 22500, 23614, 68625, 6500, 6500, 6500, 6500, 6500, 6500, 6500, 6500] },
+
+    // ESTRATEGIA FISCAL — nómina OSC (ene–jun)
+    { type: TS, label: "Factura Serv. Adm. OSC",
+      m: jan6(44298.66) },
+    { type: TS, label: "Nómina Dirección directa",
+      m: jan6(20000) },
+    { type: TS, label: "Nómina Gerencia directa",
+      m: jan6(15000) },
+    { type: TS, label: "Impuestos y comisión estrategia",
+      m: jan6(3188.50) },
+
+    // SERVICIO DE DEUDA
+    // Mar y Jul tienen cuota alternativa 31 182.80 (datos del Excel).
+    { type: DS, label: "Hipoteca TSR",
+      m: [32430.11, 32430.11, 31182.80, 32430.11, 32430.11, 32430.11,
+          31182.80, 32430.11, 32430.11, 32430.11, 32430.11, 32430.11] },
+  ]);
+
+  // ── QHS ────────────────────────────────────────────────────────────────────
+  // QHS solo registra sus costos administrativos.
+  // Los ingresos de Quiroga 2 fluyen a CRT (que administra).
+  const qhsBudget = await prisma.budget.create({
+    data: { tenantId: tenant.id, legalEntityId: qhs.id, year: YEAR },
+  });
+  await seedBudgetLines(qhsBudget.id, [
+    { type: EX, label: "Honorarios contabilidad",
+      m: s12(1300) },
+    { type: EX, label: "Comisiones bancarias",
+      m: s12(655.40) },
+  ]);
+
+  console.log(`Presupuesto ${YEAR} creado: CRT (${crtBudget.id}), TSR (${tsrBudget.id}), QHS (${qhsBudget.id})`);
 
   // -- 7. Usuario admin de prueba ------------------------------------------
   const masterRole = await prisma.role.findUnique({

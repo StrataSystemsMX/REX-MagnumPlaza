@@ -376,6 +376,10 @@ export function budgetConceptTypeLabel(c: BudgetConceptType): string {
       return "Otro ingreso";
     case "EXPENSE":
       return "Egreso";
+    case "TAX_STRATEGY":
+      return "Estrategia fiscal";
+    case "DEBT_SERVICE":
+      return "Servicio de deuda";
     default:
       return exhaustive(c);
   }

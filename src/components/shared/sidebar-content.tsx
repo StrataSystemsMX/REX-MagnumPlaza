@@ -13,9 +13,18 @@ interface SidebarContentProps {
 
 export function SidebarContent({ onLinkClick }: SidebarContentProps) {
   const pathname = usePathname();
+  const allHrefs = NAV_GROUPS.flatMap((g) => g.items.map((i) => i.href));
 
   function isActive(href: string) {
-    return href === "/" ? pathname === "/" : pathname.startsWith(href);
+    if (href === "/") return pathname === "/";
+    if (pathname !== href && !pathname.startsWith(href + "/")) return false;
+    // Si otro item registrado es más específico y también hace match, el padre no va activo
+    return !allHrefs.some(
+      (other) =>
+        other !== href &&
+        other.startsWith(href + "/") &&
+        (pathname === other || pathname.startsWith(other + "/")),
+    );
   }
 
   return (
