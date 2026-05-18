@@ -1,5 +1,6 @@
-import { CalendarRange } from "lucide-react";
+import { AlertTriangle, CalendarRange, CheckCircle2, Clock } from "lucide-react";
 import Link from "next/link";
+import { MetricCard } from "@/components/shared/metric-card";
 import { CollectionsTabs } from "@/components/collections/CollectionsTabs";
 import { Button } from "@/components/ui/button";
 import { requireAuth } from "@/lib/auth/get-session";
@@ -55,22 +56,35 @@ export default async function CollectionsPage() {
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Cobranza</h1>
-          <p className="text-sm text-muted-foreground">
-            Saldo pendiente:{" "}
-            <span className="font-semibold text-destructive">
-              {MXN.format(totalOutstanding)}
-            </span>{" "}
-            en {outstanding.length} renta{outstanding.length === 1 ? "" : "s"} ·
-            Cobrado este mes:{" "}
-            <span className="font-semibold">{MXN.format(collectedThisMonth)}</span>
-          </p>
-        </div>
+        <h1 className="text-2xl font-semibold tracking-tight">Cobranza</h1>
         <Button variant="outline" render={<Link href="/ingresos" />}>
           <CalendarRange className="size-4" />
           Vista anual
         </Button>
+      </div>
+
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-3">
+        <MetricCard
+          label="Saldo pendiente"
+          value={<span className="tabular-nums">{MXN.format(totalOutstanding)}</span>}
+          subValue={`${outstanding.length} renta${outstanding.length === 1 ? "" : "s"} por cobrar`}
+          icon={AlertTriangle}
+          color={totalOutstanding > 0 ? "danger" : "success"}
+        />
+        <MetricCard
+          label="Cobrado este mes"
+          value={<span className="tabular-nums">{MXN.format(collectedThisMonth)}</span>}
+          subValue="Pagos registrados"
+          icon={CheckCircle2}
+          color={collectedThisMonth > 0 ? "success" : "default"}
+        />
+        <MetricCard
+          label="Rentas vencidas"
+          value={outstanding.length}
+          subValue="con saldo pendiente"
+          icon={Clock}
+          color={outstanding.length > 0 ? "warning" : "success"}
+        />
       </div>
 
       <CollectionsTabs
