@@ -593,7 +593,7 @@ function StepTerms({
         />
       </div>
       <div className="space-y-1">
-        <Label>Depósito en garantía (MXN)</Label>
+        <Label>Fianza (MXN)</Label>
         <Input
           type="number"
           step="0.01"
@@ -690,7 +690,7 @@ function StepConfirm({
       <Row label="Renta mensual">
         {terms.monthlyAmount ? MXN.format(Number(terms.monthlyAmount)) : "—"}
       </Row>
-      <Row label="Depósito en garantía">
+      <Row label="Fianza">
         {terms.guaranteeAmount ? MXN.format(Number(terms.guaranteeAmount)) : "—"}
       </Row>
       <Row label="Día de cobro">{terms.paymentDay}</Row>

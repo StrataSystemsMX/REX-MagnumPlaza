@@ -1,14 +1,6 @@
 "use client";
 
-import {
-  flexRender,
-  getCoreRowModel,
-  getFilteredRowModel,
-  getSortedRowModel,
-  type ColumnDef,
-  useReactTable,
-} from "@tanstack/react-table";
-import { Plus, Search } from "lucide-react";
+import { Building2, ChevronDown, ChevronRight, Plus, Search, Store } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
@@ -39,7 +31,7 @@ import type {
   AvailableUnit,
   ContractListItem,
 } from "@/lib/services/contracts-queries";
-import type { ContractStatus } from "@/generated/prisma/enums";
+import type { ContractStatus, PropertyType } from "@/generated/prisma/enums";
 import { capitalizeFirst, cn } from "@/lib/utils";
 
 type StatusFilter = ContractStatus | "ALL";
@@ -79,9 +71,43 @@ const DATE = new Intl.DateTimeFormat("es-MX", {
   timeZone: "UTC",
 });
 
+const TABLE_COLUMN_COUNT = 5;
+
 interface ContractTableProps {
   contracts: ReadonlyArray<ContractListItem>;
   availableUnits: ReadonlyArray<AvailableUnit>;
+}
+
+interface PropertyGroup {
+  propertyId: string;
+  propertyName: string;
+  propertyType: PropertyType;
+  isPlaza: boolean;
+  contracts: ContractListItem[];
+}
+
+function groupByProperty(items: ReadonlyArray<ContractListItem>): PropertyGroup[] {
+  const groups = new Map<string, PropertyGroup>();
+  for (const c of items) {
+    const key = c.unit.property.id;
+    const existing = groups.get(key);
+    if (existing) {
+      existing.contracts.push(c);
+    } else {
+      groups.set(key, {
+        propertyId: key,
+        propertyName: c.unit.property.name,
+        propertyType: c.unit.property.type,
+        isPlaza: c.unit.property.type === "PLAZA_COMERCIAL",
+        contracts: [c],
+      });
+    }
+  }
+  // Plazas primero, luego inmuebles; ambos alfabéticos.
+  return Array.from(groups.values()).sort((a, b) => {
+    if (a.isPlaza !== b.isPlaza) return a.isPlaza ? -1 : 1;
+    return a.propertyName.localeCompare(b.propertyName, "es");
+  });
 }
 
 export function ContractTable({ contracts, availableUnits }: ContractTableProps) {
@@ -90,6 +116,7 @@ export function ContractTable({ contracts, availableUnits }: ContractTableProps)
   const [expiryFilter, setExpiryFilter] = useState<ExpiryFilter>("ALL");
   const [search, setSearch] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -118,114 +145,16 @@ export function ContractTable({ contracts, availableUnits }: ContractTableProps)
     });
   }, [contracts, statusFilter, expiryFilter, search]);
 
-  const columns = useMemo<ColumnDef<ContractListItem>[]>(
-    () => [
-      {
-        id: "lessee",
-        header: "Inquilino",
-        cell: ({ row }) => (
-          <div className="min-w-0">
-            <p className="truncate font-medium">{row.original.lessee.legalName}</p>
-            <p className="font-mono text-[10px] text-muted-foreground">
-              {row.original.id.slice(-8)}
-              {row.original.lessee.contactName
-                ? ` · ${row.original.lessee.contactName}`
-                : ""}
-            </p>
-          </div>
-        ),
-      },
-      {
-        id: "unit",
-        header: "Unidad",
-        cell: ({ row }) => (
-          <div className="min-w-0 text-sm">
-            <p className="truncate font-medium">{row.original.unit.property.name}</p>
-            <p className="truncate text-xs text-muted-foreground">
-              {row.original.unit.code}
-              {row.original.unit.name ? ` — ${row.original.unit.name}` : ""}
-              {" · "}
-              {contractTypeLabel(row.original.type)}
-            </p>
-          </div>
-        ),
-      },
-      {
-        id: "vigency",
-        header: () => <div className="text-center">Vigencia</div>,
-        cell: ({ row }) => (
-          <div className="text-center text-xs tabular-nums text-muted-foreground">
-            {capitalizeFirst(DATE.format(row.original.startDate))}
-            <span className="mx-1 text-foreground/30">→</span>
-            {capitalizeFirst(DATE.format(row.original.endDate))}
-          </div>
-        ),
-      },
-      {
-        accessorKey: "monthlyAmount",
-        header: () => <div className="text-right">Renta</div>,
-        cell: ({ row }) => (
-          <div className="text-right font-medium tabular-nums">
-            {MXN.format(Number(row.original.monthlyAmount))}
-          </div>
-        ),
-      },
-      {
-        accessorKey: "status",
-        header: () => <div className="text-center">Estado</div>,
-        cell: ({ row }) => (
-          <div className="text-center">
-            <Badge variant={contractStatusVariant(row.original.status)}>
-              {contractStatusLabel(row.original.status)}
-            </Badge>
-          </div>
-        ),
-      },
-      {
-        accessorKey: "daysToExpire",
-        header: () => <div className="text-center">Vence</div>,
-        cell: ({ row }) => {
-          const d = row.original.daysToExpire;
-          if (row.original.status !== "ACTIVE") {
-            return <div className="text-center text-xs text-muted-foreground">—</div>;
-          }
-          if (d < 0)
-            return (
-              <div className="text-center text-xs font-medium text-destructive">
-                Vencido
-              </div>
-            );
-          const tone =
-            d <= 30
-              ? "bg-rose-50 text-rose-700 ring-rose-200"
-              : d <= 60
-                ? "bg-amber-50 text-amber-700 ring-amber-200"
-                : "bg-muted text-muted-foreground ring-foreground/10";
-          return (
-            <div className="text-center">
-              <span
-                className={cn(
-                  "inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium tabular-nums ring-1",
-                  tone,
-                )}
-              >
-                {d}d
-              </span>
-            </div>
-          );
-        },
-      },
-    ],
-    [],
-  );
+  const groups = useMemo(() => groupByProperty(filtered), [filtered]);
 
-  const table = useReactTable({
-    data: filtered as ContractListItem[],
-    columns,
-    getCoreRowModel: getCoreRowModel(),
-    getFilteredRowModel: getFilteredRowModel(),
-    getSortedRowModel: getSortedRowModel(),
-  });
+  function toggleGroup(id: string) {
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
 
   return (
     <>
@@ -283,51 +212,50 @@ export function ContractTable({ contracts, availableUnits }: ContractTableProps)
       <div className="overflow-hidden rounded-lg border bg-card">
         <Table className="min-w-[860px]">
           <TableHeader>
-            {table.getHeaderGroups().map((hg) => (
-              <TableRow key={hg.id} className="hover:bg-transparent">
-                {hg.headers.map((h) => (
-                  <TableHead key={h.id} className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                    {h.isPlaceholder
-                      ? null
-                      : flexRender(h.column.columnDef.header, h.getContext())}
-                  </TableHead>
-                ))}
-              </TableRow>
-            ))}
+            <TableRow className="hover:bg-transparent">
+              <TableHead className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                Inquilino
+              </TableHead>
+              <TableHead className="text-xs font-medium uppercase tracking-wide text-muted-foreground text-center">
+                Vigencia
+              </TableHead>
+              <TableHead className="text-xs font-medium uppercase tracking-wide text-muted-foreground text-right">
+                Renta
+              </TableHead>
+              <TableHead className="text-xs font-medium uppercase tracking-wide text-muted-foreground text-center">
+                Estado
+              </TableHead>
+              <TableHead className="text-xs font-medium uppercase tracking-wide text-muted-foreground text-center">
+                Vence
+              </TableHead>
+            </TableRow>
           </TableHeader>
           <TableBody>
-            {table.getRowModel().rows.length === 0 ? (
+            {groups.length === 0 ? (
               <TableRow>
                 <TableCell
-                  colSpan={columns.length}
+                  colSpan={TABLE_COLUMN_COUNT}
                   className="py-10 text-center text-sm text-muted-foreground"
                 >
                   No hay contratos para los filtros seleccionados.
                 </TableCell>
               </TableRow>
             ) : (
-              table.getRowModel().rows.map((row) => (
-                <TableRow
-                  key={row.id}
-                  tabIndex={0}
-                  role="link"
-                  aria-label={`Ver contrato ${row.original.id.slice(-8)}`}
-                  className="group cursor-pointer transition-colors hover:bg-muted/40 focus-visible:bg-muted/60 focus-visible:outline-none"
-                  onClick={() => router.push(`/contracts/${row.original.id}`)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") {
-                      e.preventDefault();
-                      router.push(`/contracts/${row.original.id}`);
-                    }
-                  }}
-                >
-                  {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id} className="py-3">
-                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                    </TableCell>
-                  ))}
-                </TableRow>
-              ))
+              groups.map((group) => {
+                const isCollapsed = collapsed.has(group.propertyId);
+                const Icon = group.isPlaza ? Store : Building2;
+                return (
+                  <PropertyGroupRows
+                    key={group.propertyId}
+                    group={group}
+                    isCollapsed={isCollapsed}
+                    Icon={Icon}
+                    onToggle={() => toggleGroup(group.propertyId)}
+                    onRowClick={(id) => router.push(`/contracts/${id}`)}
+                    onRowPrefetch={(id) => router.prefetch(`/contracts/${id}`)}
+                  />
+                );
+              })
             )}
           </TableBody>
         </Table>
@@ -335,8 +263,8 @@ export function ContractTable({ contracts, availableUnits }: ContractTableProps)
 
       <p className="text-xs text-muted-foreground">
         {filtered.length === contracts.length
-          ? `${contracts.length} contratos`
-          : `${filtered.length} de ${contracts.length} contratos`}
+          ? `${contracts.length} contratos en ${groups.length} ${groups.length === 1 ? "inmueble" : "inmuebles"}`
+          : `${filtered.length} de ${contracts.length} contratos en ${groups.length} ${groups.length === 1 ? "inmueble" : "inmuebles"}`}
       </p>
 
       <ContractWizard
@@ -346,5 +274,136 @@ export function ContractTable({ contracts, availableUnits }: ContractTableProps)
         onCreated={() => router.refresh()}
       />
     </>
+  );
+}
+
+interface PropertyGroupRowsProps {
+  group: PropertyGroup;
+  isCollapsed: boolean;
+  Icon: typeof Store;
+  onToggle: () => void;
+  onRowClick: (contractId: string) => void;
+  onRowPrefetch: (contractId: string) => void;
+}
+
+function PropertyGroupRows({
+  group,
+  isCollapsed,
+  Icon,
+  onToggle,
+  onRowClick,
+  onRowPrefetch,
+}: PropertyGroupRowsProps) {
+  const groupLabel = group.isPlaza ? "Plaza" : "Inmueble";
+  const Chevron = isCollapsed ? ChevronRight : ChevronDown;
+
+  return (
+    <>
+      <TableRow
+        className="bg-muted/40 hover:bg-muted/60 cursor-pointer"
+        onClick={onToggle}
+      >
+        <TableCell colSpan={TABLE_COLUMN_COUNT} className="py-2">
+          <div className="flex items-center gap-2">
+            <Chevron className="size-4 text-muted-foreground" />
+            <Icon className="size-4 text-muted-foreground" />
+            <span className="font-medium">{group.propertyName}</span>
+            <Badge variant="outline" className="text-[10px]">
+              {groupLabel}
+            </Badge>
+            <span className="ml-auto text-xs text-muted-foreground">
+              {group.contracts.length} {group.contracts.length === 1 ? "contrato" : "contratos"}
+            </span>
+          </div>
+        </TableCell>
+      </TableRow>
+      {!isCollapsed &&
+        group.contracts.map((c) => (
+          <TableRow
+            key={c.id}
+            tabIndex={0}
+            role="link"
+            aria-label={`Ver contrato ${c.id.slice(-8)}`}
+            className="group cursor-pointer transition-colors hover:bg-muted/40 focus-visible:bg-muted/60 focus-visible:outline-none"
+            onClick={() => onRowClick(c.id)}
+            onMouseEnter={() => onRowPrefetch(c.id)}
+            onFocus={() => onRowPrefetch(c.id)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                onRowClick(c.id);
+              }
+            }}
+          >
+            <TableCell className="py-3">
+              <div className="min-w-0">
+                <p className="truncate font-medium">{c.lessee.legalName}</p>
+                <p className="truncate text-[10px] text-muted-foreground">
+                  <span className="font-mono">{c.id.slice(-8)}</span>
+                  {" · "}
+                  {c.unit.code}
+                  {c.unit.name ? ` — ${c.unit.name}` : ""}
+                  {" · "}
+                  {contractTypeLabel(c.type)}
+                  {c.lessee.contactName ? ` · ${c.lessee.contactName}` : ""}
+                </p>
+              </div>
+            </TableCell>
+            <TableCell className="py-3">
+              <div className="text-center text-xs tabular-nums text-muted-foreground">
+                {capitalizeFirst(DATE.format(c.startDate))}
+                <span className="mx-1 text-foreground/30">→</span>
+                {capitalizeFirst(DATE.format(c.endDate))}
+              </div>
+            </TableCell>
+            <TableCell className="py-3">
+              <div className="text-right font-medium tabular-nums">
+                {MXN.format(Number(c.monthlyAmount))}
+              </div>
+            </TableCell>
+            <TableCell className="py-3">
+              <div className="text-center">
+                <Badge variant={contractStatusVariant(c.status)}>
+                  {contractStatusLabel(c.status)}
+                </Badge>
+              </div>
+            </TableCell>
+            <TableCell className="py-3">
+              <ExpiryCell status={c.status} days={c.daysToExpire} />
+            </TableCell>
+          </TableRow>
+        ))}
+    </>
+  );
+}
+
+function ExpiryCell({ status, days }: { status: ContractStatus; days: number }) {
+  if (status !== "ACTIVE") {
+    return <div className="text-center text-xs text-muted-foreground">—</div>;
+  }
+  if (days < 0) {
+    return (
+      <div className="text-center text-xs font-medium text-destructive">
+        Vencido
+      </div>
+    );
+  }
+  const tone =
+    days <= 30
+      ? "bg-rose-50 text-rose-700 ring-rose-200"
+      : days <= 60
+        ? "bg-amber-50 text-amber-700 ring-amber-200"
+        : "bg-muted text-muted-foreground ring-foreground/10";
+  return (
+    <div className="text-center">
+      <span
+        className={cn(
+          "inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium tabular-nums ring-1",
+          tone,
+        )}
+      >
+        {days}d
+      </span>
+    </div>
   );
 }

@@ -78,7 +78,7 @@ export async function getProperties(filters: PropertyFilters = {}) {
       documents: {
         where: { type: "PROPERTY_PHOTO" },
         orderBy: { createdAt: "desc" },
-        take: 1,
+        take: 50,
         select: { id: true, url: true, filename: true },
       },
     },
@@ -105,6 +105,7 @@ export async function getProperties(filters: PropertyFilters = {}) {
           available: activeUnits.filter((u) => u.status === "DISPONIBLE").length,
         },
         coverPhotoUrl: documents[0]?.url ?? null,
+        photos: documents,
       });
     })
     .sort((a, b) => {
@@ -117,49 +118,6 @@ export async function getProperties(filters: PropertyFilters = {}) {
 }
 
 export type PropertyListItem = Awaited<ReturnType<typeof getProperties>>[number];
-
-/** Detalle del inmueble con units, contratos activos y documentos. */
-export async function getPropertyById(id: string) {
-  const { tenantId } = await requireAuth();
-
-  const property = await prisma.property.findFirst({
-    where: { id, tenantId },
-    include: {
-      ownerEntity: { select: { id: true, code: true, legalName: true } },
-      managerEntity: { select: { id: true, code: true, legalName: true } },
-      units: {
-        where: { isActive: true },
-        orderBy: { code: "asc" },
-        include: {
-          contracts: {
-            where: { status: "ACTIVE" },
-            orderBy: { startDate: "desc" },
-            take: 1,
-            include: {
-              lessee: { select: { id: true, legalName: true, contactName: true } },
-            },
-          },
-          documents: {
-            where: { type: "UNIT_PHOTO" },
-            orderBy: { createdAt: "desc" },
-            select: { id: true, url: true, filename: true, createdAt: true },
-          },
-        },
-      },
-      documents: {
-        where: { type: "PROPERTY_PHOTO" },
-        orderBy: { createdAt: "desc" },
-        take: 50,
-        select: { id: true, url: true, filename: true, createdAt: true },
-      },
-    },
-  });
-
-  return property ? serializeDecimals(property) : null;
-}
-
-export type PropertyDetail = NonNullable<Awaited<ReturnType<typeof getPropertyById>>>;
-export type UnitWithContract = PropertyDetail["units"][number];
 
 /** Razones sociales del tenant — para selects en formularios. */
 export async function getLegalEntities() {

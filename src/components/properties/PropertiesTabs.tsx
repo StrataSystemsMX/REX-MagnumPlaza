@@ -1,6 +1,4 @@
-"use client";
-
-import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { cn } from "@/lib/utils";
 
 const TABS = [
@@ -15,15 +13,13 @@ interface Props {
 }
 
 export function PropertiesTabs({ activeTab }: Props) {
-  const router = useRouter();
-
   return (
     <div className="border-b border-border">
       <nav className="-mb-px flex gap-6">
         {TABS.map((t) => (
-          <button
+          <Link
             key={t.key}
-            onClick={() => router.push(`/plazas?tab=${t.key}`)}
+            href={`/plazas?tab=${t.key}`}
             className={cn(
               "pb-3 text-sm font-medium transition-colors border-b-2",
               activeTab === t.key
@@ -32,7 +28,7 @@ export function PropertiesTabs({ activeTab }: Props) {
             )}
           >
             {t.label}
-          </button>
+          </Link>
         ))}
       </nav>
     </div>

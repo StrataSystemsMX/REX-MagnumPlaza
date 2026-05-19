@@ -264,8 +264,6 @@ export function guaranteeStatusLabel(s: GuaranteeStatus): string {
       return "Devuelto parcial";
     case "RETURNED":
       return "Devuelto";
-    case "APPLIED_TO_DEBT":
-      return "Aplicado a saldo";
     default:
       return exhaustive(s);
   }
@@ -371,7 +369,7 @@ export function budgetConceptTypeLabel(c: BudgetConceptType): string {
     case "INCOME_BILLBOARD":
       return "Ingreso por espectacular";
     case "INCOME_GUARANTEE":
-      return "Depósito en garantía";
+      return "Fianza";
     case "INCOME_OTHER":
       return "Otro ingreso";
     case "EXPENSE":

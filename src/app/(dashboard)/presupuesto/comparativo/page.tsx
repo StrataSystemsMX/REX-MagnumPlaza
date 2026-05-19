@@ -1,4 +1,5 @@
 import { BarChart2, TrendingDown, TrendingUp, AlertTriangle } from "lucide-react";
+import Link from "next/link";
 import { MetricCard } from "@/components/shared/metric-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -118,9 +119,9 @@ export default async function PresupuestoComparativoPage({
           {!budget && (
             <p className="text-sm text-amber-700">
               No hay presupuesto registrado para {year}. Ve a{" "}
-              <a href="/presupuesto" className="underline">
+              <Link href="/presupuesto" className="underline">
                 Presupuesto
-              </a>{" "}
+              </Link>{" "}
               para crearlo.
             </p>
           )}

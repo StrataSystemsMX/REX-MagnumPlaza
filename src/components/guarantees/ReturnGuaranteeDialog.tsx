@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useFieldArray, useForm, type Resolver } from "react-hook-form";
 import { Trash2, Plus } from "lucide-react";
@@ -22,29 +22,70 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { actionApplyGuaranteeToDebt, actionReturnGuarantee } from "@/lib/services/guarantees";
-import { returnGuaranteeSchema, type ReturnGuaranteeInput } from "@/lib/validators/guarantee";
+import { actionReturnGuarantee } from "@/lib/services/guarantees";
+import { cn } from "@/lib/utils";
+import {
+  returnGuaranteeSchema,
+  type ReturnGuaranteeInput,
+} from "@/lib/validators/guarantee";
 
 const MXN = new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" });
+
+interface InitialReturn {
+  returnedAmount: number | null;
+  returnedDate: Date | null;
+  deductions: Array<{ concept: string; amount: number }> | null;
+  notes: string | null;
+}
 
 interface Props {
   guaranteeId: string;
   totalAmount: number;
   lesseeName: string;
+  /** Si viene, el diálogo abre en modo "editar devolución" precargado. */
+  initial?: InitialReturn | null;
+  /** Texto del botón disparador. */
+  triggerLabel?: string;
+  /** Variante visual del botón disparador. */
+  triggerVariant?: "outline" | "ghost" | "default";
 }
 
-export function ReturnGuaranteeDialog({ guaranteeId, totalAmount, lesseeName }: Props) {
+function toDateInput(d: Date | null | undefined): string {
+  if (!d) return "";
+  return d.toISOString().slice(0, 10);
+}
+
+export function ReturnGuaranteeDialog({
+  guaranteeId,
+  totalAmount,
+  lesseeName,
+  initial = null,
+  triggerLabel,
+  triggerVariant = "outline",
+}: Props) {
+  const isEdit = initial !== null;
   const [open, setOpen] = useState(false);
-  const [applyingToDebt, setApplyingToDebt] = useState(false);
+
+  const initialDeductions = initial?.deductions ?? [];
+  const initialDeductedSum = initialDeductions.reduce(
+    (acc, d) => acc + (d.amount || 0),
+    0,
+  );
+  const initialNet = Math.max(0, totalAmount - initialDeductedSum);
+  const initialReturnedAmount = initial?.returnedAmount ?? initialNet;
 
   const form = useForm<ReturnGuaranteeInput>({
-    resolver: zodResolver(returnGuaranteeSchema) as unknown as Resolver<ReturnGuaranteeInput>,
+    resolver: zodResolver(
+      returnGuaranteeSchema,
+    ) as unknown as Resolver<ReturnGuaranteeInput>,
     defaultValues: {
       guaranteeId,
-      returnedAmount: undefined,
-      deductions: [],
-      notes: "",
+      returnedAmount: initialReturnedAmount,
+      returnedDate: initial?.returnedDate ?? undefined,
+      deductions: initialDeductions,
+      notes: initial?.notes ?? "",
     },
   });
 
@@ -55,40 +96,70 @@ export function ReturnGuaranteeDialog({ guaranteeId, totalAmount, lesseeName }: 
 
   const deductions = form.watch("deductions");
   const totalDeducted = deductions.reduce((acc, d) => acc + (d.amount || 0), 0);
-  const net = totalAmount - totalDeducted;
+  const net = Math.max(0, totalAmount - totalDeducted);
+  const watchedReturned = form.watch("returnedAmount");
+  const numericReturned =
+    typeof watchedReturned === "number" && Number.isFinite(watchedReturned)
+      ? watchedReturned
+      : 0;
+  const returnedExceeds = numericReturned > totalAmount + 0.0001;
+
+  // Auto-sincroniza el "monto devuelto" con el neto a devolver cuando cambian
+  // las deducciones, salvo que el usuario haya tocado el campo manualmente.
+  const returnedTouchedRef = useRef(false);
+  useEffect(() => {
+    if (!open) return;
+    if (returnedTouchedRef.current) return;
+    form.setValue("returnedAmount", net, { shouldValidate: false });
+  }, [net, open, form]);
 
   async function onSubmit(values: ReturnGuaranteeInput) {
+    if (values.returnedAmount > totalAmount) {
+      form.setError("returnedAmount", {
+        type: "max",
+        message: `No puede exceder el depósito original (${MXN.format(totalAmount)}).`,
+      });
+      return;
+    }
     try {
       await actionReturnGuarantee(values);
-      toast.success("Devolución registrada correctamente.");
+      toast.success(
+        isEdit ? "Devolución actualizada." : "Devolución registrada correctamente.",
+      );
       setOpen(false);
-      form.reset();
-    } catch {
-      toast.error("Error al registrar la devolución.");
+      if (!isEdit) form.reset();
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : "Error al guardar la devolución.",
+      );
     }
   }
 
-  async function onApplyToDebt() {
-    setApplyingToDebt(true);
-    try {
-      await actionApplyGuaranteeToDebt({ guaranteeId });
-      toast.success("Depósito aplicado al saldo pendiente.");
-      setOpen(false);
-    } catch {
-      toast.error("Error al aplicar el depósito.");
-    } finally {
-      setApplyingToDebt(false);
+  function handleOpenChange(next: boolean) {
+    setOpen(next);
+    if (next) {
+      returnedTouchedRef.current = isEdit;
+      form.reset({
+        guaranteeId,
+        returnedAmount: initialReturnedAmount,
+        returnedDate: initial?.returnedDate ?? undefined,
+        deductions: initialDeductions,
+        notes: initial?.notes ?? "",
+      });
     }
   }
+
+  const label = triggerLabel ?? (isEdit ? "Editar devolución" : "Cerrar depósito");
+  const title = isEdit ? `Editar devolución — ${lesseeName}` : `Cerrar depósito — ${lesseeName}`;
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger render={<Button variant="outline" size="sm" />}>
-        Cerrar depósito
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      <DialogTrigger render={<Button variant={triggerVariant} size="sm" />}>
+        {label}
       </DialogTrigger>
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>Cerrar depósito — {lesseeName}</DialogTitle>
+          <DialogTitle>{title}</DialogTitle>
         </DialogHeader>
 
         <div className="rounded-md border bg-muted/40 px-4 py-3 text-sm">
@@ -101,7 +172,7 @@ export function ReturnGuaranteeDialog({ guaranteeId, totalAmount, lesseeName }: 
             {/* Deducciones */}
             <div>
               <div className="mb-2 flex items-center justify-between">
-                <FormLabel>Deducciones por daños</FormLabel>
+                <Label>Deducciones por daños</Label>
                 <Button
                   type="button"
                   variant="ghost"
@@ -177,21 +248,55 @@ export function ReturnGuaranteeDialog({ guaranteeId, totalAmount, lesseeName }: 
             <FormField
               control={form.control}
               name="returnedAmount"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Monto devuelto (MXN)</FormLabel>
-                  <FormControl>
-                    <Input
-                      type="number"
-                      step="0.01"
-                      placeholder="0.00"
-                      {...field}
-                      onChange={(e) => field.onChange(e.target.valueAsNumber)}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
+              rules={{
+                validate: (v) =>
+                  typeof v === "number" && v > totalAmount
+                    ? `No puede exceder el depósito original (${MXN.format(totalAmount)}).`
+                    : true,
+              }}
+              render={({ field, fieldState }) => {
+                const exceeds =
+                  typeof field.value === "number" && field.value > totalAmount;
+                return (
+                  <FormItem>
+                    <div className="flex items-center justify-between gap-2">
+                      <FormLabel>Monto devuelto (MXN)</FormLabel>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          returnedTouchedRef.current = true;
+                          field.onChange(totalAmount);
+                          form.clearErrors("returnedAmount");
+                        }}
+                        className="shrink-0 text-[11px] font-medium text-blue-700 hover:underline dark:text-blue-300"
+                      >
+                        Todo
+                      </button>
+                    </div>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        min={0}
+                        max={totalAmount}
+                        placeholder="0.00"
+                        {...field}
+                        value={field.value ?? ""}
+                        onChange={(e) => {
+                          returnedTouchedRef.current = true;
+                          field.onChange(e.target.valueAsNumber);
+                        }}
+                        className={cn(
+                          "tabular-nums",
+                          (exceeds || fieldState.error) &&
+                            "border-destructive focus-visible:ring-destructive/40",
+                        )}
+                      />
+                    </FormControl>
+                    {fieldState.error ? <FormMessage /> : null}
+                  </FormItem>
+                );
+              }}
             />
 
             <FormField
@@ -206,7 +311,7 @@ export function ReturnGuaranteeDialog({ guaranteeId, totalAmount, lesseeName }: 
                       {...field}
                       value={
                         field.value instanceof Date
-                          ? field.value.toISOString().slice(0, 10)
+                          ? toDateInput(field.value)
                           : (field.value as string) ?? ""
                       }
                     />
@@ -223,31 +328,36 @@ export function ReturnGuaranteeDialog({ guaranteeId, totalAmount, lesseeName }: 
                 <FormItem>
                   <FormLabel>Notas (opcional)</FormLabel>
                   <FormControl>
-                    <Textarea rows={2} placeholder="Observaciones..." {...field} value={field.value ?? ""} />
+                    <Textarea
+                      rows={2}
+                      placeholder="Observaciones..."
+                      {...field}
+                      value={field.value ?? ""}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
             />
 
-            <div className="flex flex-col gap-2 pt-2 sm:flex-row sm:justify-between">
-              <Button
-                type="button"
-                variant="outline"
-                className="text-destructive hover:text-destructive"
-                disabled={applyingToDebt}
-                onClick={onApplyToDebt}
-              >
-                {applyingToDebt ? "Aplicando..." : "Aplicar a saldo"}
+            <div className="flex justify-end gap-2 pt-2">
+              <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+                Cancelar
               </Button>
-              <div className="flex gap-2">
-                <Button type="button" variant="outline" onClick={() => setOpen(false)}>
-                  Cancelar
-                </Button>
-                <Button type="submit" disabled={form.formState.isSubmitting}>
-                  {form.formState.isSubmitting ? "Guardando..." : "Registrar devolución"}
-                </Button>
-              </div>
+              <Button
+                type="submit"
+                disabled={
+                  form.formState.isSubmitting ||
+                  returnedExceeds ||
+                  numericReturned <= 0
+                }
+              >
+                {form.formState.isSubmitting
+                  ? "Guardando..."
+                  : isEdit
+                    ? `Guardar ${MXN.format(numericReturned)}`
+                    : `Registrar ${MXN.format(numericReturned)}`}
+              </Button>
             </div>
           </form>
         </Form>

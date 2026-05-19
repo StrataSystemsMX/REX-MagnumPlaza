@@ -34,16 +34,34 @@ export async function getLessees(filters: LesseeFilters = {}) {
     include: {
       contracts: {
         where: { status: "ACTIVE" },
-        select: { id: true },
+        select: {
+          id: true,
+          unit: {
+            select: {
+              property: {
+                select: { id: true, name: true, type: true },
+              },
+            },
+          },
+        },
       },
     },
   });
 
   return lessees.map((l) => {
     const { contracts, ...rest } = l;
+    const propertyMap = new Map<
+      string,
+      { id: string; name: string; type: (typeof contracts)[number]["unit"]["property"]["type"] }
+    >();
+    for (const c of contracts) {
+      const p = c.unit.property;
+      if (!propertyMap.has(p.id)) propertyMap.set(p.id, p);
+    }
     return {
       ...rest,
       activeContractsCount: contracts.length,
+      properties: Array.from(propertyMap.values()),
     };
   });
 }
@@ -77,45 +95,3 @@ export async function getLesseeById(id: string) {
 }
 
 export type LesseeDetail = NonNullable<Awaited<ReturnType<typeof getLesseeById>>>;
-
-/** Búsqueda rápida por razón social / contacto / RFC para autocompletes. */
-export async function searchLessees(query: string, limit = 10) {
-  const { tenantId } = await requireAuth();
-
-  const q = query.trim();
-  if (q.length === 0) {
-    return prisma.lessee.findMany({
-      where: { tenantId, isActive: true },
-      orderBy: { legalName: "asc" },
-      take: limit,
-      select: {
-        id: true,
-        legalName: true,
-        contactName: true,
-        rfc: true,
-      },
-    });
-  }
-
-  return prisma.lessee.findMany({
-    where: {
-      tenantId,
-      isActive: true,
-      OR: [
-        { legalName: { contains: q, mode: "insensitive" } },
-        { contactName: { contains: q, mode: "insensitive" } },
-        { rfc: { contains: q, mode: "insensitive" } },
-      ],
-    },
-    orderBy: { legalName: "asc" },
-    take: limit,
-    select: {
-      id: true,
-      legalName: true,
-      contactName: true,
-      rfc: true,
-    },
-  });
-}
-
-export type LesseeSearchResult = Awaited<ReturnType<typeof searchLessees>>[number];

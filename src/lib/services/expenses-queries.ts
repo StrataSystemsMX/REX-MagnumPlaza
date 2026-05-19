@@ -33,6 +33,7 @@ export async function getExpenses(filters: ExpenseListFilters = {}) {
       ...(dateFilter ? { expenseDate: dateFilter } : {}),
     },
     orderBy: [{ expenseDate: "desc" }, { createdAt: "desc" }],
+    take: 5000,
     include: {
       legalEntity: { select: { id: true, code: true, legalName: true } },
       category: { select: { id: true, code: true, name: true, type: true } },
@@ -196,18 +197,40 @@ export async function getYearlyExpensesMatrix(
     (_, i) => new Date(Date.UTC(year, i, 1)),
   );
 
-  const rows = await prisma.expense.findMany({
-    where: {
-      tenantId,
-      category: { type: { not: "PAYROLL" } },
-      expenseDate: { gte: yearStart, lt: yearEnd },
-    },
-    orderBy: [{ expenseDate: "asc" }],
-    include: {
-      legalEntity: { select: { id: true, code: true, legalName: true } },
-      category: { select: { id: true, code: true, name: true, type: true } },
-    },
-  });
+  // Cargamos en paralelo: expenses planos (sólo IDs de FK) + entidades + categorías.
+  // Evita el `include` que dispara `IN ($1..$N)` con N = nº de expenses, aunque
+  // sólo existan ~4 entidades y ~17 categorías. Resolvemos por map en memoria.
+  const [rows, legalEntities, categories] = await Promise.all([
+    prisma.expense.findMany({
+      where: {
+        tenantId,
+        category: { type: { not: "PAYROLL" } },
+        expenseDate: { gte: yearStart, lt: yearEnd },
+      },
+      orderBy: [{ expenseDate: "asc" }],
+      take: 5000,
+      select: {
+        id: true,
+        legalEntityId: true,
+        categoryId: true,
+        amount: true,
+        expenseDate: true,
+        description: true,
+        isPaid: true,
+        isNotRequired: true,
+      },
+    }),
+    prisma.legalEntity.findMany({
+      where: { tenantId, isActive: true },
+      select: { id: true, code: true, legalName: true },
+    }),
+    prisma.expenseCategory.findMany({
+      where: { tenantId, type: { not: "PAYROLL" } },
+      select: { id: true, code: true, name: true },
+    }),
+  ]);
+  const entityMap = new Map(legalEntities.map((e) => [e.id, e]));
+  const categoryMap = new Map(categories.map((c) => [c.id, c]));
 
   // Estructura: entity → conceptKey → row
   const byEntity = new Map<
@@ -221,16 +244,19 @@ export async function getYearlyExpensesMatrix(
   >();
 
   for (const r of rows) {
-    const entityKey = r.legalEntity.id;
-    let entity = byEntity.get(entityKey);
+    const entity_ = entityMap.get(r.legalEntityId);
+    const category_ = categoryMap.get(r.categoryId);
+    if (!entity_ || !category_) continue; // entidad/categoría inactiva — ignoramos.
+
+    let entity = byEntity.get(entity_.id);
     if (!entity) {
       entity = {
-        entityId: r.legalEntity.id,
-        entityCode: r.legalEntity.code,
-        entityLegalName: r.legalEntity.legalName,
+        entityId: entity_.id,
+        entityCode: entity_.code,
+        entityLegalName: entity_.legalName,
         rows: new Map(),
       };
-      byEntity.set(entityKey, entity);
+      byEntity.set(entity_.id, entity);
     }
 
     const conceptKey = `${r.categoryId}::${r.description}`;
@@ -240,8 +266,8 @@ export async function getYearlyExpensesMatrix(
         conceptKey,
         description: r.description,
         categoryId: r.categoryId,
-        categoryCode: r.category.code,
-        categoryName: r.category.name,
+        categoryCode: category_.code,
+        categoryName: category_.name,
         cells: periods.map((p) => ({
           expenseId: null,
           amount: 0,
@@ -358,14 +384,3 @@ export async function getYearlyExpensesMatrix(
   return { year, entities, monthlyTotals };
 }
 
-/** Años con al menos un egreso registrado (excluye nóminas), descendente. */
-export async function getExpenseYears(): Promise<number[]> {
-  const { tenantId } = await requireAuth();
-  const rows = await prisma.expense.findMany({
-    where: { tenantId, category: { type: { not: "PAYROLL" } } },
-    select: { expenseDate: true },
-  });
-  const years = new Set<number>();
-  for (const r of rows) years.add(r.expenseDate.getUTCFullYear());
-  return Array.from(years).sort((a, b) => b - a);
-}

@@ -47,9 +47,10 @@ interface UnitFormProps {
   initial: UnitFormInitial;
   onSuccess?: () => void;
   submitLabel?: string;
+  secondaryAction?: React.ReactNode;
 }
 
-export function UnitForm({ initial, onSuccess, submitLabel = "Guardar" }: UnitFormProps) {
+export function UnitForm({ initial, onSuccess, submitLabel = "Guardar", secondaryAction }: UnitFormProps) {
   const isEdit = Boolean(initial.id);
   const [pending, startTransition] = useTransition();
 
@@ -169,7 +170,8 @@ export function UnitForm({ initial, onSuccess, submitLabel = "Guardar" }: UnitFo
             )}
           />
         </div>
-        <div className="flex justify-end gap-2 pt-2">
+        <div className="flex items-center justify-between gap-2 pt-2">
+          <div>{secondaryAction}</div>
           <Button type="submit" disabled={pending}>
             {pending ? "Guardando..." : submitLabel}
           </Button>

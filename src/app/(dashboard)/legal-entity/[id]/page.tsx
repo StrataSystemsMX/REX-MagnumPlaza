@@ -259,12 +259,7 @@ export default async function LegalEntityPage({ params, searchParams }: PageProp
                 {[...data.ownedProperties, ...data.managedProperties].map((p) => (
                   <TableRow key={`${p.id}-${p.isOwner ? "o" : "m"}`}>
                     <TableCell>
-                      <Link
-                        href={`/properties/${p.id}`}
-                        className="font-medium hover:underline"
-                      >
-                        {p.name}
-                      </Link>
+                      <span className="font-medium">{p.name}</span>
                     </TableCell>
                     <TableCell className="text-xs text-muted-foreground">
                       {propertyTypeLabel(p.type as PropertyType)}

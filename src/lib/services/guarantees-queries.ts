@@ -33,7 +33,15 @@ export async function getGuarantees(filters: GuaranteeFilters = {}) {
               id: true,
               code: true,
               name: true,
-              property: { select: { id: true, name: true } },
+              property: {
+                select: {
+                  id: true,
+                  name: true,
+                  ownerEntity: {
+                    select: { id: true, code: true, legalName: true },
+                  },
+                },
+              },
             },
           },
         },
@@ -66,15 +74,7 @@ export async function getGuarantees(filters: GuaranteeFilters = {}) {
 
 export type GuaranteeRow = Awaited<ReturnType<typeof getGuarantees>>[number];
 
-export async function getGuaranteesByContract(contractId: string) {
-  const { tenantId } = await requireAuth();
-  return prisma.guarantee.findMany({
-    where: { tenantId, contractId },
-    orderBy: { receivedDate: "desc" },
-  });
-}
-
-/** Contratos activos sin garantía registrada — para el formulario de alta. */
+/** Contratos activos sin fianza registrada — para el formulario de alta. */
 export async function getContractsWithoutGuarantee() {
   const { tenantId } = await requireAuth();
 

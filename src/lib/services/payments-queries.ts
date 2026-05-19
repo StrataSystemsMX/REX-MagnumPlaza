@@ -92,15 +92,27 @@ export interface PaymentFilters {
   lesseeId?: string;
 }
 
-/** Listado de Payments con info del Rent, contrato e inquilino. */
-export async function getPayments(filters: PaymentFilters = {}) {
+/**
+ * Listado de Payments con info del Rent, contrato e inquilino.
+ *
+ * Defaults conservadores para no traer histórico completo:
+ *   - Ventana de 90 días si no se pasa `from`/`to`.
+ *   - Tope duro de 200 registros para acotar payload.
+ * El caller puede sobreescribir con `filters.from` o `filters.take`.
+ */
+export async function getPayments(filters: PaymentFilters & { take?: number } = {}) {
   const { tenantId } = await requireAuth();
 
   const where: Prisma.PaymentWhereInput = { tenantId };
-  if (filters.from || filters.to) {
+  const hasExplicitRange = Boolean(filters.from || filters.to);
+  if (hasExplicitRange) {
     where.paymentDate = {};
     if (filters.from) where.paymentDate.gte = filters.from;
     if (filters.to) where.paymentDate.lte = filters.to;
+  } else {
+    // Default: últimos 90 días.
+    const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
+    where.paymentDate = { gte: ninetyDaysAgo };
   }
   if (filters.method) where.method = filters.method;
   if (filters.lesseeId) {
@@ -110,6 +122,7 @@ export async function getPayments(filters: PaymentFilters = {}) {
   const payments = await prisma.payment.findMany({
     where,
     orderBy: { paymentDate: "desc" },
+    take: filters.take ?? 200,
     include: {
       rent: {
         select: {
@@ -141,15 +154,6 @@ export async function getPayments(filters: PaymentFilters = {}) {
 
 export type PaymentListItem = Awaited<ReturnType<typeof getPayments>>[number];
 
-/** Pagos de un Rent específico (para el detalle del contrato). */
-export async function getPaymentsByRent(rentId: string) {
-  const { tenantId } = await requireAuth();
-  return prisma.payment.findMany({
-    where: { tenantId, rentId },
-    orderBy: { paymentDate: "asc" },
-  });
-}
-
 /** Pagos históricos de un Lessee — usado en su tab "Pagos históricos". */
 export async function getPaymentsByLessee(lesseeId: string) {
   const { tenantId } = await requireAuth();
@@ -180,10 +184,6 @@ export async function getPaymentsByLessee(lesseeId: string) {
 }
 
 export type LesseePayment = Awaited<ReturnType<typeof getPaymentsByLessee>>[number];
-
-export async function getPaymentsByDateRange(from: Date, to: Date) {
-  return getPayments({ from, to });
-}
 
 /**
  * Saldo pendiente total de un inquilino: suma de (amountDue - amountPaid)
@@ -331,77 +331,6 @@ export type OutstandingRentLite = Awaited<
 >[number];
 
 /**
- * Rents condonables de un contrato — usado por el dialog "Condonar".
- * Incluye también PENDING (rentas futuras que aún no vencen) para permitir
- * condonar meses por adelantado. Excluye PAID y WAIVED.
- */
-export async function getCondonableRentsForContract(contractId: string) {
-  const { tenantId } = await requireAuth();
-  const rents = await prisma.rent.findMany({
-    where: {
-      tenantId,
-      contractId,
-      status: { in: [...OUTSTANDING_STATUSES, "PENDING"] },
-    },
-    orderBy: { dueDate: "asc" },
-    select: {
-      id: true,
-      period: true,
-      dueDate: true,
-      amountDue: true,
-      amountPaid: true,
-      amountWaived: true,
-      status: true,
-    },
-  });
-  return rents.map((r) => ({
-    id: r.id,
-    period: r.period,
-    dueDate: r.dueDate,
-    amountDue: r.amountDue.toString(),
-    amountPaid: r.amountPaid.toString(),
-    amountWaived: r.amountWaived.toString(),
-    balance: new Prisma.Decimal(r.amountDue)
-      .minus(new Prisma.Decimal(r.amountPaid))
-      .minus(new Prisma.Decimal(r.amountWaived ?? 0))
-      .toString(),
-    status: r.status,
-  }));
-}
-
-export type CondonableRent = Awaited<
-  ReturnType<typeof getCondonableRentsForContract>
->[number];
-
-/**
- * Listado de TODOS los rents del tenant — alimenta la vista calendario que
- * agrupa por mes. Incluye contract.lessee y unit/property para mostrar
- * cada celda con contexto.
- */
-export async function getAllRentsForCalendar() {
-  const { tenantId } = await requireAuth();
-  return prisma.rent.findMany({
-    where: { tenantId },
-    orderBy: [{ period: "asc" }],
-    include: {
-      contract: {
-        select: {
-          lessee: { select: { legalName: true } },
-          unit: {
-            select: {
-              code: true,
-              property: { select: { name: true } },
-            },
-          },
-        },
-      },
-    },
-  });
-}
-
-export type CalendarRent = Awaited<ReturnType<typeof getAllRentsForCalendar>>[number];
-
-/**
  * Vista mensual agrupada por Property — pivote para la pantalla "Cobros del Mes".
  * Para cada Property activa devuelve TODAS sus Units (incluso vacías), con su
  * contrato activo del periodo (si existe), el Rent del periodo (si existe), y
@@ -508,41 +437,70 @@ export async function getMonthlyCollectionsByProperty(period: Date): Promise<Mon
     Date.UTC(period.getUTCFullYear(), period.getUTCMonth() + 1, 1),
   );
 
-  const properties = await prisma.property.findMany({
-    where: { tenantId, isActive: true },
-    orderBy: { name: "asc" },
-    include: {
-      ownerEntity: { select: { code: true } },
-      managerEntity: { select: { code: true } },
-      units: {
-        where: { isActive: true },
-        orderBy: { code: "asc" },
-        include: {
-          contracts: {
-            where: {
-              status: "ACTIVE",
-              startDate: { lt: periodEnd },
-              endDate: { gte: periodStart },
-            },
-            orderBy: { startDate: "desc" },
-            take: 1,
-            include: {
-              lessee: { select: { id: true, legalName: true } },
-              rents: {
-                where: { period: periodStart },
-                take: 1,
-              },
-            },
-          },
+  // 3 queries planas en paralelo en vez de 1 nested deep. Prisma serializaba
+  // los 5 niveles de include en ~6 round-trips a Supabase (≈1s); aquí son
+  // 3 round-trips simultáneos (≈150ms total).
+  const [propertiesRaw, activeContracts, rentsInPeriod] = await Promise.all([
+    prisma.property.findMany({
+      where: { tenantId, isActive: true },
+      orderBy: { name: "asc" },
+      select: {
+        id: true,
+        name: true,
+        ownerEntity: { select: { code: true } },
+        managerEntity: { select: { code: true } },
+        units: {
+          where: { isActive: true },
+          orderBy: { code: "asc" },
+          select: { id: true, code: true, name: true },
         },
       },
-    },
-  });
+    }),
+    prisma.contract.findMany({
+      where: {
+        tenantId,
+        status: "ACTIVE",
+        startDate: { lt: periodEnd },
+        endDate: { gte: periodStart },
+      },
+      orderBy: { startDate: "desc" }, // más reciente primero → "primero gana"
+      select: {
+        id: true,
+        unitId: true,
+        monthlyAmount: true,
+        paidInAdvance: true,
+        advancePaidUntil: true,
+        lessee: { select: { id: true, legalName: true } },
+      },
+    }),
+    prisma.rent.findMany({
+      where: { tenantId, period: periodStart },
+      select: {
+        id: true,
+        contractId: true,
+        amountDue: true,
+        amountPaid: true,
+        amountWaived: true,
+        status: true,
+      },
+    }),
+  ]);
+
+  // Index para joins en memoria. "Primero gana" preserva el comportamiento
+  // del original `take: 1, orderBy: startDate desc`.
+  const contractByUnit = new Map<string, (typeof activeContracts)[number]>();
+  for (const c of activeContracts) {
+    if (!contractByUnit.has(c.unitId)) contractByUnit.set(c.unitId, c);
+  }
+  const rentByContract = new Map<string, (typeof rentsInPeriod)[number]>();
+  for (const r of rentsInPeriod) rentByContract.set(r.contractId, r);
 
   // Para units vacías traemos el último contrato (cualquiera) para mostrar
   // el último inquilino que ocupó el local — útil como contexto en la fila.
-  const emptyUnitIds = properties.flatMap((p) =>
-    p.units.filter((u) => u.contracts.length === 0).map((u) => u.id),
+  // Se hace en una 4ª query secuencial porque depende de saber qué units
+  // quedan vacías. Es chica (sólo IN-list de ~5-10 units).
+  const emptyUnitIds = propertiesRaw.flatMap((p) =>
+    p.units.filter((u) => !contractByUnit.has(u.id)).map((u) => u.id),
   );
   const lastContractsByUnit = emptyUnitIds.length
     ? await prisma.contract
@@ -562,6 +520,28 @@ export async function getMonthlyCollectionsByProperty(period: Date): Promise<Mon
           return map;
         })
     : new Map<string, string>();
+
+  // Reshape al formato original: properties con units anidadas y contrato+rent
+  // pegados a cada unit (como si fuera el include nested original).
+  const properties = propertiesRaw.map((p) => ({
+    ...p,
+    units: p.units.map((u) => {
+      const contract = contractByUnit.get(u.id);
+      return {
+        ...u,
+        contracts: contract
+          ? [
+              {
+                ...contract,
+                rents: rentByContract.has(contract.id)
+                  ? [rentByContract.get(contract.id)!]
+                  : [],
+              },
+            ]
+          : [],
+      };
+    }),
+  }));
 
   const totals = {
     paid: 0,

@@ -308,7 +308,7 @@ function entityTypeLabel(type: string): string {
     case "Expense":
       return "el gasto";
     case "Guarantee":
-      return "el depósito en garantía";
+      return "la fianza";
     case "Rent":
       return "la renta";
     default:

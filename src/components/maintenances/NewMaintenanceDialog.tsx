@@ -69,6 +69,13 @@ export function NewMaintenanceDialog({ properties }: Props) {
   const selectedPropertyId = form.watch("propertyId");
   const selectedProperty = properties.find((p) => p.id === selectedPropertyId);
 
+  const propertyLabels = Object.fromEntries(properties.map((p) => [p.id, p.name]));
+  const unitLabels = selectedProperty
+    ? Object.fromEntries(
+        selectedProperty.units.map((u) => [u.id, `${u.code}${u.name ? ` — ${u.name}` : ""}`]),
+      )
+    : {};
+
   async function onSubmit(values: CreateMaintenanceInput) {
     try {
       await actionCreateMaintenance(values);
@@ -169,6 +176,7 @@ export function NewMaintenanceDialog({ properties }: Props) {
                       form.setValue("unitId", null);
                     }}
                     value={field.value}
+                    items={propertyLabels}
                   >
                     <FormControl>
                       <SelectTrigger>
@@ -198,6 +206,7 @@ export function NewMaintenanceDialog({ properties }: Props) {
                     <Select
                       onValueChange={field.onChange}
                       value={field.value ?? ""}
+                      items={unitLabels}
                     >
                       <FormControl>
                         <SelectTrigger>

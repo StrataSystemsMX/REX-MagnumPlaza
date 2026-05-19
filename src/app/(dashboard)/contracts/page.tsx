@@ -19,7 +19,7 @@ export default async function ContractsPage() {
   ).length;
 
   return (
-    <div className="space-y-6">
+    <div className="-m-4 space-y-6 bg-gradient-to-b from-[#8899AC]/40 to-transparent bg-[length:100%_180px] bg-no-repeat p-4 sm:-m-6 sm:p-6 lg:-m-8 lg:p-8 dark:from-[#8899AC]/30">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Contratos</h1>
         <p className="text-sm text-muted-foreground">

@@ -297,19 +297,37 @@ export function PaymentsTable({ payments, canDelete }: PaymentsTableProps) {
               ))}
             </SelectContent>
           </Select>
-          <div className="flex flex-col gap-2 sm:flex-row sm:gap-2">
-            <Input
-              type="date"
-              value={from}
-              onChange={(e) => setFrom(e.target.value)}
-              className="w-full sm:w-40"
-            />
-            <Input
-              type="date"
-              value={to}
-              onChange={(e) => setTo(e.target.value)}
-              className="w-full sm:w-40"
-            />
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:gap-2">
+            <div className="flex flex-col gap-1">
+              <label
+                htmlFor="payments-from"
+                className="text-xs font-medium text-muted-foreground"
+              >
+                Desde
+              </label>
+              <Input
+                id="payments-from"
+                type="date"
+                value={from}
+                onChange={(e) => setFrom(e.target.value)}
+                className="w-full sm:w-40"
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label
+                htmlFor="payments-to"
+                className="text-xs font-medium text-muted-foreground"
+              >
+                Hasta
+              </label>
+              <Input
+                id="payments-to"
+                type="date"
+                value={to}
+                onChange={(e) => setTo(e.target.value)}
+                className="w-full sm:w-40"
+              />
+            </div>
           </div>
         </div>
         <div className="flex items-center justify-between gap-3 sm:justify-end">

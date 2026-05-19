@@ -13,10 +13,6 @@ const CONFIG: Record<GuaranteeStatus, { label: string; className: string }> = {
     label: "Devuelto",
     className: "bg-emerald-100 text-emerald-800",
   },
-  APPLIED_TO_DEBT: {
-    label: "Aplicado a deuda",
-    className: "bg-rose-100 text-rose-800",
-  },
 };
 
 export function GuaranteeStatusBadge({ status }: { status: GuaranteeStatus }) {

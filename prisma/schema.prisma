@@ -231,6 +231,7 @@ model Property {
 
   @@index([tenantId])
   @@index([ownerEntityId])
+  @@index([managerEntityId])
   @@map("properties")
 }
 
@@ -364,6 +365,7 @@ model Contract {
 
   @@index([tenantId])
   @@index([unitId])
+  @@index([lesseeId])
   @@index([endDate]) // para alertas de vencimiento
   @@map("contracts")
 }
@@ -500,7 +502,6 @@ enum GuaranteeStatus {
   HELD // en custodia
   PARTIALLY_RETURNED
   RETURNED // devuelto
-  APPLIED_TO_DEBT // aplicado a saldo pendiente
 }
 
 // ============================================================================

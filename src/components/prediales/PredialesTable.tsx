@@ -45,14 +45,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { PredialFormDialog } from "@/components/prediales/PredialFormDialog";
 import { PredialReceiptsDialog } from "@/components/prediales/PredialReceiptsDialog";
 import { PredialRegisterPaymentDialog } from "@/components/prediales/PredialRegisterPaymentDialog";
@@ -438,7 +430,7 @@ export function PredialesTable({
         />
       </div>
 
-      {/* Owner sections */}
+      {/* Owner sections (3 tarjetas; CSS Grid compartido garantiza alineación) */}
       {groups.length === 0 ? (
         <div className="rounded-lg border border-dashed bg-card py-12 text-center">
           <CircleDollarSign className="mx-auto size-8 text-muted-foreground/40" />
@@ -554,22 +546,13 @@ export function PredialesTable({
   );
 }
 
-function OwnerSection({
-  group,
-  expanded,
-  onToggle,
-  canUpdate,
-  canDelete,
-  onPay,
-  onUnmark,
-  onReceipts,
-  onEdit,
-  onDelete,
-  payerLabel,
-}: {
-  group: OwnerGroup;
-  expanded: boolean;
-  onToggle: () => void;
+// Shared grid template — single source of truth for column widths across all
+// owner sections. As long as every section renders rows of identical container
+// width, the columns will land at the same X position on the page.
+const PREDIAL_GRID_COLS =
+  "minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.15fr) minmax(0, 0.85fr) 40px";
+
+interface RowHandlers {
   canUpdate: boolean;
   canDelete: boolean;
   onPay: (p: CadastralListItem) => void;
@@ -578,7 +561,18 @@ function OwnerSection({
   onEdit: (p: CadastralListItem) => void;
   onDelete: (p: CadastralListItem) => void;
   payerLabel: (p: CadastralListItem) => string;
-}) {
+}
+
+function OwnerSection({
+  group,
+  expanded,
+  onToggle,
+  ...handlers
+}: {
+  group: OwnerGroup;
+  expanded: boolean;
+  onToggle: () => void;
+} & RowHandlers) {
   const theme = themeFor(group.code);
   const count = group.items.length;
   const progress = group.total > 0 ? (group.paid / group.total) * 100 : 0;
@@ -609,8 +603,7 @@ function OwnerSection({
               {count} inmueble{count === 1 ? "" : "s"}
             </span>
             <span className="text-xs text-muted-foreground">
-              · {group.paidCount} de {count} pagado
-              {count === 1 ? "" : "s"}
+              · {group.paidCount} de {count} pagado{count === 1 ? "" : "s"}
             </span>
           </div>
           <div className="mt-2 flex items-center gap-3">
@@ -643,91 +636,129 @@ function OwnerSection({
       </button>
 
       {expanded ? (
-        <div className="border-t">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Inmueble</TableHead>
-                <TableHead>Clave catastral</TableHead>
-                <TableHead>Pagador</TableHead>
-                <TableHead className="text-right">Monto</TableHead>
-                <TableHead className="text-center">
-                  <span className="inline-flex items-center gap-1">
-                    <CalendarClock className="size-3.5" />
-                    Fecha de pago
-                  </span>
-                </TableHead>
-                <TableHead>Estado</TableHead>
-                <TableHead className="w-12 text-right">
-                  <span className="sr-only">Acciones</span>
-                </TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {group.items.map((p) => (
-                <TableRow key={p.id}>
-                  <TableCell className="font-medium">
-                    {p.propertyName}
-                  </TableCell>
-                  <TableCell className="font-mono text-xs">
-                    {p.cadastralKey ?? "—"}
-                  </TableCell>
-                  <TableCell className="text-sm">{payerLabel(p)}</TableCell>
-                  <TableCell className="text-right font-mono tabular-nums">
-                    {p.totalAmount !== null ? MXN.format(p.totalAmount) : "—"}
-                  </TableCell>
-                  <TableCell className="text-center text-xs text-muted-foreground">
-                    {p.paymentDate
-                      ? capitalizeFirst(DATE.format(p.paymentDate))
-                      : "—"}
-                  </TableCell>
-                  <TableCell>{statusBadge(p.status)}</TableCell>
-                  <TableCell className="text-right">
-                    <DropdownMenu>
-                      <DropdownMenuTrigger
-                        render={<Button variant="ghost" size="icon" />}
-                      >
-                        <MoreHorizontal className="size-4" />
-                        <span className="sr-only">Acciones</span>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        {canUpdate && !p.isPaid ? (
-                          <DropdownMenuItem onClick={() => onPay(p)}>
-                            <CheckCircle2 className="size-4" />
-                            Registrar pago
-                          </DropdownMenuItem>
-                        ) : null}
-                        {canUpdate && p.isPaid ? (
-                          <DropdownMenuItem onClick={() => onUnmark(p)}>
-                            <RotateCcw className="size-4" />
-                            Desmarcar pago
-                          </DropdownMenuItem>
-                        ) : null}
-                        <DropdownMenuItem onClick={() => onReceipts(p)}>
-                          <FileText className="size-4" />
-                          Boletas
-                        </DropdownMenuItem>
-                        {canUpdate ? (
-                          <DropdownMenuItem onClick={() => onEdit(p)}>
-                            <Pencil className="size-4" />
-                            Editar
-                          </DropdownMenuItem>
-                        ) : null}
-                        {canDelete ? (
-                          <DropdownMenuItem onClick={() => onDelete(p)}>
-                            <Trash2 className="size-4 text-destructive" />
-                            Eliminar
-                          </DropdownMenuItem>
-                        ) : null}
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+        <div
+          role="table"
+          aria-label={`Prediales ${group.code}`}
+          className="border-t"
+        >
+          <div
+            role="row"
+            className="grid items-center border-b bg-muted/30 text-xs font-medium uppercase text-muted-foreground"
+            style={{ gridTemplateColumns: PREDIAL_GRID_COLS }}
+          >
+            <div role="columnheader" className="px-3 py-2.5">
+              Inmueble
+            </div>
+            <div role="columnheader" className="px-3 py-2.5">
+              Clave catastral
+            </div>
+            <div role="columnheader" className="px-3 py-2.5">
+              Pagador
+            </div>
+            <div role="columnheader" className="px-3 py-2.5 text-right">
+              Monto
+            </div>
+            <div role="columnheader" className="px-3 py-2.5 text-center">
+              <span className="inline-flex items-center gap-1">
+                <CalendarClock className="size-3.5" />
+                Fecha de pago
+              </span>
+            </div>
+            <div role="columnheader" className="px-3 py-2.5 text-center">
+              Estado
+            </div>
+            <div role="columnheader" aria-label="Acciones" />
+          </div>
+          {group.items.map((p) => (
+            <PredialRow key={p.id} payment={p} {...handlers} />
+          ))}
         </div>
       ) : null}
+    </div>
+  );
+}
+
+function PredialRow({
+  payment,
+  canUpdate,
+  canDelete,
+  onPay,
+  onUnmark,
+  onReceipts,
+  onEdit,
+  onDelete,
+  payerLabel,
+}: { payment: CadastralListItem } & RowHandlers) {
+  return (
+    <div
+      role="row"
+      className="grid items-center border-b text-sm transition-colors last:border-b-0 hover:bg-muted/50"
+      style={{ gridTemplateColumns: PREDIAL_GRID_COLS }}
+    >
+      <div role="cell" className="truncate px-3 py-2.5 font-medium">
+        {payment.propertyName}
+      </div>
+      <div role="cell" className="truncate px-3 py-2.5 font-mono text-xs">
+        {payment.cadastralKey ?? "—"}
+      </div>
+      <div role="cell" className="truncate px-3 py-2.5">
+        {payerLabel(payment)}
+      </div>
+      <div
+        role="cell"
+        className="px-3 py-2.5 text-right font-mono tabular-nums"
+      >
+        {payment.totalAmount !== null ? MXN.format(payment.totalAmount) : "—"}
+      </div>
+      <div
+        role="cell"
+        className="px-3 py-2.5 text-center text-xs text-muted-foreground"
+      >
+        {payment.paymentDate
+          ? capitalizeFirst(DATE.format(payment.paymentDate))
+          : "—"}
+      </div>
+      <div role="cell" className="flex justify-center px-3 py-2.5">
+        {statusBadge(payment.status)}
+      </div>
+      <div role="cell" className="flex justify-end pr-1">
+        <DropdownMenu>
+          <DropdownMenuTrigger render={<Button variant="ghost" size="icon" />}>
+            <MoreHorizontal className="size-4" />
+            <span className="sr-only">Acciones</span>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            {canUpdate && !payment.isPaid ? (
+              <DropdownMenuItem onClick={() => onPay(payment)}>
+                <CheckCircle2 className="size-4" />
+                Registrar pago
+              </DropdownMenuItem>
+            ) : null}
+            {canUpdate && payment.isPaid ? (
+              <DropdownMenuItem onClick={() => onUnmark(payment)}>
+                <RotateCcw className="size-4" />
+                Desmarcar pago
+              </DropdownMenuItem>
+            ) : null}
+            <DropdownMenuItem onClick={() => onReceipts(payment)}>
+              <FileText className="size-4" />
+              Boletas
+            </DropdownMenuItem>
+            {canUpdate ? (
+              <DropdownMenuItem onClick={() => onEdit(payment)}>
+                <Pencil className="size-4" />
+                Editar
+              </DropdownMenuItem>
+            ) : null}
+            {canDelete ? (
+              <DropdownMenuItem onClick={() => onDelete(payment)}>
+                <Trash2 className="size-4 text-destructive" />
+                Eliminar
+              </DropdownMenuItem>
+            ) : null}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
     </div>
   );
 }
