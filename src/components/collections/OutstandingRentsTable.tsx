@@ -9,6 +9,7 @@ import {
   useReactTable,
 } from "@tanstack/react-table";
 import { HandCoins, Plus } from "lucide-react";
+import Link from "next/link";
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -113,7 +114,12 @@ export function OutstandingRentsTable({ rents, properties }: OutstandingRentsTab
         header: "Inquilino",
         cell: ({ row }) => (
           <div className="text-sm">
-            <p className="font-medium">{row.original.contract.lessee.legalName}</p>
+            <Link
+              href={`/lessees/${row.original.contract.lessee.id}`}
+              className="font-medium hover:underline"
+            >
+              {row.original.contract.lessee.legalName}
+            </Link>
             {row.original.contract.lessee.contactName ? (
               <p className="text-xs text-muted-foreground">
                 {row.original.contract.lessee.contactName}

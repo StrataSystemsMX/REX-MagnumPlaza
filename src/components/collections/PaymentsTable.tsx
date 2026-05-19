@@ -9,6 +9,7 @@ import {
   useReactTable,
 } from "@tanstack/react-table";
 import { Download, Trash2 } from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
 import { toast } from "sonner";
@@ -172,9 +173,12 @@ export function PaymentsTable({ payments, canDelete }: PaymentsTableProps) {
         id: "lessee",
         header: "Inquilino",
         cell: ({ row }) => (
-          <span className="text-sm font-medium">
+          <Link
+            href={`/lessees/${row.original.rent.contract.lessee.id}`}
+            className="text-sm font-medium hover:underline"
+          >
             {row.original.rent.contract.lessee.legalName}
-          </span>
+          </Link>
         ),
       },
       {

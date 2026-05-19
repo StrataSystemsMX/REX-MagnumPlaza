@@ -26,6 +26,7 @@ import {
 } from "@/components/ui/table";
 import { actionUpdateMaintenanceStatus } from "@/lib/services/maintenances";
 import type { MaintenanceRow } from "@/lib/services/maintenances-queries";
+import Link from "next/link";
 import { MoreHorizontal } from "lucide-react";
 
 const MXN = new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" });
@@ -123,7 +124,12 @@ export function MaintenancesTable({ maintenances, canManage }: Props) {
                       </div>
                     </TableCell>
                     <TableCell className="text-sm">
-                      <span className="text-muted-foreground">{m.property.name}</span>
+                      <Link
+                        href={`/properties/${m.property.id}`}
+                        className="text-muted-foreground hover:underline"
+                      >
+                        {m.property.name}
+                      </Link>
                       {m.unit && (
                         <span className="ml-1 font-medium text-foreground">{m.unit.code}</span>
                       )}

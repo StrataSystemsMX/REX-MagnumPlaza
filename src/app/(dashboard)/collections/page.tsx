@@ -12,6 +12,19 @@ import {
   getOutstandingRents,
   getPayments,
 } from "@/lib/services/payments-queries";
+import { getRentasTableData } from "@/lib/services/rentas-queries";
+
+const VALID_TABS = ["monthly", "outstanding", "payments", "calendar", "rentas"] as const;
+type CollectionsTab = (typeof VALID_TABS)[number];
+
+function parsePeriod(periodo?: string): Date {
+  if (periodo && /^\d{4}-\d{2}$/.test(periodo)) {
+    const [year, month] = periodo.split("-").map(Number);
+    return new Date(Date.UTC(year!, month! - 1, 1));
+  }
+  const now = new Date();
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+}
 
 const MXN = new Intl.NumberFormat("es-MX", {
   style: "currency",
@@ -19,15 +32,24 @@ const MXN = new Intl.NumberFormat("es-MX", {
   maximumFractionDigits: 2,
 });
 
-export default async function CollectionsPage() {
+export default async function CollectionsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ tab?: string; periodo?: string }>;
+}) {
   const { tenantId, dbUser } = await requireAuth();
+  const { tab: tabParam, periodo } = await searchParams;
+  const activeTab: CollectionsTab = VALID_TABS.includes(tabParam as CollectionsTab)
+    ? (tabParam as CollectionsTab)
+    : "monthly";
 
   const now = new Date();
   const currentPeriod = new Date(
     Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1),
   );
+  const rentasPeriod = parsePeriod(periodo);
 
-  const [outstanding, payments, calendarRents, monthly, properties, master] =
+  const [outstanding, payments, calendarRents, monthly, properties, master, rentasData] =
     await Promise.all([
       getOutstandingRents(),
       getPayments(),
@@ -39,6 +61,7 @@ export default async function CollectionsPage() {
         select: { id: true, name: true },
       }),
       isMaster(dbUser.id),
+      getRentasTableData(rentasPeriod),
     ]);
 
   const totalOutstanding = outstanding.reduce(
@@ -107,6 +130,8 @@ export default async function CollectionsPage() {
         monthly={monthly}
         properties={properties}
         canDeletePayment={master}
+        rentasData={rentasData}
+        defaultTab={activeTab}
       />
     </div>
   );

@@ -35,7 +35,7 @@ export function GuaranteesTable({ guarantees, canManage }: Props) {
           <p className="text-muted-foreground">No hay fianzas registradas.</p>
           {canManage && (
             <p className="text-sm text-muted-foreground">
-              Usa el botón "Registrar fianza" para agregar la primera.
+              Usa el botón &ldquo;Registrar fianza&rdquo; para agregar la primera.
             </p>
           )}
         </CardContent>
