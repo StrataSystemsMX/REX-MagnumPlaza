@@ -331,7 +331,7 @@ export function BulkPaymentDialog({
                 </div>
               </div>
               <p className="mb-2 text-xs text-muted-foreground">
-                "Distribuir" llena las rentas más antiguas primero hasta cubrir el monto recibido.
+                &ldquo;Distribuir&rdquo; llena las rentas más antiguas primero hasta cubrir el monto recibido.
               </p>
               <div className="rounded-md border max-h-72 overflow-auto">
                 {loadingRents ? (

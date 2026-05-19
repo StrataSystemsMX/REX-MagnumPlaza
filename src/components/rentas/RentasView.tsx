@@ -186,7 +186,7 @@ export function RentasView({ tableData }: { tableData: RentasTableData }) {
 
   function navigate(yyyyMM: string) {
     setSelectedPropertyId(null);
-    router.push(`/rentas?periodo=${yyyyMM}`);
+    router.push(`/collections?tab=rentas&periodo=${yyyyMM}`);
   }
 
   async function openHistory(row: RentTableRow) {

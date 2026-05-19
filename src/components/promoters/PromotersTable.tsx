@@ -213,7 +213,7 @@ export function PromotersTable({ promoters, units, canManage }: Props) {
           <p className="text-muted-foreground">No hay promotores registrados.</p>
           {canManage && (
             <p className="text-sm text-muted-foreground">
-              Usa el botón "Nuevo promotor" para agregar el primero.
+              Usa el botón &ldquo;Nuevo promotor&rdquo; para agregar el primero.
             </p>
           )}
         </CardContent>
