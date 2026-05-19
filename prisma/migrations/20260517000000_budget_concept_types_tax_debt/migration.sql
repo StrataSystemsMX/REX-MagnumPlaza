@@ -1,0 +1,3 @@
+-- AlterEnum
+ALTER TYPE "BudgetConceptType" ADD VALUE 'TAX_STRATEGY';
+ALTER TYPE "BudgetConceptType" ADD VALUE 'DEBT_SERVICE';

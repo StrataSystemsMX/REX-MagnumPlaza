@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma/client";
 import { sendTemplate, WhatsAppError } from "@/lib/whatsapp/client";
 import type { ReminderLevel } from "@/lib/pdf/template-config";
 import type { NotificationLogModel } from "@/generated/prisma/models";
+import { capitalizeFirst } from "@/lib/utils";
 
 /**
  * Plantillas pre-aprobadas en Meta Business. Los nombres deben coincidir
@@ -221,7 +222,7 @@ export async function sendRentReminder(
   const overdueCount = allPending.length;
 
   const lessee = rent.contract.lessee;
-  const periodLabel = PERIOD.format(rent.period);
+  const periodLabel = capitalizeFirst(PERIOD.format(rent.period));
   const balanceFormatted = MXN.format(Number(totalBalance));
   const monthlyAmount = MXN.format(Number(rent.amountDue));
   const pdfUrl = pdf.url ?? "";
@@ -257,7 +258,7 @@ export async function sendRentReminder(
     // Fecha límite = hoy + 5 días hábiles (aproximamos a 7 naturales).
     const limit = new Date();
     limit.setUTCDate(limit.getUTCDate() + 7);
-    parameters = [lessee.legalName, DATE.format(limit), balanceFormatted];
+    parameters = [lessee.legalName, capitalizeFirst(DATE.format(limit)), balanceFormatted];
     bodyPreview = `Aviso 3 (desalojo) — saldo ${balanceFormatted}. PDF: ${pdfUrl}`;
   }
 
@@ -322,7 +323,7 @@ export async function sendPaymentConfirmation(
 
   const lessee = payment.rent.contract.lessee;
   const amount = MXN.format(Number(payment.amount));
-  const concept = `Renta ${PERIOD.format(payment.rent.period)} — ${payment.rent.contract.unit.property.name} ${payment.rent.contract.unit.code}`;
+  const concept = `Renta ${capitalizeFirst(PERIOD.format(payment.rent.period))} — ${payment.rent.contract.unit.property.name} ${payment.rent.contract.unit.code}`;
   const parameters = [lessee.legalName, amount, concept];
 
   return dispatchWhatsApp({
@@ -360,7 +361,7 @@ export async function sendContractExpiringNotice(
   const unitLabel = `${contract.unit.property.name} ${contract.unit.code}`;
   const parameters = [
     lessee.legalName,
-    DATE.format(contract.endDate),
+    capitalizeFirst(DATE.format(contract.endDate)),
     unitLabel,
   ];
 
@@ -372,7 +373,7 @@ export async function sendContractExpiringNotice(
     templateName: WHATSAPP_TEMPLATES.CONTRACT_EXPIRING,
     parameters,
     to: lessee.whatsapp ?? null,
-    bodyPreview: `Recordatorio: contrato de ${unitLabel} vence el ${DATE.format(contract.endDate)}`,
+    bodyPreview: `Recordatorio: contrato de ${unitLabel} vence el ${capitalizeFirst(DATE.format(contract.endDate))}`,
     subject: "Contrato por vencer",
     send: options.forceSend ?? true,
   });

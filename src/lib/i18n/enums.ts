@@ -15,6 +15,7 @@ import type {
   PaymentMethod,
   PayrollType,
   Plan,
+  PropertyStatus,
   PropertyType,
   RentStatus,
   RoleCode,
@@ -75,6 +76,17 @@ export function propertyTypeLabel(t: PropertyType): string {
       return "Otro";
     default:
       return exhaustive(t);
+  }
+}
+
+export function propertyStatusLabel(s: PropertyStatus): string {
+  switch (s) {
+    case "ACTIVO":
+      return "Activo";
+    case "BLOQUEADO":
+      return "Bloqueado";
+    default:
+      return exhaustive(s);
   }
 }
 
@@ -252,8 +264,6 @@ export function guaranteeStatusLabel(s: GuaranteeStatus): string {
       return "Devuelto parcial";
     case "RETURNED":
       return "Devuelto";
-    case "APPLIED_TO_DEBT":
-      return "Aplicado a saldo";
     default:
       return exhaustive(s);
   }
@@ -359,11 +369,15 @@ export function budgetConceptTypeLabel(c: BudgetConceptType): string {
     case "INCOME_BILLBOARD":
       return "Ingreso por espectacular";
     case "INCOME_GUARANTEE":
-      return "Depósito en garantía";
+      return "Fianza";
     case "INCOME_OTHER":
       return "Otro ingreso";
     case "EXPENSE":
       return "Egreso";
+    case "TAX_STRATEGY":
+      return "Estrategia fiscal";
+    case "DEBT_SERVICE":
+      return "Servicio de deuda";
     default:
       return exhaustive(c);
   }

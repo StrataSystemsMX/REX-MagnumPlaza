@@ -8,7 +8,9 @@ import {
   type ColumnDef,
   useReactTable,
 } from "@tanstack/react-table";
-import { HandCoins, Plus } from "lucide-react";
+import { FileDown, HandCoins, Plus } from "lucide-react";
+import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -32,9 +34,14 @@ import {
   RegisterPaymentDialog,
   type RegisterPaymentDialogContext,
 } from "@/components/collections/RegisterPaymentDialog";
+import { SendWhatsAppButton } from "@/components/collections/SendWhatsAppButton";
 import { RentStatusBadge } from "@/components/shared/RentStatusBadge";
+import { OUTSTANDING_STATUSES } from "@/lib/constants/rent-statuses";
+import { rentStatusLabel } from "@/lib/i18n/enums";
 import type { OutstandingRent } from "@/lib/services/payments-queries";
 import type { RentStatus } from "@/generated/prisma/enums";
+import type { ReminderLevel } from "@/lib/pdf/template-config";
+import { capitalizeFirst, cn } from "@/lib/utils";
 
 const MXN = new Intl.NumberFormat("es-MX", {
   style: "currency",
@@ -50,25 +57,34 @@ const PERIOD = new Intl.DateTimeFormat("es-MX", {
 
 type StatusFilter = RentStatus | "ALL";
 
-const STATUS_OPTIONS: ReadonlyArray<RentStatus> = [
-  "DUE",
-  "PARTIAL",
-  "OVERDUE_1M",
-  "OVERDUE_2M",
-  "OVERDUE_3M",
-];
-
 const statusFilterItems: Record<string, string> = {
   ALL: "Todos los estados",
-  ...Object.fromEntries(STATUS_OPTIONS.map((s) => [s, s])),
+  ...Object.fromEntries(OUTSTANDING_STATUSES.map((s) => [s, rentStatusLabel(s)])),
 };
+
+const ESCALON_CHIPS = [
+  { key: "all", label: "Todas", status: null },
+  { key: "1m", label: "1 mes", status: "OVERDUE_1M" as RentStatus, level: "1M" as ReminderLevel },
+  { key: "2m", label: "2 meses", status: "OVERDUE_2M" as RentStatus, level: "2M" as ReminderLevel },
+  { key: "3m", label: "3+ meses", status: "OVERDUE_3M" as RentStatus, level: "3M" as ReminderLevel, destructive: true },
+] as const;
+
+export type EscalonChip = (typeof ESCALON_CHIPS)[number]["key"];
 
 interface OutstandingRentsTableProps {
   rents: ReadonlyArray<OutstandingRent>;
   properties: ReadonlyArray<{ id: string; name: string }>;
+  /** Escalón activo desde la URL. Default `all`. */
+  escalon?: EscalonChip;
 }
 
-export function OutstandingRentsTable({ rents, properties }: OutstandingRentsTableProps) {
+export function OutstandingRentsTable({
+  rents,
+  properties,
+  escalon = "all",
+}: OutstandingRentsTableProps) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("ALL");
   const [propertyFilter, setPropertyFilter] = useState<string>("ALL");
   const [search, setSearch] = useState("");
@@ -76,6 +92,26 @@ export function OutstandingRentsTable({ rents, properties }: OutstandingRentsTab
     null,
   );
   const [bulkOpen, setBulkOpen] = useState(false);
+
+  const activeEscalonChip = ESCALON_CHIPS.find((c) => c.key === escalon) ?? ESCALON_CHIPS[0];
+  const reminderLevel = "level" in activeEscalonChip ? activeEscalonChip.level : null;
+
+  function setEscalon(next: EscalonChip) {
+    const params = new URLSearchParams(searchParams.toString());
+    if (next === "all") params.delete("escalon");
+    else params.set("escalon", next);
+    router.replace(`?${params.toString()}`, { scroll: false });
+  }
+
+  const escalonCounts = useMemo(() => {
+    const counts = { all: rents.length, "1m": 0, "2m": 0, "3m": 0 };
+    for (const r of rents) {
+      if (r.status === "OVERDUE_1M") counts["1m"]++;
+      else if (r.status === "OVERDUE_2M") counts["2m"]++;
+      else if (r.status === "OVERDUE_3M") counts["3m"]++;
+    }
+    return counts;
+  }, [rents]);
 
   const propertyFilterItems = useMemo<Record<string, string>>(
     () => ({
@@ -87,7 +123,9 @@ export function OutstandingRentsTable({ rents, properties }: OutstandingRentsTab
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
+    const escalonStatus = activeEscalonChip.status;
     return rents.filter((r) => {
+      if (escalonStatus && r.status !== escalonStatus) return false;
       if (statusFilter !== "ALL" && r.status !== statusFilter) return false;
       if (propertyFilter !== "ALL" && r.contract.unit.property.id !== propertyFilter)
         return false;
@@ -104,7 +142,7 @@ export function OutstandingRentsTable({ rents, properties }: OutstandingRentsTab
       }
       return true;
     });
-  }, [rents, statusFilter, propertyFilter, search]);
+  }, [rents, statusFilter, propertyFilter, search, activeEscalonChip]);
 
   const totalBalance = useMemo(
     () => filtered.reduce((acc, r) => acc + Number(r.balance), 0),
@@ -118,7 +156,12 @@ export function OutstandingRentsTable({ rents, properties }: OutstandingRentsTab
         header: "Inquilino",
         cell: ({ row }) => (
           <div className="text-sm">
-            <p className="font-medium">{row.original.contract.lessee.legalName}</p>
+            <Link
+              href={`/lessees/${row.original.contract.lessee.id}`}
+              className="font-medium hover:underline"
+            >
+              {row.original.contract.lessee.legalName}
+            </Link>
             {row.original.contract.lessee.contactName ? (
               <p className="text-xs text-muted-foreground">
                 {row.original.contract.lessee.contactName}
@@ -144,9 +187,9 @@ export function OutstandingRentsTable({ rents, properties }: OutstandingRentsTab
       },
       {
         accessorKey: "period",
-        header: "Periodo",
+        header: () => <div className="text-center">Periodo</div>,
         cell: ({ row }) => (
-          <span className="text-sm capitalize">{PERIOD.format(row.original.period)}</span>
+          <div className="text-center text-sm">{capitalizeFirst(PERIOD.format(row.original.period))}</div>
         ),
       },
       {
@@ -193,14 +236,40 @@ export function OutstandingRentsTable({ rents, properties }: OutstandingRentsTab
       },
       {
         accessorKey: "status",
-        header: "Estado",
-        cell: ({ row }) => <RentStatusBadge status={row.original.status} />,
+        header: () => <div className="text-center">Estado</div>,
+        cell: ({ row }) => (
+          <div className="text-center">
+            <RentStatusBadge status={row.original.status} />
+          </div>
+        ),
       },
       {
         id: "actions",
         header: () => <span className="sr-only">Acciones</span>,
         cell: ({ row }) => (
-          <div className="text-right">
+          <div className="flex items-center justify-end gap-2">
+            {reminderLevel ? (
+              <>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    const url = `/api/documents/overdue-reminder?rentId=${encodeURIComponent(row.original.id)}&level=${reminderLevel}`;
+                    window.open(url, "_blank", "noopener,noreferrer");
+                  }}
+                  title="Ver PDF del aviso"
+                >
+                  <FileDown className="size-4" />
+                  PDF
+                </Button>
+                <SendWhatsAppButton
+                  rentId={row.original.id}
+                  level={reminderLevel}
+                  lesseeName={row.original.contract.lessee.legalName}
+                  hasWhatsapp={Boolean(row.original.contract.lessee.whatsapp)}
+                />
+              </>
+            ) : null}
             <Button
               variant="secondary"
               size="sm"
@@ -222,7 +291,7 @@ export function OutstandingRentsTable({ rents, properties }: OutstandingRentsTab
         ),
       },
     ],
-    [],
+    [reminderLevel],
   );
 
   const table = useReactTable({
@@ -235,19 +304,53 @@ export function OutstandingRentsTable({ rents, properties }: OutstandingRentsTab
 
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
+        {ESCALON_CHIPS.map((chip) => {
+          const isActive = chip.key === activeEscalonChip.key;
+          const count = escalonCounts[chip.key];
+          return (
+            <button
+              key={chip.key}
+              type="button"
+              onClick={() => setEscalon(chip.key)}
+              className={cn(
+                "inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-sm transition-colors",
+                isActive
+                  ? "destructive" in chip
+                    ? "border-destructive bg-destructive text-destructive-foreground"
+                    : "border-foreground bg-foreground text-background"
+                  : "border-border text-muted-foreground hover:text-foreground hover:bg-muted",
+              )}
+            >
+              {chip.label}
+              <span
+                className={cn(
+                  "rounded-full px-1.5 text-xs tabular-nums",
+                  isActive
+                    ? "bg-background/20"
+                    : "bg-muted text-foreground/70",
+                )}
+              >
+                {count}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
           <Input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="max-w-xs"
+            className="w-full sm:max-w-xs"
           />
           <Select
             value={statusFilter}
             onValueChange={(v) => v && setStatusFilter(v as StatusFilter)}
             items={statusFilterItems}
           >
-            <SelectTrigger className="w-44">
+            <SelectTrigger className="w-full sm:w-44">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -263,7 +366,7 @@ export function OutstandingRentsTable({ rents, properties }: OutstandingRentsTab
             onValueChange={(v) => v && setPropertyFilter(v)}
             items={propertyFilterItems}
           >
-            <SelectTrigger className="w-56">
+            <SelectTrigger className="w-full sm:w-56">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -275,8 +378,8 @@ export function OutstandingRentsTable({ rents, properties }: OutstandingRentsTab
             </SelectContent>
           </Select>
         </div>
-        <div className="flex items-center gap-3">
-          <div className="text-right">
+        <div className="flex items-center justify-between gap-3 sm:justify-end">
+          <div className="text-left sm:text-right">
             <p className="text-xs text-muted-foreground">Saldo filtrado</p>
             <p className="text-lg font-semibold tabular-nums">
               {MXN.format(totalBalance)}
@@ -289,8 +392,8 @@ export function OutstandingRentsTable({ rents, properties }: OutstandingRentsTab
         </div>
       </div>
 
-      <div className="rounded-md border bg-card">
-        <Table>
+      <div className="overflow-x-auto rounded-md border bg-card">
+        <Table className="min-w-[820px]">
           <TableHeader>
             {table.getHeaderGroups().map((hg) => (
               <TableRow key={hg.id}>

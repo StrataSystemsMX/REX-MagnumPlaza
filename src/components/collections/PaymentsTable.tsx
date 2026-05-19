@@ -9,6 +9,7 @@ import {
   useReactTable,
 } from "@tanstack/react-table";
 import { Download, Trash2 } from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
 import { toast } from "sonner";
@@ -44,6 +45,7 @@ import { paymentMethodLabel } from "@/lib/i18n/enums";
 import { actionDeletePayment } from "@/lib/services/payments";
 import type { PaymentListItem } from "@/lib/services/payments-queries";
 import type { PaymentMethod } from "@/generated/prisma/enums";
+import { capitalizeFirst } from "@/lib/utils";
 
 const MXN = new Intl.NumberFormat("es-MX", {
   style: "currency",
@@ -160,20 +162,23 @@ export function PaymentsTable({ payments, canDelete }: PaymentsTableProps) {
     () => [
       {
         accessorKey: "paymentDate",
-        header: "Fecha",
+        header: () => <div className="text-center">Fecha</div>,
         cell: ({ row }) => (
-          <span className="text-xs tabular-nums">
-            {DATE.format(row.original.paymentDate)}
-          </span>
+          <div className="text-center text-xs tabular-nums">
+            {capitalizeFirst(DATE.format(row.original.paymentDate))}
+          </div>
         ),
       },
       {
         id: "lessee",
         header: "Inquilino",
         cell: ({ row }) => (
-          <span className="text-sm font-medium">
+          <Link
+            href={`/lessees/${row.original.rent.contract.lessee.id}`}
+            className="text-sm font-medium hover:underline"
+          >
             {row.original.rent.contract.lessee.legalName}
-          </span>
+          </Link>
         ),
       },
       {
@@ -190,11 +195,11 @@ export function PaymentsTable({ payments, canDelete }: PaymentsTableProps) {
       },
       {
         id: "period",
-        header: "Periodo",
+        header: () => <div className="text-center">Periodo</div>,
         cell: ({ row }) => (
-          <span className="text-sm capitalize">
-            {PERIOD.format(row.original.rent.period)}
-          </span>
+          <div className="text-center text-sm">
+            {capitalizeFirst(PERIOD.format(row.original.rent.period))}
+          </div>
         ),
       },
       {
@@ -208,9 +213,11 @@ export function PaymentsTable({ payments, canDelete }: PaymentsTableProps) {
       },
       {
         accessorKey: "method",
-        header: "Método",
+        header: () => <div className="text-center">Método</div>,
         cell: ({ row }) => (
-          <Badge variant="secondary">{paymentMethodLabel(row.original.method)}</Badge>
+          <div className="text-center">
+            <Badge variant="secondary">{paymentMethodLabel(row.original.method)}</Badge>
+          </div>
         ),
       },
       {
@@ -267,19 +274,19 @@ export function PaymentsTable({ payments, canDelete }: PaymentsTableProps) {
 
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
           <Input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="max-w-xs"
+            className="w-full sm:max-w-xs"
           />
           <Select
             value={methodFilter}
             onValueChange={(v) => v && setMethodFilter(v as PaymentMethod | "ALL")}
             items={methodFilterItems}
           >
-            <SelectTrigger className="w-40">
+            <SelectTrigger className="w-full sm:w-40">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -290,21 +297,41 @@ export function PaymentsTable({ payments, canDelete }: PaymentsTableProps) {
               ))}
             </SelectContent>
           </Select>
-          <Input
-            type="date"
-            value={from}
-            onChange={(e) => setFrom(e.target.value)}
-            className="w-40"
-          />
-          <Input
-            type="date"
-            value={to}
-            onChange={(e) => setTo(e.target.value)}
-            className="w-40"
-          />
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:gap-2">
+            <div className="flex flex-col gap-1">
+              <label
+                htmlFor="payments-from"
+                className="text-xs font-medium text-muted-foreground"
+              >
+                Desde
+              </label>
+              <Input
+                id="payments-from"
+                type="date"
+                value={from}
+                onChange={(e) => setFrom(e.target.value)}
+                className="w-full sm:w-40"
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label
+                htmlFor="payments-to"
+                className="text-xs font-medium text-muted-foreground"
+              >
+                Hasta
+              </label>
+              <Input
+                id="payments-to"
+                type="date"
+                value={to}
+                onChange={(e) => setTo(e.target.value)}
+                className="w-full sm:w-40"
+              />
+            </div>
+          </div>
         </div>
-        <div className="flex items-center gap-3">
-          <div className="text-right">
+        <div className="flex items-center justify-between gap-3 sm:justify-end">
+          <div className="text-left sm:text-right">
             <p className="text-xs text-muted-foreground">
               {filtered.length} pago{filtered.length === 1 ? "" : "s"}
             </p>
@@ -319,8 +346,8 @@ export function PaymentsTable({ payments, canDelete }: PaymentsTableProps) {
         </div>
       </div>
 
-      <div className="rounded-md border bg-card">
-        <Table>
+      <div className="overflow-x-auto rounded-md border bg-card">
+        <Table className="min-w-[820px]">
           <TableHeader>
             {table.getHeaderGroups().map((hg) => (
               <TableRow key={hg.id}>

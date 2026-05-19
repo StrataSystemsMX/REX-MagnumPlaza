@@ -1,16 +1,11 @@
 import { Prisma } from "@/generated/prisma/client";
 import { requireAuth } from "@/lib/auth/get-session";
+import { OUTSTANDING_STATUSES } from "@/lib/constants/rent-statuses";
 import { prisma } from "@/lib/prisma/client";
 import { serializeDecimals } from "@/lib/utils/serialize-decimals";
 import type { PaymentMethod, RentStatus } from "@/generated/prisma/enums";
 
-const OUTSTANDING_STATUSES: RentStatus[] = [
-  "DUE",
-  "PARTIAL",
-  "OVERDUE_1M",
-  "OVERDUE_2M",
-  "OVERDUE_3M",
-];
+export { OUTSTANDING_STATUSES };
 
 export interface OutstandingFilters {
   statuses?: RentStatus[];
@@ -80,7 +75,9 @@ export async function getOutstandingRents(filters: OutstandingFilters = {}) {
 
   const now = Date.now();
   return rents.map((r) => {
-    const balance = new Prisma.Decimal(r.amountDue).minus(new Prisma.Decimal(r.amountPaid));
+    const balance = new Prisma.Decimal(r.amountDue)
+      .minus(new Prisma.Decimal(r.amountPaid))
+      .minus(new Prisma.Decimal(r.amountWaived ?? 0));
     const daysOverdue = Math.floor((now - r.dueDate.getTime()) / (1000 * 60 * 60 * 24));
     return serializeDecimals({ ...r, balance: balance.toString(), daysOverdue });
   });
@@ -95,15 +92,27 @@ export interface PaymentFilters {
   lesseeId?: string;
 }
 
-/** Listado de Payments con info del Rent, contrato e inquilino. */
-export async function getPayments(filters: PaymentFilters = {}) {
+/**
+ * Listado de Payments con info del Rent, contrato e inquilino.
+ *
+ * Defaults conservadores para no traer histórico completo:
+ *   - Ventana de 90 días si no se pasa `from`/`to`.
+ *   - Tope duro de 200 registros para acotar payload.
+ * El caller puede sobreescribir con `filters.from` o `filters.take`.
+ */
+export async function getPayments(filters: PaymentFilters & { take?: number } = {}) {
   const { tenantId } = await requireAuth();
 
   const where: Prisma.PaymentWhereInput = { tenantId };
-  if (filters.from || filters.to) {
+  const hasExplicitRange = Boolean(filters.from || filters.to);
+  if (hasExplicitRange) {
     where.paymentDate = {};
     if (filters.from) where.paymentDate.gte = filters.from;
     if (filters.to) where.paymentDate.lte = filters.to;
+  } else {
+    // Default: últimos 90 días.
+    const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
+    where.paymentDate = { gte: ninetyDaysAgo };
   }
   if (filters.method) where.method = filters.method;
   if (filters.lesseeId) {
@@ -113,6 +122,7 @@ export async function getPayments(filters: PaymentFilters = {}) {
   const payments = await prisma.payment.findMany({
     where,
     orderBy: { paymentDate: "desc" },
+    take: filters.take ?? 200,
     include: {
       rent: {
         select: {
@@ -143,15 +153,6 @@ export async function getPayments(filters: PaymentFilters = {}) {
 }
 
 export type PaymentListItem = Awaited<ReturnType<typeof getPayments>>[number];
-
-/** Pagos de un Rent específico (para el detalle del contrato). */
-export async function getPaymentsByRent(rentId: string) {
-  const { tenantId } = await requireAuth();
-  return prisma.payment.findMany({
-    where: { tenantId, rentId },
-    orderBy: { paymentDate: "asc" },
-  });
-}
 
 /** Pagos históricos de un Lessee — usado en su tab "Pagos históricos". */
 export async function getPaymentsByLessee(lesseeId: string) {
@@ -184,10 +185,6 @@ export async function getPaymentsByLessee(lesseeId: string) {
 
 export type LesseePayment = Awaited<ReturnType<typeof getPaymentsByLessee>>[number];
 
-export async function getPaymentsByDateRange(from: Date, to: Date) {
-  return getPayments({ from, to });
-}
-
 /**
  * Saldo pendiente total de un inquilino: suma de (amountDue - amountPaid)
  * de todos sus Rents en estados DUE/PARTIAL/OVERDUE_*. Usado en el header
@@ -210,6 +207,7 @@ export async function getOutstandingByLessee(lesseeId: string): Promise<{
     select: {
       amountDue: true,
       amountPaid: true,
+      amountWaived: true,
       status: true,
       dueDate: true,
     },
@@ -218,7 +216,11 @@ export async function getOutstandingByLessee(lesseeId: string): Promise<{
 
   const total = rents.reduce(
     (acc, r) =>
-      acc.plus(new Prisma.Decimal(r.amountDue).minus(new Prisma.Decimal(r.amountPaid))),
+      acc.plus(
+        new Prisma.Decimal(r.amountDue)
+          .minus(new Prisma.Decimal(r.amountPaid))
+          .minus(new Prisma.Decimal(r.amountWaived ?? 0)),
+      ),
     new Prisma.Decimal(0),
   );
   const overdueCount = rents.filter((r) =>
@@ -313,8 +315,10 @@ export async function getOutstandingRentsForLessee(lesseeId: string) {
     dueDate: r.dueDate,
     amountDue: r.amountDue.toString(),
     amountPaid: r.amountPaid.toString(),
+    amountWaived: r.amountWaived.toString(),
     balance: new Prisma.Decimal(r.amountDue)
       .minus(new Prisma.Decimal(r.amountPaid))
+      .minus(new Prisma.Decimal(r.amountWaived ?? 0))
       .toString(),
     status: r.status,
     unitCode: r.contract.unit.code,
@@ -327,42 +331,15 @@ export type OutstandingRentLite = Awaited<
 >[number];
 
 /**
- * Listado de TODOS los rents del tenant — alimenta la vista calendario que
- * agrupa por mes. Incluye contract.lessee y unit/property para mostrar
- * cada celda con contexto.
- */
-export async function getAllRentsForCalendar() {
-  const { tenantId } = await requireAuth();
-  return prisma.rent.findMany({
-    where: { tenantId },
-    orderBy: [{ period: "asc" }],
-    include: {
-      contract: {
-        select: {
-          lessee: { select: { legalName: true } },
-          unit: {
-            select: {
-              code: true,
-              property: { select: { name: true } },
-            },
-          },
-        },
-      },
-    },
-  });
-}
-
-export type CalendarRent = Awaited<ReturnType<typeof getAllRentsForCalendar>>[number];
-
-/**
  * Vista mensual agrupada por Property — pivote para la pantalla "Cobros del Mes".
  * Para cada Property activa devuelve TODAS sus Units (incluso vacías), con su
  * contrato activo del periodo (si existe), el Rent del periodo (si existe), y
  * un estado derivado: PAID / PARTIAL / SIN_PAGO / PRE_PAGADO / ABONO / VACANT.
  *
  * El periodo se interpreta en UTC (matches Rent.period que es el primer día
- * del mes UTC). PRE_PAGADO se deriva de Contract.paidInAdvance + advancePaidUntil.
- * ABONO indica sobrepago (amountPaid > amountDue).
+ * del mes UTC). El estado depende del periodo vs. la fecha actual:
+ *   - Periodo pasado o actual: PAID (cubierto) / PARTIAL (pago insuficiente) / SIN_PAGO.
+ *   - Periodo futuro:          PRE_PAGADO (cubierto) / ABONO (pago insuficiente) / SIN_PAGO.
  */
 export type MonthlyUnitStatus =
   | "PAID"
@@ -370,7 +347,41 @@ export type MonthlyUnitStatus =
   | "SIN_PAGO"
   | "PRE_PAGADO"
   | "ABONO"
+  | "WAIVED"
   | "VACANT";
+
+/**
+ * Deriva el estado de una renta a partir de los montos y la posición del
+ * periodo respecto al mes actual. Centralizado para que monthly y yearly
+ * coincidan.
+ *
+ * Saldo efectivo = amountDue - amountWaived. Una renta condonada parcialmente
+ * con $X y luego pagada el resto debe mostrarse como PAID, no como PARTIAL.
+ */
+function deriveMonthlyStatus(
+  period: Date,
+  amountPaid: Prisma.Decimal,
+  amountDue: Prisma.Decimal,
+  now: Date,
+  rentStatus?: RentStatus | null,
+  amountWaived: Prisma.Decimal = new Prisma.Decimal(0),
+): MonthlyUnitStatus {
+  if (rentStatus === "WAIVED") return "WAIVED";
+
+  const currentMonthStart = new Date(
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1),
+  );
+  const isFuture = period.getTime() > currentMonthStart.getTime();
+  const effectiveDue = amountDue.minus(amountWaived);
+  const fullyPaid =
+    effectiveDue.lessThanOrEqualTo(0) ||
+    (amountPaid.greaterThanOrEqualTo(effectiveDue) && effectiveDue.greaterThan(0));
+  const hasPayment = amountPaid.greaterThan(0);
+
+  if (fullyPaid) return isFuture ? "PRE_PAGADO" : "PAID";
+  if (hasPayment) return isFuture ? "ABONO" : "PARTIAL";
+  return "SIN_PAGO";
+}
 
 export interface MonthlyUnitRow {
   unitId: string;
@@ -418,6 +429,7 @@ export interface MonthlyCollections {
 export async function getMonthlyCollectionsByProperty(period: Date): Promise<MonthlyCollections> {
   const { tenantId } = await requireAuth();
 
+  const now = new Date();
   const periodStart = new Date(
     Date.UTC(period.getUTCFullYear(), period.getUTCMonth(), 1),
   );
@@ -425,41 +437,70 @@ export async function getMonthlyCollectionsByProperty(period: Date): Promise<Mon
     Date.UTC(period.getUTCFullYear(), period.getUTCMonth() + 1, 1),
   );
 
-  const properties = await prisma.property.findMany({
-    where: { tenantId, isActive: true },
-    orderBy: { name: "asc" },
-    include: {
-      ownerEntity: { select: { code: true } },
-      managerEntity: { select: { code: true } },
-      units: {
-        where: { isActive: true },
-        orderBy: { code: "asc" },
-        include: {
-          contracts: {
-            where: {
-              status: "ACTIVE",
-              startDate: { lt: periodEnd },
-              endDate: { gte: periodStart },
-            },
-            orderBy: { startDate: "desc" },
-            take: 1,
-            include: {
-              lessee: { select: { id: true, legalName: true } },
-              rents: {
-                where: { period: periodStart },
-                take: 1,
-              },
-            },
-          },
+  // 3 queries planas en paralelo en vez de 1 nested deep. Prisma serializaba
+  // los 5 niveles de include en ~6 round-trips a Supabase (≈1s); aquí son
+  // 3 round-trips simultáneos (≈150ms total).
+  const [propertiesRaw, activeContracts, rentsInPeriod] = await Promise.all([
+    prisma.property.findMany({
+      where: { tenantId, isActive: true },
+      orderBy: { name: "asc" },
+      select: {
+        id: true,
+        name: true,
+        ownerEntity: { select: { code: true } },
+        managerEntity: { select: { code: true } },
+        units: {
+          where: { isActive: true },
+          orderBy: { code: "asc" },
+          select: { id: true, code: true, name: true },
         },
       },
-    },
-  });
+    }),
+    prisma.contract.findMany({
+      where: {
+        tenantId,
+        status: "ACTIVE",
+        startDate: { lt: periodEnd },
+        endDate: { gte: periodStart },
+      },
+      orderBy: { startDate: "desc" }, // más reciente primero → "primero gana"
+      select: {
+        id: true,
+        unitId: true,
+        monthlyAmount: true,
+        paidInAdvance: true,
+        advancePaidUntil: true,
+        lessee: { select: { id: true, legalName: true } },
+      },
+    }),
+    prisma.rent.findMany({
+      where: { tenantId, period: periodStart },
+      select: {
+        id: true,
+        contractId: true,
+        amountDue: true,
+        amountPaid: true,
+        amountWaived: true,
+        status: true,
+      },
+    }),
+  ]);
+
+  // Index para joins en memoria. "Primero gana" preserva el comportamiento
+  // del original `take: 1, orderBy: startDate desc`.
+  const contractByUnit = new Map<string, (typeof activeContracts)[number]>();
+  for (const c of activeContracts) {
+    if (!contractByUnit.has(c.unitId)) contractByUnit.set(c.unitId, c);
+  }
+  const rentByContract = new Map<string, (typeof rentsInPeriod)[number]>();
+  for (const r of rentsInPeriod) rentByContract.set(r.contractId, r);
 
   // Para units vacías traemos el último contrato (cualquiera) para mostrar
   // el último inquilino que ocupó el local — útil como contexto en la fila.
-  const emptyUnitIds = properties.flatMap((p) =>
-    p.units.filter((u) => u.contracts.length === 0).map((u) => u.id),
+  // Se hace en una 4ª query secuencial porque depende de saber qué units
+  // quedan vacías. Es chica (sólo IN-list de ~5-10 units).
+  const emptyUnitIds = propertiesRaw.flatMap((p) =>
+    p.units.filter((u) => !contractByUnit.has(u.id)).map((u) => u.id),
   );
   const lastContractsByUnit = emptyUnitIds.length
     ? await prisma.contract
@@ -479,6 +520,28 @@ export async function getMonthlyCollectionsByProperty(period: Date): Promise<Mon
           return map;
         })
     : new Map<string, string>();
+
+  // Reshape al formato original: properties con units anidadas y contrato+rent
+  // pegados a cada unit (como si fuera el include nested original).
+  const properties = propertiesRaw.map((p) => ({
+    ...p,
+    units: p.units.map((u) => {
+      const contract = contractByUnit.get(u.id);
+      return {
+        ...u,
+        contracts: contract
+          ? [
+              {
+                ...contract,
+                rents: rentByContract.has(contract.id)
+                  ? [rentByContract.get(contract.id)!]
+                  : [],
+              },
+            ]
+          : [],
+      };
+    }),
+  }));
 
   const totals = {
     paid: 0,
@@ -517,35 +580,28 @@ export async function getMonthlyCollectionsByProperty(period: Date): Promise<Mon
       const rent = contract.rents[0] ?? null;
       const amountDue = rent ? new Prisma.Decimal(rent.amountDue) : new Prisma.Decimal(contract.monthlyAmount);
       const amountPaid = rent ? new Prisma.Decimal(rent.amountPaid) : new Prisma.Decimal(0);
+      const amountWaived = rent ? new Prisma.Decimal(rent.amountWaived ?? 0) : new Prisma.Decimal(0);
       expected = expected.plus(amountDue);
 
-      // PRE_PAGADO: contrato marcado paidInAdvance y la fecha límite de
-      // anticipo cubre o pasa este periodo.
-      const prePaid =
-        contract.paidInAdvance &&
-        contract.advancePaidUntil !== null &&
-        contract.advancePaidUntil >= periodEnd;
-      const prePaidMonths = prePaid && contract.advancePaidUntil
-        ? Math.max(
-            0,
-            (contract.advancePaidUntil.getUTCFullYear() - period.getUTCFullYear()) * 12 +
-              (contract.advancePaidUntil.getUTCMonth() - period.getUTCMonth()),
-          )
-        : null;
+      const status = deriveMonthlyStatus(
+        period,
+        amountPaid,
+        amountDue,
+        now,
+        rent?.status,
+        amountWaived,
+      );
 
-      // Estado derivado: el orden importa — PRE_PAGADO gana sobre todo.
-      let status: MonthlyUnitStatus;
-      if (prePaid) {
-        status = "PRE_PAGADO";
-      } else if (amountPaid.greaterThan(amountDue)) {
-        status = "ABONO";
-      } else if (amountPaid.equals(amountDue) && amountDue.greaterThan(0)) {
-        status = "PAID";
-      } else if (amountPaid.greaterThan(0)) {
-        status = "PARTIAL";
-      } else {
-        status = "SIN_PAGO";
-      }
+      // Meses pre-pagados (para tooltip): solo aplica si el contrato fue
+      // marcado con paidInAdvance/advancePaidUntil. Es metadata informativa.
+      const prePaidMonths =
+        status === "PRE_PAGADO" && contract.paidInAdvance && contract.advancePaidUntil
+          ? Math.max(
+              0,
+              (contract.advancePaidUntil.getUTCFullYear() - period.getUTCFullYear()) * 12 +
+                (contract.advancePaidUntil.getUTCMonth() - period.getUTCMonth()),
+            )
+          : null;
 
       switch (status) {
         case "PAID":
@@ -618,6 +674,7 @@ export interface YearlyCell {
   contractId: string | null;
   amountDue: string;
   amountPaid: string;
+  amountWaived: string;
   status: MonthlyUnitStatus;
   prePaidMonths: number | null;
   overdueLevel: 1 | 2 | 3 | null;
@@ -660,6 +717,7 @@ export interface YearlyCollections {
 export async function getYearlyCollectionsMatrix(year: number): Promise<YearlyCollections> {
   const { tenantId } = await requireAuth();
 
+  const now = new Date();
   const yearStart = new Date(Date.UTC(year, 0, 1));
   const yearEnd = new Date(Date.UTC(year + 1, 0, 1));
 
@@ -747,6 +805,7 @@ export async function getYearlyCollectionsMatrix(year: number): Promise<YearlyCo
             contractId: null,
             amountDue: "0",
             amountPaid: "0",
+            amountWaived: "0",
             status: "VACANT",
             prePaidMonths: null,
             overdueLevel: null,
@@ -759,38 +818,31 @@ export async function getYearlyCollectionsMatrix(year: number): Promise<YearlyCo
         const amountPaid = rent
           ? new Prisma.Decimal(rent.amountPaid)
           : new Prisma.Decimal(0);
+        const amountWaived = rent
+          ? new Prisma.Decimal(rent.amountWaived ?? 0)
+          : new Prisma.Decimal(0);
         unitExpected = unitExpected.plus(amountDue);
         unitPaid = unitPaid.plus(amountPaid);
         monthlyAgg[i]!.expected = monthlyAgg[i]!.expected.plus(amountDue);
         monthlyAgg[i]!.paid = monthlyAgg[i]!.paid.plus(amountPaid);
 
-        const periodEnd = new Date(
-          Date.UTC(period.getUTCFullYear(), period.getUTCMonth() + 1, 1),
+        const status = deriveMonthlyStatus(
+          period,
+          amountPaid,
+          amountDue,
+          now,
+          rent?.status,
+          amountWaived,
         );
-        const prePaid =
-          contract.paidInAdvance &&
-          contract.advancePaidUntil !== null &&
-          contract.advancePaidUntil >= periodEnd;
-        const prePaidMonths = prePaid && contract.advancePaidUntil
-          ? Math.max(
-              0,
-              (contract.advancePaidUntil.getUTCFullYear() - period.getUTCFullYear()) * 12 +
-                (contract.advancePaidUntil.getUTCMonth() - period.getUTCMonth()),
-            )
-          : null;
 
-        let status: MonthlyUnitStatus;
-        if (prePaid) {
-          status = "PRE_PAGADO";
-        } else if (amountPaid.greaterThan(amountDue)) {
-          status = "ABONO";
-        } else if (amountPaid.equals(amountDue) && amountDue.greaterThan(0)) {
-          status = "PAID";
-        } else if (amountPaid.greaterThan(0)) {
-          status = "PARTIAL";
-        } else {
-          status = "SIN_PAGO";
-        }
+        const prePaidMonths =
+          status === "PRE_PAGADO" && contract.paidInAdvance && contract.advancePaidUntil
+            ? Math.max(
+                0,
+                (contract.advancePaidUntil.getUTCFullYear() - period.getUTCFullYear()) * 12 +
+                  (contract.advancePaidUntil.getUTCMonth() - period.getUTCMonth()),
+              )
+            : null;
 
         if (status === "PAID" || status === "PRE_PAGADO") monthlyAgg[i]!.paidCount += 1;
         if (status === "SIN_PAGO") monthlyAgg[i]!.sinPagoCount += 1;
@@ -810,6 +862,7 @@ export async function getYearlyCollectionsMatrix(year: number): Promise<YearlyCo
           contractId: contract.id,
           amountDue: amountDue.toString(),
           amountPaid: amountPaid.toString(),
+          amountWaived: amountWaived.toString(),
           status,
           prePaidMonths,
           overdueLevel,

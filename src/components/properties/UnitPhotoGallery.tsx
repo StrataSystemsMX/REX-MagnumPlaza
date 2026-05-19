@@ -1,6 +1,6 @@
 "use client";
 
-import { Loader2, Trash2 } from "lucide-react";
+import { ImagePlus, Loader2, Trash2 } from "lucide-react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
@@ -15,7 +15,13 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { UnitPhotoUploader } from "@/components/properties/UnitPhotoUploader";
 import { actionDeleteUnitPhoto } from "@/lib/services/unit-photos";
 
@@ -30,8 +36,11 @@ interface Props {
   photos: ReadonlyArray<Photo>;
 }
 
+const MIN_SLOTS = 4;
+
 export function UnitPhotoGallery({ unitId, photos }: Props) {
   const router = useRouter();
+  const [uploadOpen, setUploadOpen] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Photo | null>(null);
   const [pending, startTransition] = useTransition();
@@ -52,64 +61,110 @@ export function UnitPhotoGallery({ unitId, photos }: Props) {
     });
   }
 
-  return (
-    <div className="space-y-4">
-      <UnitPhotoUploader unitId={unitId} onUploaded={() => router.refresh()} />
+  const emptySlots = Math.max(0, MIN_SLOTS - photos.length);
 
-      {photos.length === 0 ? (
-        <div className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
-          Aún no hay fotos para esta unidad.
-        </div>
-      ) : (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-          {photos.map((photo) => (
-            <div
-              key={photo.id}
-              className="group relative aspect-[4/3] overflow-hidden rounded-md border bg-muted"
+  return (
+    <>
+      <p className="text-sm text-muted-foreground">
+        {photos.length === 0
+          ? "Aún no hay fotos. Haz click en cualquier recuadro para subir."
+          : `${photos.length} foto${photos.length === 1 ? "" : "s"}. La más reciente aparece como portada.`}
+      </p>
+
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+        {photos.map((photo) => (
+          <div
+            key={photo.id}
+            className="group relative aspect-square overflow-hidden rounded-lg border bg-muted"
+          >
+            <button
+              type="button"
+              onClick={() => setPreviewUrl(photo.url)}
+              className="absolute inset-0"
+              aria-label={`Ver ${photo.filename}`}
             >
-              <button
-                type="button"
-                onClick={() => setPreviewUrl(photo.url)}
-                className="absolute inset-0"
-                aria-label={`Ver ${photo.filename}`}
-              >
-                <Image
-                  src={photo.url}
-                  alt={photo.filename}
-                  fill
-                  sizes="(max-width: 640px) 50vw, 33vw"
-                  className="object-cover transition-transform group-hover:scale-105"
-                />
-              </button>
-              <button
-                type="button"
-                onClick={() => setDeleteTarget(photo)}
-                className="absolute right-2 top-2 rounded-full bg-background/90 p-1.5 opacity-0 shadow transition-opacity hover:bg-background group-hover:opacity-100"
-                aria-label={`Eliminar ${photo.filename}`}
-              >
-                <Trash2 className="size-4 text-destructive" />
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
+              <Image
+                src={photo.url}
+                alt=""
+                aria-hidden
+                fill
+                sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
+                className="scale-110 object-cover blur-xl"
+              />
+              <div className="absolute inset-0 bg-background/30" />
+              <Image
+                src={photo.url}
+                alt={photo.filename}
+                fill
+                sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
+                className="object-contain transition-transform group-hover:scale-105"
+              />
+            </button>
+            <button
+              type="button"
+              onClick={() => setDeleteTarget(photo)}
+              className="absolute right-2 top-2 rounded-full bg-background/90 p-1.5 opacity-0 shadow transition-opacity hover:bg-background group-hover:opacity-100"
+              aria-label={`Eliminar ${photo.filename}`}
+            >
+              <Trash2 className="size-4 text-destructive" />
+            </button>
+          </div>
+        ))}
+
+        {Array.from({ length: emptySlots }).map((_, i) => (
+          <button
+            key={`empty-${i}`}
+            type="button"
+            onClick={() => setUploadOpen(true)}
+            aria-label="Subir foto"
+            className="group flex aspect-square items-center justify-center rounded-lg border border-dashed bg-muted/40 transition-colors hover:border-primary/50 hover:bg-muted/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+          >
+            <ImagePlus className="size-10 text-muted-foreground/40 transition-colors group-hover:text-primary/70" />
+          </button>
+        ))}
+      </div>
+
+      <Dialog open={uploadOpen} onOpenChange={setUploadOpen}>
+        <DialogContent className="max-w-xl">
+          <DialogHeader>
+            <DialogTitle>Subir fotos del local</DialogTitle>
+            <DialogDescription>
+              Las imágenes se guardan en almacenamiento seguro y se asocian al local.
+            </DialogDescription>
+          </DialogHeader>
+          <UnitPhotoUploader
+            unitId={unitId}
+            onUploaded={() => {
+              setUploadOpen(false);
+              router.refresh();
+            }}
+          />
+        </DialogContent>
+      </Dialog>
 
       <Dialog
         open={previewUrl !== null}
         onOpenChange={(open) => !open && setPreviewUrl(null)}
       >
-        <DialogContent className="max-w-4xl p-2">
+        <DialogContent className="w-fit max-h-none max-w-none gap-0 overflow-hidden border-none bg-transparent p-0 shadow-none ring-0 sm:max-w-none">
           <DialogHeader className="sr-only">
             <DialogTitle>Vista previa</DialogTitle>
           </DialogHeader>
           {previewUrl ? (
-            <div className="relative aspect-[4/3] w-full">
+            <div
+              className="flex h-[96vh] w-[98vw] cursor-zoom-out items-center justify-center"
+              onClick={() => setPreviewUrl(null)}
+            >
               <Image
                 src={previewUrl}
                 alt="Vista previa"
-                fill
-                sizes="100vw"
-                className="object-contain"
+                width={3840}
+                height={2160}
+                sizes="98vw"
+                className="h-auto max-h-[96vh] w-auto max-w-[98vw] cursor-default rounded-md object-contain"
+                style={{ width: "auto", height: "auto" }}
+                priority
+                onClick={(e) => e.stopPropagation()}
               />
             </div>
           ) : null}
@@ -124,7 +179,7 @@ export function UnitPhotoGallery({ unitId, photos }: Props) {
           <AlertDialogHeader>
             <AlertDialogTitle>¿Eliminar foto?</AlertDialogTitle>
             <AlertDialogDescription>
-              Se borrará &quot;{deleteTarget?.filename}&quot; de la unidad. Esta acción
+              Se borrará &quot;{deleteTarget?.filename}&quot; del local. Esta acción
               no se puede deshacer.
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -143,6 +198,6 @@ export function UnitPhotoGallery({ unitId, photos }: Props) {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+    </>
   );
 }

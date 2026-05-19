@@ -6,6 +6,7 @@ import { RunMorosityCronButton } from "@/components/configuracion/RunMorosityCro
 import { requireAuth } from "@/lib/auth/get-session";
 import { isMaster } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/prisma/client";
+import { capitalizeFirst } from "@/lib/utils";
 
 const DATETIME = new Intl.DateTimeFormat("es-MX", {
   dateStyle: "medium",
@@ -127,7 +128,7 @@ export default async function ConfiguracionSistemaPage() {
             {lastOverdueAudits.map((a) => (
               <li key={a.id} className="rounded-md border p-2">
                 <p className="text-xs text-muted-foreground tabular-nums">
-                  {DATETIME.format(a.createdAt)} · Rent {a.entityId.slice(-8)}
+                  {capitalizeFirst(DATETIME.format(a.createdAt))} · Rent {a.entityId.slice(-8)}
                 </p>
                 <p className="mt-0.5 font-mono text-[10px]">
                   {JSON.stringify(a.changes)}

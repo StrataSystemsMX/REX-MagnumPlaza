@@ -40,7 +40,7 @@ export async function getContracts(filters: ContractListFilters = {}) {
           id: true,
           code: true,
           name: true,
-          property: { select: { id: true, name: true } },
+          property: { select: { id: true, name: true, type: true } },
         },
       },
     },
@@ -69,18 +69,15 @@ export async function getContractById(id: string) {
     where: { id, tenantId },
     include: {
       lessee: true,
-      unit: {
-        include: {
-          property: {
-            include: {
-              ownerEntity: { select: { id: true, code: true, legalName: true } },
-              managerEntity: { select: { id: true, code: true, legalName: true } },
-            },
-          },
-        },
-      },
+      // property: sólo scalars (incluye ownerEntityId/managerEntityId como FKs).
+      // Las entidades se cargan abajo en una sola query para evitar dos
+      // SELECT legal_entities IN ($1) duplicados que Prisma dispara cuando
+      // hacemos include de ownerEntity + managerEntity por separado.
+      unit: { include: { property: true } },
       rents: {
-        orderBy: { period: "asc" },
+        // Traemos sólo los últimos 24 meses para evitar cargar 5+ años en contratos viejos.
+        orderBy: { period: "desc" },
+        take: 24,
         include: {
           payments: {
             orderBy: { paymentDate: "asc" },
@@ -98,21 +95,48 @@ export async function getContractById(id: string) {
 
   if (!contract) return null;
 
+  const entityIds = Array.from(
+    new Set([
+      contract.unit.property.ownerEntityId,
+      contract.unit.property.managerEntityId,
+    ]),
+  );
+  const entities = await prisma.legalEntity.findMany({
+    where: { tenantId, id: { in: entityIds } },
+    select: { id: true, code: true, legalName: true },
+  });
+  const entityMap = new Map(entities.map((e) => [e.id, e]));
+  const ownerEntity = entityMap.get(contract.unit.property.ownerEntityId)!;
+  const managerEntity = entityMap.get(contract.unit.property.managerEntityId)!;
+
   // Serializamos Decimal → number antes de cruzar a Client Components.
   return {
     ...contract,
     monthlyAmount: contract.monthlyAmount.toNumber(),
     guaranteeAmount: contract.guaranteeAmount.toNumber(),
     lateFeePercentage: contract.lateFeePercentage?.toNumber() ?? null,
-    rents: contract.rents.map((r) => ({
-      ...r,
-      amountDue: r.amountDue.toNumber(),
-      amountPaid: r.amountPaid.toNumber(),
-      payments: r.payments.map((p) => ({
-        ...p,
-        amount: p.amount.toNumber(),
-      })),
-    })),
+    unit: {
+      ...contract.unit,
+      estimatedRent: contract.unit.estimatedRent?.toNumber() ?? null,
+      property: {
+        ...contract.unit.property,
+        ownerEntity,
+        managerEntity,
+      },
+    },
+    rents: contract.rents
+      .map((r) => ({
+        ...r,
+        amountDue: r.amountDue.toNumber(),
+        amountPaid: r.amountPaid.toNumber(),
+        amountWaived: r.amountWaived.toNumber(),
+        payments: r.payments.map((p) => ({
+          ...p,
+          amount: p.amount.toNumber(),
+        })),
+      }))
+      // La query trae desc para `take: 24`; reordenamos a asc para la UI.
+      .reverse(),
     guarantees: contract.guarantees.map((g) => ({
       ...g,
       amount: g.amount.toNumber(),
@@ -128,28 +152,46 @@ export type ContractRent = ContractDetail["rents"][number];
 export async function getContractAuditLog(contractId: string) {
   const { tenantId } = await requireAuth();
 
-  return prisma.auditLog.findMany({
+  const logs = await prisma.auditLog.findMany({
     where: { tenantId, entityType: "Contract", entityId: contractId },
     orderBy: { createdAt: "desc" },
-    include: {
-      user: { select: { id: true, name: true, email: true } },
-    },
     take: 100,
   });
+
+  // Evitamos `include: { user }` porque cuando userId es null Prisma aún
+  // dispara `SELECT users WHERE id IN (NULL)` — round-trip a la nada.
+  // Hacemos un único findMany filtrando nulls.
+  const userIds = Array.from(
+    new Set(logs.map((l) => l.userId).filter((id): id is string => !!id)),
+  );
+  const users =
+    userIds.length > 0
+      ? await prisma.user.findMany({
+          where: { tenantId, id: { in: userIds } },
+          select: { id: true, name: true, email: true },
+        })
+      : [];
+  const userMap = new Map(users.map((u) => [u.id, u]));
+
+  return logs.map((l) => ({
+    ...l,
+    user: l.userId ? (userMap.get(l.userId) ?? null) : null,
+  }));
 }
 
 export type ContractAuditEntry = Awaited<ReturnType<typeof getContractAuditLog>>[number];
 
-/** Contratos que vencen en los próximos `daysAhead` días. */
-export async function getContractsExpiringSoon(daysAhead = 60) {
-  return getContracts({ statuses: ["ACTIVE"], expiresInDays: daysAhead });
-}
-
-/** Unidades disponibles del tenant — para el formulario de nuevo contrato. */
+/** Unidades disponibles del tenant — para el formulario de nuevo contrato.
+ *  Excluye unidades cuyo inmueble está BLOQUEADO (no rentable). */
 export async function getAvailableUnits() {
   const { tenantId } = await requireAuth();
   const units = await prisma.unit.findMany({
-    where: { tenantId, isActive: true, status: { in: ["DISPONIBLE", "APARTADA"] } },
+    where: {
+      tenantId,
+      isActive: true,
+      status: { in: ["DISPONIBLE", "APARTADA"] },
+      property: { status: "ACTIVO" },
+    },
     orderBy: [{ property: { name: "asc" } }, { code: "asc" }],
     select: {
       id: true,
@@ -157,7 +199,7 @@ export async function getAvailableUnits() {
       name: true,
       status: true,
       estimatedRent: true,
-      property: { select: { id: true, name: true } },
+      property: { select: { id: true, name: true, type: true } },
     },
   });
   return units.map((u) => ({

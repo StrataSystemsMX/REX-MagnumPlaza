@@ -22,7 +22,7 @@ import { Separator } from "@/components/ui/separator";
 import { actionGetContractRentHistory } from "@/lib/services/rentas";
 import type { ContractHistoryEntry } from "@/lib/services/rentas-queries";
 import type { RentTableRow, RentasTableData } from "@/lib/services/rentas-queries";
-import { cn } from "@/lib/utils";
+import { capitalizeFirst, cn } from "@/lib/utils";
 
 // ─── Formatters ───────────────────────────────────────────────────────────────
 
@@ -186,7 +186,11 @@ export function RentasView({ tableData }: { tableData: RentasTableData }) {
 
   function navigate(yyyyMM: string) {
     setSelectedPropertyId(null);
-    router.push(`/rentas?periodo=${yyyyMM}`);
+    router.push(`/collections?tab=rentas&periodo=${yyyyMM}`);
+  }
+
+  function prefetchPeriod(yyyyMM: string) {
+    router.prefetch(`/collections?tab=rentas&periodo=${yyyyMM}`);
   }
 
   async function openHistory(row: RentTableRow) {
@@ -272,7 +276,7 @@ export function RentasView({ tableData }: { tableData: RentasTableData }) {
             <div className="flex flex-wrap items-center gap-2">
               <Badge variant="outline" className="bg-background gap-1.5">
                 <CalendarDays className="size-3.5" />
-                <span className="capitalize">{MONTH_LONG.format(period)}</span>
+                <span>{capitalizeFirst(MONTH_LONG.format(period))}</span>
               </Badge>
               {selectedProperty ? (
                 <Badge variant="outline" className="bg-background font-mono">
@@ -299,6 +303,7 @@ export function RentasView({ tableData }: { tableData: RentasTableData }) {
                     size="icon-sm"
                     className="bg-background"
                     onClick={() => navigate(prevMonth(tableData.period))}
+                    onMouseEnter={() => prefetchPeriod(prevMonth(tableData.period))}
                     aria-label="Mes anterior"
                   >
                     <ChevronLeft className="size-4" />
@@ -308,6 +313,7 @@ export function RentasView({ tableData }: { tableData: RentasTableData }) {
                     size="icon-sm"
                     className="bg-background"
                     onClick={() => navigate(nextMonth(tableData.period))}
+                    onMouseEnter={() => prefetchPeriod(nextMonth(tableData.period))}
                     aria-label="Mes siguiente"
                   >
                     <ChevronRight className="size-4" />
@@ -748,7 +754,7 @@ function HistoryEntry({ entry }: { entry: ContractHistoryEntry }) {
     <div className="bg-card space-y-3 rounded-lg border p-4">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-2.5">
-          <span className="text-sm font-semibold capitalize">{MONTH_SHORT.format(period)}</span>
+          <span className="text-sm font-semibold">{capitalizeFirst(MONTH_SHORT.format(period))}</span>
           <StatusBadge status={entry.status} />
         </div>
         <div className="text-right text-sm tabular-nums">
@@ -769,7 +775,7 @@ function HistoryEntry({ entry }: { entry: ContractHistoryEntry }) {
               className="bg-muted/40 flex flex-col gap-1 rounded-md px-3 py-2 text-xs sm:flex-row sm:items-center sm:justify-between"
             >
               <div className="text-muted-foreground flex flex-wrap items-center gap-2">
-                <span>{DATE_MED.format(new Date(p.paymentDate))}</span>
+                <span>{capitalizeFirst(DATE_MED.format(new Date(p.paymentDate)))}</span>
                 <Separator orientation="vertical" className="h-3" />
                 <span>{METHOD_LABELS[p.method] ?? p.method}</span>
                 {p.reference && (

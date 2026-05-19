@@ -55,6 +55,7 @@ model Tenant {
   payments          Payment[]
   expenses          Expense[]
   expenseCategories ExpenseCategory[]
+  payrolls          Payroll[]
   maintenances      Maintenance[]
   promoters         Promoter[]
   promoterLinks     PromoterLink[]
@@ -62,8 +63,12 @@ model Tenant {
   notifications     NotificationLog[]
   documents         Document[]
   guarantees        Guarantee[]
-  auditLogs         AuditLog[]
-  morositySnapshots MorosityDailySnapshot[]
+  auditLogs            AuditLog[]
+  morositySnapshots    MorosityDailySnapshot[]
+  loans                Loan[]
+  loanPayments         LoanPayment[]
+  investmentProjects   InvestmentProject[]
+  investmentPayments   InvestmentPayment[]
 
   @@map("tenants")
 }
@@ -179,6 +184,8 @@ model LegalEntity {
   budgets           Budget[]
   payrolls          Payroll[]
   paidCadastrals    CadastralPayment[] @relation("CadastralPayer")
+  loans             Loan[]
+  investmentProjects InvestmentProject[]
 
   @@unique([tenantId, code])
   @@index([tenantId])
@@ -202,6 +209,7 @@ model Property {
   managerEntityId String // quién factura/administra (puede ser CRT)
   name            String // "Plaza Magnum Progreso"
   type            PropertyType
+  status          PropertyStatus @default(ACTIVO) // BLOQUEADO = no se renta (ej. casa del dueño)
   address         String
   cadastralKey    String? // clave catastral
   latitude        Float?
@@ -215,13 +223,15 @@ model Property {
   tenant            Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   ownerEntity       LegalEntity        @relation("OwnerEntity", fields: [ownerEntityId], references: [id])
   managerEntity     LegalEntity        @relation("ManagerEntity", fields: [managerEntityId], references: [id])
-  units             Unit[]
-  cadastralPayments CadastralPayment[]
-  maintenances      Maintenance[]
-  documents         Document[]
+  units              Unit[]
+  cadastralPayments  CadastralPayment[]
+  maintenances       Maintenance[]
+  documents          Document[]
+  investmentProjects InvestmentProject[]
 
   @@index([tenantId])
   @@index([ownerEntityId])
+  @@index([managerEntityId])
   @@map("properties")
 }
 
@@ -234,6 +244,11 @@ enum PropertyType {
   BODEGA // Bodega CRT
   ESPECTACULAR // Renta de espacio para anuncio
   OTRO
+}
+
+enum PropertyStatus {
+  ACTIVO // estado normal: rentable / con contrato
+  BLOQUEADO // no se renta (ej. casa del dueño); UI oculta renta/inquilino
 }
 
 model Unit {
@@ -350,6 +365,7 @@ model Contract {
 
   @@index([tenantId])
   @@index([unitId])
+  @@index([lesseeId])
   @@index([endDate]) // para alertas de vencimiento
   @@map("contracts")
 }
@@ -387,6 +403,7 @@ model Rent {
   period        DateTime // primer día del mes que cubre (ej. 2026-04-01)
   amountDue     Decimal    @db.Decimal(12, 2)
   amountPaid    Decimal    @default(0) @db.Decimal(12, 2)
+  amountWaived  Decimal    @default(0) @db.Decimal(12, 2) // monto condonado (parcial o total)
   status        RentStatus @default(PENDING)
   dueDate       DateTime
   notes         String?
@@ -485,7 +502,6 @@ enum GuaranteeStatus {
   HELD // en custodia
   PARTIALLY_RETURNED
   RETURNED // devuelto
-  APPLIED_TO_DEBT // aplicado a saldo pendiente
 }
 
 // ============================================================================
@@ -542,6 +558,9 @@ model Expense {
   invoiceNumber String? // folio fiscal / referencia
   paymentMethod PaymentMethod?
   isPaid        Boolean        @default(true)
+  // "Sin egreso": el usuario decide manualmente que en este mes no aplica
+  // pagar este concepto. Mutuamente exclusivo con isPaid.
+  isNotRequired Boolean        @default(false) @map("is_not_required")
   notes         String?
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
@@ -618,7 +637,8 @@ model Payroll {
   createdAt        DateTime    @default(now())
   updatedAt        DateTime    @updatedAt
 
-  legalEntity LegalEntity @relation(fields: [legalEntityId], references: [id])
+  tenant      Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  legalEntity LegalEntity @relation(fields: [legalEntityId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
   @@index([period])
@@ -801,7 +821,9 @@ enum BudgetConceptType {
   INCOME_BILLBOARD // espectacular
   INCOME_GUARANTEE // depósitos en garantía recibidos
   INCOME_OTHER
-  EXPENSE // egresos (categoryId obligatorio)
+  EXPENSE // egresos operativos (categoryId obligatorio)
+  TAX_STRATEGY // sueldos adicionales / estrategia fiscal (debajo de utilidad operativa)
+  DEBT_SERVICE // hipotecas y préstamos (debajo de utilidad operativa)
 }
 
 // ============================================================================
@@ -943,6 +965,138 @@ enum AuditAction {
   LOGOUT
   EXPORT
   PERMISSION_CHANGE
+}
+
+// ============================================================================
+// INVERSIONES Y PRÉSTAMOS
+// ============================================================================
+// Préstamos: vehículos (Toyota, Expedition, BMW) y otros créditos que CRT/TSR
+// pagan mensualmente. Cada préstamo tiene un schedule mensual (LoanPayment).
+//
+// Proyectos de inversión: obras de construcción/remodelación con presupuesto
+// vs ejecutado. Ej: "Etapa Final Plaza Quiroga" ($152k/sem).
+// ============================================================================
+
+model Loan {
+  id             String     @id @default(cuid())
+  tenantId       String
+  legalEntityId  String
+  name           String // "Crédito Toyota Hilux", "Crédito Ford Expedition"
+  lender         String? // banco/institución financiera
+  type           LoanType
+  originalAmount Decimal    @db.Decimal(12, 2)
+  currentBalance Decimal    @db.Decimal(12, 2)
+  monthlyPayment Decimal    @db.Decimal(12, 2)
+  interestRate   Decimal?   @db.Decimal(6, 4) // tasa anual decimal (ej. 0.1200 = 12%)
+  startDate      DateTime
+  endDate        DateTime? // fecha estimada de liquidación
+  paymentDay     Int? // día del mes en que vence el pago
+  status         LoanStatus @default(ACTIVE)
+  notes          String?
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+
+  tenant      Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  legalEntity LegalEntity   @relation(fields: [legalEntityId], references: [id])
+  payments    LoanPayment[]
+
+  @@index([tenantId])
+  @@index([legalEntityId])
+  @@map("loans")
+}
+
+enum LoanType {
+  VEHICLE // Toyota, Expedition, BMW
+  MORTGAGE
+  PERSONAL
+  CORPORATE
+  LINE_OF_CREDIT
+  OTHER
+}
+
+enum LoanStatus {
+  ACTIVE
+  PAID_OFF
+  REFINANCED
+  DEFAULTED
+  CANCELLED
+}
+
+model LoanPayment {
+  id          String    @id @default(cuid())
+  tenantId    String
+  loanId      String
+  period      DateTime // primer día del mes (ej. 2026-05-01)
+  amount      Decimal   @db.Decimal(12, 2)
+  principal   Decimal?  @db.Decimal(12, 2)
+  interest    Decimal?  @db.Decimal(12, 2)
+  paymentDate DateTime?
+  isPaid      Boolean   @default(false)
+  notes       String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  loan   Loan   @relation(fields: [loanId], references: [id], onDelete: Cascade)
+
+  @@unique([loanId, period])
+  @@index([tenantId])
+  @@index([period])
+  @@map("loan_payments")
+}
+
+model InvestmentProject {
+  id             String                  @id @default(cuid())
+  tenantId       String
+  legalEntityId  String
+  propertyId     String? // obra asociada a una propiedad específica
+  name           String // "Etapa Final Plaza Quiroga"
+  description    String?
+  budgetAmount   Decimal                 @db.Decimal(12, 2)
+  executedAmount Decimal                 @default(0) @db.Decimal(12, 2)
+  startDate      DateTime
+  endDate        DateTime?
+  status         InvestmentProjectStatus @default(ACTIVE)
+  notes          String?
+  createdAt      DateTime                @default(now())
+  updatedAt      DateTime                @updatedAt
+
+  tenant      Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  legalEntity LegalEntity         @relation(fields: [legalEntityId], references: [id])
+  property    Property?           @relation(fields: [propertyId], references: [id])
+  payments    InvestmentPayment[]
+
+  @@index([tenantId])
+  @@map("investment_projects")
+}
+
+enum InvestmentProjectStatus {
+  PLANNING
+  ACTIVE
+  PAUSED
+  COMPLETED
+  CANCELLED
+}
+
+model InvestmentPayment {
+  id          String   @id @default(cuid())
+  tenantId    String
+  projectId   String
+  description String
+  amount      Decimal  @db.Decimal(12, 2)
+  paymentDate DateTime
+  isPaid      Boolean  @default(false)
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tenant  Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  project InvestmentProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([projectId])
+  @@index([paymentDate])
+  @@map("investment_payments")
 }
 
 // ============================================================================

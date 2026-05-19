@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
@@ -14,7 +14,7 @@ import {
   RegisterPaymentDialog,
   type RegisterPaymentDialogContext,
 } from "@/components/collections/RegisterPaymentDialog";
-import { cn } from "@/lib/utils";
+import { capitalizeFirst, cn } from "@/lib/utils";
 import type {
   MonthlyUnitStatus,
   YearlyCell,
@@ -379,6 +379,7 @@ const CELL_BG: Record<MonthlyUnitStatus, string> = {
   ABONO: "bg-amber-400 hover:bg-amber-500 dark:bg-amber-500",
   PRE_PAGADO: "bg-blue-500 hover:bg-blue-600 dark:bg-blue-600",
   SIN_PAGO: "bg-red-500 hover:bg-red-600 dark:bg-red-600",
+  WAIVED: "bg-blue-300 hover:bg-blue-400 dark:bg-blue-400 dark:hover:bg-blue-300",
   VACANT: "bg-muted hover:bg-muted-foreground/20",
 };
 
@@ -393,18 +394,28 @@ interface MatrixCellProps {
 function MatrixCell({ cell, unitCode, propertyName, lesseeName, onClick }: MatrixCellProps) {
   const tooltip = buildTooltip(cell, lesseeName);
   const clickable = cell.rentId !== null;
+  // Mostrar cruz si la renta tiene cualquier monto condonado (parcial o total).
+  const hasWaiver = Number(cell.amountWaived) > 0;
 
   if (!clickable) {
     return (
       <div
         title={tooltip}
         className={cn(
-          "mx-auto h-6 w-6 rounded transition-colors",
+          "relative mx-auto h-6 w-6 rounded transition-colors",
           CELL_BG[cell.status],
           cell.status === "PRE_PAGADO" && "ring-1 ring-blue-300",
           cell.overdueLevel === 3 && "ring-2 ring-red-700",
+          hasWaiver && "ring-2 ring-black",
         )}
-      />
+      >
+        {hasWaiver ? (
+          <X
+            className="absolute inset-0 m-auto size-5 text-black"
+            strokeWidth={3.5}
+          />
+        ) : null}
+      </div>
     );
   }
 
@@ -417,22 +428,31 @@ function MatrixCell({ cell, unitCode, propertyName, lesseeName, onClick }: Matri
           rentId: cell.rentId!,
           amountDue: cell.amountDue,
           amountPaid: cell.amountPaid,
+          amountWaived: cell.amountWaived,
           period: cell.period,
           lesseeName: lesseeName ?? "",
           unitLabel: `${propertyName} ${unitCode}`,
         })
       }
       className={cn(
-        "mx-auto block h-6 w-6 rounded transition-colors",
+        "relative mx-auto block h-6 w-6 rounded transition-colors",
         CELL_BG[cell.status],
         cell.overdueLevel === 3 && "ring-2 ring-red-700",
+        hasWaiver && "ring-2 ring-black",
       )}
-    />
+    >
+      {hasWaiver ? (
+        <X
+          className="pointer-events-none absolute inset-0 m-auto size-5 text-black"
+          strokeWidth={3.5}
+        />
+      ) : null}
+    </button>
   );
 }
 
 function buildTooltip(cell: YearlyCell, lesseeName: string | null): string {
-  const period = PERIOD_FULL.format(cell.period);
+  const period = capitalizeFirst(PERIOD_FULL.format(cell.period));
   if (cell.status === "VACANT") {
     return `${period} — Vacío`;
   }
@@ -482,7 +502,7 @@ function MonthlyTotalsBar({
             const pct = expected > 0 ? Math.round((paid / expected) * 100) : 0;
             return (
               <tr key={i} className="border-b last:border-b-0">
-                <td className="px-3 py-1.5 capitalize">{PERIOD_FULL.format(t.period)}</td>
+                <td className="px-3 py-1.5">{capitalizeFirst(PERIOD_FULL.format(t.period))}</td>
                 <td className="px-3 py-1.5 text-right tabular-nums">
                   {MXN_INT.format(expected)}
                 </td>

@@ -14,18 +14,12 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { LesseeForm } from "@/components/forms/LesseeForm";
 import { EnumSelect } from "@/components/ui/enum-select";
 import { contractTypeLabel, unitStatusLabel } from "@/lib/i18n/enums";
+import { cn } from "@/lib/utils";
 import { actionCreateContract } from "@/lib/services/contracts";
 import { actionSearchLessees, type LesseeSearchResult } from "@/lib/services/lessees";
 import {
@@ -34,6 +28,7 @@ import {
 } from "@/lib/validators/contract";
 import type { AvailableUnit } from "@/lib/services/contracts-queries";
 import type { ContractType } from "@/generated/prisma/enums";
+import { capitalizeFirst } from "@/lib/utils";
 
 const CONTRACT_TYPES: ReadonlyArray<ContractType> = [
   "ARRENDAMIENTO",
@@ -335,6 +330,12 @@ export function ContractWizard({
 // Steps
 // =============================================================================
 
+const MXN_RENT = new Intl.NumberFormat("es-MX", {
+  style: "currency",
+  currency: "MXN",
+  maximumFractionDigits: 0,
+});
+
 function StepUnit({
   units,
   value,
@@ -344,48 +345,116 @@ function StepUnit({
   value: string | null;
   onChange: (id: string) => void;
 }) {
-  const unitItems = useMemo<Record<string, string>>(
-    () =>
-      Object.fromEntries(
-        units.map((u) => {
-          const suffix = u.name ? ` (${u.name})` : "";
-          return [u.id, `${u.property.name} · ${u.code}${suffix} [${unitStatusLabel(u.status)}]`];
-        }),
-      ),
-    [units],
-  );
+  const [filter, setFilter] = useState("");
+
+  const filtered = useMemo(() => {
+    const q = filter.trim().toLowerCase();
+    if (!q) return units;
+    return units.filter((u) => {
+      const hay =
+        u.code + " " + (u.name ?? "") + " " + u.property.name;
+      return hay.toLowerCase().includes(q);
+    });
+  }, [units, filter]);
+
+  // Agrupa unidades por inmueble para mostrarlas organizadas (la plaza es el
+  // contexto, el local es lo que se contrata).
+  const groups = useMemo(() => {
+    const map = new Map<string, { name: string; units: AvailableUnit[] }>();
+    for (const u of filtered) {
+      const key = u.property.id;
+      const existing = map.get(key);
+      if (existing) {
+        existing.units.push(u);
+      } else {
+        map.set(key, { name: u.property.name, units: [u] });
+      }
+    }
+    return Array.from(map.values());
+  }, [filtered]);
+
   if (units.length === 0) {
     return (
       <div className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
-        No hay unidades disponibles. Marca alguna como DISPONIBLE en su detalle de inmueble.
+        No hay unidades disponibles. Marca alguna como DISPONIBLE en su detalle
+        de inmueble.
       </div>
     );
   }
+
   return (
-    <div className="space-y-2">
-      <Label>Unidad disponible</Label>
-      <Select
-        value={value ?? ""}
-        onValueChange={(v) => v !== null && onChange(v)}
-        items={unitItems}
-      >
-        <SelectTrigger className="w-full">
-          <SelectValue placeholder="Selecciona la unidad a rentar" />
-        </SelectTrigger>
-        <SelectContent>
-          {units.map((u) => (
-            <SelectItem key={u.id} value={u.id}>
-              <span className="font-medium">{u.property.name}</span>
-              <span className="text-muted-foreground"> · {u.code}</span>
-              {u.name ? <span className="text-muted-foreground"> ({u.name})</span> : null}
-              <span className="ml-2 text-xs">[{unitStatusLabel(u.status)}]</span>
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-      <p className="text-xs text-muted-foreground">
-        Solo se listan unidades en estado DISPONIBLE o APARTADA.
-      </p>
+    <div className="space-y-3">
+      <div className="flex items-center justify-between gap-3">
+        <Label className="text-sm">Selecciona el local a contratar</Label>
+        <span className="text-xs text-muted-foreground">
+          {filtered.length} {filtered.length === 1 ? "disponible" : "disponibles"}
+        </span>
+      </div>
+
+      {units.length > 5 ? (
+        <Input
+          value={filter}
+          onChange={(e) => setFilter(e.target.value)}
+          placeholder="Buscar por local, plaza o inmueble..."
+        />
+      ) : null}
+
+      <div className="max-h-[340px] space-y-3 overflow-y-auto pr-1">
+        {groups.map((g) => (
+          <div key={g.name} className="space-y-1.5">
+            <p className="px-1 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+              {g.name}
+            </p>
+            <div className="space-y-1.5">
+              {g.units.map((u) => {
+                const selected = value === u.id;
+                return (
+                  <button
+                    key={u.id}
+                    type="button"
+                    onClick={() => onChange(u.id)}
+                    className={cn(
+                      "flex w-full items-center justify-between gap-3 rounded-lg border bg-card p-3 text-left transition-colors",
+                      selected
+                        ? "border-primary ring-2 ring-primary/20"
+                        : "hover:border-foreground/30 hover:bg-muted/40",
+                    )}
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-base font-semibold leading-tight">
+                        {u.code}
+                        {u.name ? (
+                          <span className="font-normal text-foreground/80">
+                            {" "}
+                            — {u.name}
+                          </span>
+                        ) : null}
+                      </p>
+                      <p className="mt-0.5 text-xs text-muted-foreground">
+                        {u.estimatedRent !== null
+                          ? `Renta estimada: ${MXN_RENT.format(u.estimatedRent)}/mes`
+                          : "Sin renta estimada"}
+                      </p>
+                    </div>
+                    <Badge
+                      variant={u.status === "DISPONIBLE" ? "secondary" : "outline"}
+                      className="shrink-0"
+                    >
+                      {unitStatusLabel(u.status)}
+                    </Badge>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+
+        {filtered.length === 0 ? (
+          <p className="py-6 text-center text-sm text-muted-foreground">
+            No hay locales que coincidan con &ldquo;{filter}&rdquo;.
+          </p>
+        ) : null}
+      </div>
     </div>
   );
 }
@@ -524,7 +593,7 @@ function StepTerms({
         />
       </div>
       <div className="space-y-1">
-        <Label>Depósito en garantía (MXN)</Label>
+        <Label>Fianza (MXN)</Label>
         <Input
           type="number"
           step="0.01"
@@ -615,13 +684,13 @@ function StepConfirm({
       <Row label="Inquilino">{lesseeLabel}</Row>
       <Row label="Tipo">{contractTypeLabel(terms.type)}</Row>
       <Row label="Vigencia">
-        {terms.startDate ? DATE.format(new Date(terms.startDate)) : "—"} →{" "}
-        {terms.endDate ? DATE.format(new Date(terms.endDate)) : "—"}
+        {terms.startDate ? capitalizeFirst(DATE.format(new Date(terms.startDate))) : "—"} →{" "}
+        {terms.endDate ? capitalizeFirst(DATE.format(new Date(terms.endDate))) : "—"}
       </Row>
       <Row label="Renta mensual">
         {terms.monthlyAmount ? MXN.format(Number(terms.monthlyAmount)) : "—"}
       </Row>
-      <Row label="Depósito en garantía">
+      <Row label="Fianza">
         {terms.guaranteeAmount ? MXN.format(Number(terms.guaranteeAmount)) : "—"}
       </Row>
       <Row label="Día de cobro">{terms.paymentDay}</Row>

@@ -25,6 +25,7 @@ import { actionSearchLessees, type LesseeSearchResult } from "@/lib/services/les
 import { bulkPaymentSchema } from "@/lib/validators/payment";
 import type { OutstandingRentLite } from "@/lib/services/payments-queries";
 import type { PaymentMethod } from "@/generated/prisma/enums";
+import { capitalizeFirst } from "@/lib/utils";
 
 const METHODS: ReadonlyArray<PaymentMethod> = [
   "TRANSFER",
@@ -330,7 +331,7 @@ export function BulkPaymentDialog({
                 </div>
               </div>
               <p className="mb-2 text-xs text-muted-foreground">
-                "Distribuir" llena las rentas más antiguas primero hasta cubrir el monto recibido.
+                &ldquo;Distribuir&rdquo; llena las rentas más antiguas primero hasta cubrir el monto recibido.
               </p>
               <div className="rounded-md border max-h-72 overflow-auto">
                 {loadingRents ? (
@@ -357,7 +358,7 @@ export function BulkPaymentDialog({
                           />
                           <div className="flex-1">
                             <p className="font-medium">
-                              {PERIOD.format(r.period)} · {r.propertyName} {r.unitCode}
+                              {capitalizeFirst(PERIOD.format(r.period))} · {r.propertyName} {r.unitCode}
                             </p>
                             <p className="text-xs text-muted-foreground">
                               Cargo {MXN.format(Number(r.amountDue))} · Pagado{" "}

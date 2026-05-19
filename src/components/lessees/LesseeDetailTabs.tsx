@@ -23,6 +23,7 @@ import type { LesseeDetail } from "@/lib/services/lessees-queries";
 import type { NotificationLogRow } from "@/lib/services/notifications-queries";
 import type { LesseePayment, LesseeStatement as LesseeStatementData } from "@/lib/services/payments-queries";
 import type { ContractStatus } from "@/generated/prisma/enums";
+import { capitalizeFirst } from "@/lib/utils";
 
 const MXN = new Intl.NumberFormat("es-MX", {
   style: "currency",
@@ -68,15 +69,17 @@ export function LesseeDetailTabs({
 }: LesseeDetailTabsProps) {
   return (
     <Tabs defaultValue="info" className="w-full">
-      <TabsList>
-        <TabsTrigger value="info">Información general</TabsTrigger>
-        <TabsTrigger value="contracts">
-          Contratos ({lessee.contracts.length})
-        </TabsTrigger>
-        <TabsTrigger value="statement">Estado de cuenta</TabsTrigger>
-        <TabsTrigger value="payments">Pagos históricos ({payments.length})</TabsTrigger>
-        <TabsTrigger value="comms">Comunicaciones</TabsTrigger>
-      </TabsList>
+      <div className="-mx-1 overflow-x-auto px-1">
+        <TabsList>
+          <TabsTrigger value="info">Información general</TabsTrigger>
+          <TabsTrigger value="contracts">
+            Contratos ({lessee.contracts.length})
+          </TabsTrigger>
+          <TabsTrigger value="statement">Estado de cuenta</TabsTrigger>
+          <TabsTrigger value="payments">Pagos históricos ({payments.length})</TabsTrigger>
+          <TabsTrigger value="comms">Comunicaciones</TabsTrigger>
+        </TabsList>
+      </div>
 
       <TabsContent value="info" className="mt-4 rounded-md border bg-card p-6">
         <LesseeForm
@@ -96,16 +99,16 @@ export function LesseeDetailTabs({
       </TabsContent>
 
       <TabsContent value="contracts" className="mt-4 space-y-3">
-        <div className="rounded-md border bg-card">
-          <Table>
+        <div className="overflow-x-auto rounded-md border bg-card">
+          <Table className="min-w-[720px]">
             <TableHeader>
               <TableRow>
                 <TableHead>Contrato</TableHead>
                 <TableHead>Unidad</TableHead>
                 <TableHead>Tipo</TableHead>
-                <TableHead>Vigencia</TableHead>
+                <TableHead className="text-center">Vigencia</TableHead>
                 <TableHead className="text-right">Renta mensual</TableHead>
-                <TableHead>Estado</TableHead>
+                <TableHead className="text-center">Estado</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -134,13 +137,13 @@ export function LesseeDetailTabs({
                       </p>
                     </TableCell>
                     <TableCell className="text-sm">{contractTypeLabel(c.type)}</TableCell>
-                    <TableCell className="text-xs">
-                      {DATE.format(c.startDate)} → {DATE.format(c.endDate)}
+                    <TableCell className="text-center text-xs">
+                      {capitalizeFirst(DATE.format(c.startDate))} → {capitalizeFirst(DATE.format(c.endDate))}
                     </TableCell>
                     <TableCell className="text-right tabular-nums">
                       {MXN.format(Number(c.monthlyAmount))}
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="text-center">
                       <Badge variant={statusVariant(c.status)}>
                         {contractStatusLabel(c.status)}
                       </Badge>
@@ -158,15 +161,15 @@ export function LesseeDetailTabs({
       </TabsContent>
 
       <TabsContent value="payments" className="mt-4 space-y-3">
-        <div className="rounded-md border bg-card">
-          <Table>
+        <div className="overflow-x-auto rounded-md border bg-card">
+          <Table className="min-w-[720px]">
             <TableHeader>
               <TableRow>
-                <TableHead>Fecha</TableHead>
+                <TableHead className="text-center">Fecha</TableHead>
                 <TableHead>Inmueble · Unidad</TableHead>
                 <TableHead>Periodo</TableHead>
                 <TableHead className="text-right">Monto</TableHead>
-                <TableHead>Método</TableHead>
+                <TableHead className="text-center">Método</TableHead>
                 <TableHead>Referencia</TableHead>
               </TableRow>
             </TableHeader>
@@ -180,8 +183,8 @@ export function LesseeDetailTabs({
               ) : (
                 payments.map((p) => (
                   <TableRow key={p.id}>
-                    <TableCell className="text-xs tabular-nums">
-                      {DATE.format(p.paymentDate)}
+                    <TableCell className="text-center text-xs tabular-nums">
+                      {capitalizeFirst(DATE.format(p.paymentDate))}
                     </TableCell>
                     <TableCell className="text-sm">
                       {p.rent.contract.unit.property.name} {p.rent.contract.unit.code}
@@ -192,7 +195,7 @@ export function LesseeDetailTabs({
                     <TableCell className="text-right tabular-nums font-medium">
                       {MXN.format(Number(p.amount))}
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="text-center">
                       <Badge variant="secondary">{paymentMethodLabel(p.method)}</Badge>
                     </TableCell>
                     <TableCell className="font-mono text-xs">{p.reference ?? "—"}</TableCell>

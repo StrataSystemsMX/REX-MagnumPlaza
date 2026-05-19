@@ -7,6 +7,7 @@ import {
   type DocumentBillingEntity,
   type DocumentTenantInfo,
 } from "./shared";
+import { capitalizeFirst } from "@/lib/utils";
 
 const MXN = new Intl.NumberFormat("es-MX", {
   style: "currency",
@@ -99,7 +100,7 @@ export interface DashboardSummaryPdfProps {
 function monthLabel(yyyymm: string): string {
   const y = Number(yyyymm.slice(0, 4));
   const m = Number(yyyymm.slice(5, 7));
-  return MONTH_LABEL.format(new Date(Date.UTC(y, m - 1, 1)));
+  return capitalizeFirst(MONTH_LABEL.format(new Date(Date.UTC(y, m - 1, 1))));
 }
 
 export function DashboardSummaryPdf(props: DashboardSummaryPdfProps) {

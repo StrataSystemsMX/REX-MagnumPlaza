@@ -11,11 +11,14 @@ const PROPERTY_TYPE_VALUES = [
   "OTRO",
 ] as const;
 
+const PROPERTY_STATUS_VALUES = ["ACTIVO", "BLOQUEADO"] as const;
+
 export const createPropertySchema = z.object({
   name: z.string().trim().min(1, "El nombre es requerido."),
   type: z.enum(PROPERTY_TYPE_VALUES, {
     message: "Selecciona el tipo de inmueble.",
   }),
+  status: z.enum(PROPERTY_STATUS_VALUES).optional(),
   address: z.string().trim().min(1, "La dirección es requerida."),
   ownerEntityId: z.string().min(1, "Selecciona la razón social dueña."),
   managerEntityId: z.string().min(1, "Selecciona la razón social administradora."),

@@ -20,6 +20,7 @@ import {
 import { RentStatusBadge } from "@/components/shared/RentStatusBadge";
 import { contractStatusLabel, paymentMethodLabel } from "@/lib/i18n/enums";
 import type { LesseeStatement as LesseeStatementData } from "@/lib/services/payments-queries";
+import { capitalizeFirst } from "@/lib/utils";
 
 const MXN = new Intl.NumberFormat("es-MX", {
   style: "currency",
@@ -75,7 +76,7 @@ export function LesseeStatement({ data }: LesseeStatementProps) {
                 {MXN.format(Number(lastPayment.amount))}
               </span>
               <p className="text-xs text-muted-foreground">
-                {DATE.format(lastPayment.paymentDate)} ·{" "}
+                {capitalizeFirst(DATE.format(lastPayment.paymentDate))} ·{" "}
                 {paymentMethodLabel(lastPayment.method)}
               </p>
             </>
@@ -130,28 +131,30 @@ export function LesseeStatement({ data }: LesseeStatementProps) {
               </div>
             </div>
 
-            <Table>
+            <div className="overflow-x-auto">
+            <Table className="min-w-[820px]">
               <TableHeader>
                 <TableRow>
-                  <TableHead>Periodo</TableHead>
-                  <TableHead>Vence</TableHead>
+                  <TableHead className="text-center">Periodo</TableHead>
+                  <TableHead className="text-center">Vence</TableHead>
                   <TableHead className="text-right">Cargo</TableHead>
                   <TableHead className="text-right">Pagado</TableHead>
                   <TableHead className="text-right">Saldo</TableHead>
-                  <TableHead>Estado</TableHead>
+                  <TableHead className="text-center">Estado</TableHead>
                   <TableHead className="text-right">Acciones</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {c.rents.map((r) => {
-                  const balance = Number(r.amountDue) - Number(r.amountPaid);
+                  const balance =
+                    Number(r.amountDue) - Number(r.amountPaid) - Number(r.amountWaived ?? 0);
                   const isPayable = balance > 0 && r.status !== "WAIVED";
                   return (
                     <TableRow key={r.id}>
-                      <TableCell className="capitalize text-sm">
-                        {PERIOD.format(r.period)}
+                      <TableCell className="text-center text-sm">
+                        {capitalizeFirst(PERIOD.format(r.period))}
                       </TableCell>
-                      <TableCell className="text-xs">{DATE.format(r.dueDate)}</TableCell>
+                      <TableCell className="text-center text-xs">{capitalizeFirst(DATE.format(r.dueDate))}</TableCell>
                       <TableCell className="text-right tabular-nums">
                         {MXN.format(Number(r.amountDue))}
                       </TableCell>
@@ -161,7 +164,7 @@ export function LesseeStatement({ data }: LesseeStatementProps) {
                       <TableCell className="text-right tabular-nums font-medium">
                         {MXN.format(balance)}
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="text-center">
                         <RentStatusBadge status={r.status} />
                       </TableCell>
                       <TableCell className="text-right">
@@ -189,6 +192,7 @@ export function LesseeStatement({ data }: LesseeStatementProps) {
                 })}
               </TableBody>
             </Table>
+            </div>
           </div>
         );
       })}

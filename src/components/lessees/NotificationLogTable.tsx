@@ -1,6 +1,6 @@
 "use client";
 
-import { RotateCw, ExternalLink, Loader2 } from "lucide-react";
+import { RotateCw, ExternalLink, Loader2, Send } from "lucide-react";
 import { useTransition } from "react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
@@ -20,6 +20,7 @@ import {
 import { actionRetryNotification } from "@/lib/services/notifications-actions";
 import type { NotificationLogRow } from "@/lib/services/notifications-queries";
 import type { NotificationStatus } from "@/generated/prisma/enums";
+import { capitalizeFirst } from "@/lib/utils";
 
 const DATETIME = new Intl.DateTimeFormat("es-MX", {
   dateStyle: "medium",
@@ -69,19 +70,23 @@ interface NotificationLogTableProps {
 export function NotificationLogTable({ logs }: NotificationLogTableProps) {
   const [pending, startTransition] = useTransition();
 
-  function retry(id: string) {
+  function send(id: string, isRetry: boolean) {
     startTransition(async () => {
       try {
         const r = await actionRetryNotification(id);
         if (r.status === "SENT") {
-          toast.success("Reenviado correctamente.");
+          toast.success(isRetry ? "Reenviado correctamente." : "Enviado correctamente.");
         } else if (r.status === "FAILED") {
-          toast.error(`Reintento falló: ${r.failureReason ?? "error desconocido"}`);
+          toast.error(
+            `${isRetry ? "Reintento" : "Envío"} falló: ${r.failureReason ?? "error desconocido"}`,
+          );
         } else {
-          toast.warning("Reintento registrado en PENDING.");
+          toast.warning("Quedó en PENDING.");
         }
       } catch (e) {
-        toast.error(e instanceof Error ? e.message : "Error al reintentar.");
+        toast.error(
+          e instanceof Error ? e.message : isRetry ? "Error al reintentar." : "Error al enviar.",
+        );
       }
     });
   }
@@ -95,14 +100,14 @@ export function NotificationLogTable({ logs }: NotificationLogTableProps) {
   }
 
   return (
-    <div className="rounded-md border bg-card">
-      <Table>
+    <div className="overflow-x-auto rounded-md border bg-card">
+      <Table className="min-w-[820px]">
         <TableHeader>
           <TableRow>
-            <TableHead>Fecha</TableHead>
+            <TableHead className="text-center">Fecha</TableHead>
             <TableHead>Plantilla</TableHead>
             <TableHead>Canal</TableHead>
-            <TableHead>Estado</TableHead>
+            <TableHead className="text-center">Estado</TableHead>
             <TableHead>Detalle</TableHead>
             <TableHead className="text-right">Acción</TableHead>
           </TableRow>
@@ -113,8 +118,8 @@ export function NotificationLogTable({ logs }: NotificationLogTableProps) {
             const pdfUrl = pdfMatch?.[0] ?? null;
             return (
               <TableRow key={l.id}>
-                <TableCell className="whitespace-nowrap text-xs tabular-nums">
-                  {DATETIME.format(l.createdAt)}
+                <TableCell className="whitespace-nowrap text-center text-xs tabular-nums">
+                  {capitalizeFirst(DATETIME.format(l.createdAt))}
                 </TableCell>
                 <TableCell className="text-sm">
                   {templateLabel(l.templateCode)}
@@ -122,7 +127,7 @@ export function NotificationLogTable({ logs }: NotificationLogTableProps) {
                 <TableCell className="text-xs">
                   {communicationChannelLabel(l.channel)}
                 </TableCell>
-                <TableCell>
+                <TableCell className="text-center">
                   <Badge variant={statusVariant(l.status)}>
                     {notificationStatusLabel(l.status)}
                   </Badge>
@@ -152,12 +157,26 @@ export function NotificationLogTable({ logs }: NotificationLogTableProps) {
                         <ExternalLink className="size-4" />
                       </Button>
                     ) : null}
-                    {l.status === "FAILED" ? (
+                    {l.status === "PENDING" ? (
+                      <Button
+                        size="sm"
+                        variant="default"
+                        disabled={pending}
+                        onClick={() => send(l.id, false)}
+                      >
+                        {pending ? (
+                          <Loader2 className="size-4 animate-spin" />
+                        ) : (
+                          <Send className="size-4" />
+                        )}
+                        Enviar
+                      </Button>
+                    ) : l.status === "FAILED" ? (
                       <Button
                         size="sm"
                         variant="secondary"
                         disabled={pending}
-                        onClick={() => retry(l.id)}
+                        onClick={() => send(l.id, true)}
                       >
                         {pending ? (
                           <Loader2 className="size-4 animate-spin" />

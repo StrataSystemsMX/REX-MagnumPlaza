@@ -1,5 +1,6 @@
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "@/generated/prisma/client";
+import { queryStatsLogger } from "./query-logger";
 import { tenantIsolation } from "./tenant-middleware";
 
 const connectionString = process.env["DATABASE_URL"];
@@ -19,7 +20,14 @@ const globalForPrisma = globalThis as unknown as {
 
 function createBaseClient(): PrismaClient {
   const adapter = new PrismaPg({ connectionString });
-  return new PrismaClient({ adapter });
+  // Log de queries en dev (o en prod si PERF_LOG=1) para medir latencia DB.
+  // Quitar al cerrar el trabajo de performance.
+  const shouldLog =
+    process.env["NODE_ENV"] !== "production" || process.env["PERF_LOG"] === "1";
+  const log = shouldLog
+    ? ([{ emit: "stdout", level: "query" }] as const)
+    : undefined;
+  return new PrismaClient({ adapter, ...(log ? { log: [...log] } : {}) });
 }
 
 const baseClient: PrismaClient = globalForPrisma.prismaBase ?? createBaseClient();
@@ -35,7 +43,9 @@ if (process.env["NODE_ENV"] !== "production") {
  * explícito, la extensión revienta loud antes de tocar la base. Ver
  * `tenant-middleware.ts`.
  */
-export const prisma = baseClient.$extends(tenantIsolation);
+export const prisma = baseClient
+  .$extends(tenantIsolation)
+  .$extends(queryStatsLogger);
 
 /**
  * Cliente sin el guardrail multi-tenant. Solo para casos legítimamente

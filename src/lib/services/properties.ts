@@ -50,7 +50,6 @@ export async function actionCreateProperty(
 
   revalidatePath("/plazas");
   revalidatePath("/inmuebles");
-  revalidatePath("/units");
   return property;
 }
 
@@ -81,7 +80,6 @@ export async function actionUpdateProperty(
 
   revalidatePath("/plazas");
   revalidatePath("/inmuebles");
-  revalidatePath("/units");
   revalidatePath(`/properties/${id}`);
   return updated;
 }
@@ -102,6 +100,5 @@ export async function actionDeleteProperty(id: string): Promise<void> {
 
   revalidatePath("/plazas");
   revalidatePath("/inmuebles");
-  revalidatePath("/units");
   revalidatePath(`/properties/${id}`);
 }

@@ -1,12 +1,14 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { AlertCircle, AlertTriangle } from "lucide-react";
-import { Card, CardContent } from "@/components/ui/card";
+import { AlertCircle, AlertTriangle, BarChart2, Clock, TrendingDown, TrendingUp } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { FinancialHistoryChart } from "@/components/dashboard/charts";
+import { MetricCard } from "@/components/shared/metric-card";
 import { getActiveLegalEntityId } from "@/lib/auth/active-legal-entity";
 import { requireAuth } from "@/lib/auth/get-session";
 import { getUserRoleCodes } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/prisma/client";
+import { timed } from "@/lib/perf/timed";
 
 // ─── Formatters ──────────────────────────────────────────────────────────────
 
@@ -46,14 +48,6 @@ const EXPENSE_TYPE_LABEL: Record<string, string> = {
 
 // ─── Helpers de badge ────────────────────────────────────────────────────────
 
-function unitBadge(key: string): { label: string; cls: string } {
-  switch (key) {
-    case "PAGADO":    return { label: "Pagado",    cls: "bg-emerald-100 text-emerald-700" };
-    case "NO_PAGO":   return { label: "No pago",   cls: "bg-rose-100 text-rose-700" };
-    case "PENDIENTE": return { label: "Pendiente", cls: "bg-amber-100 text-amber-700" };
-    default:          return { label: "Sin renta", cls: "bg-slate-100 text-slate-500" };
-  }
-}
 
 function overdueBadge(status: string): { label: string; cls: string } {
   switch (status) {
@@ -112,6 +106,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
   const paymentLeFilter = legalEntityParam ? { rent: { legalEntityId: legalEntityParam } } : {};
   const propLeFilter    = legalEntityParam ? { managerEntityId: legalEntityParam } : {};
 
+  const pageStart = performance.now();
   const [
     ventas,
     egresos,
@@ -124,25 +119,25 @@ export default async function DashboardPage({ searchParams }: PageProps) {
     cobranzaMonthRents,
   ] = await Promise.all([
     // KPI cards — respetan el filtro de LE
-    prisma.payment.aggregate({
+    timed("dashboard:ventas.aggregate", () => prisma.payment.aggregate({
       where: { tenantId: dbUser.tenantId, paymentDate: { gte: periodStart, lt: periodEnd }, ...paymentLeFilter },
       _sum: { amount: true },
-    }),
-    prisma.expense.aggregate({
+    })),
+    timed("dashboard:egresos.aggregate", () => prisma.expense.aggregate({
       where: { tenantId: dbUser.tenantId, expenseDate: { gte: periodStart, lt: periodEnd }, ...leFilter },
       _sum: { amount: true },
-    }),
-    prisma.rent.aggregate({
+    })),
+    timed("dashboard:cxc.aggregate", () => prisma.rent.aggregate({
       where: {
         tenantId: dbUser.tenantId,
         status: { in: ["DUE", "PARTIAL", "OVERDUE_1M", "OVERDUE_2M", "OVERDUE_3M"] },
         ...leFilter,
       },
       _sum: { amountDue: true, amountPaid: true },
-    }),
+    })),
 
     // Semáforo de locales — filtrado por managerEntityId
-    prisma.property.findMany({
+    timed("dashboard:propertiesWithUnits", () => prisma.property.findMany({
       where: { tenantId: dbUser.tenantId, isActive: true, ...propLeFilter },
       select: {
         id: true,
@@ -171,10 +166,10 @@ export default async function DashboardPage({ searchParams }: PageProps) {
         },
       },
       orderBy: { name: "asc" },
-    }),
+    })),
 
     // Adeudos — para el top overdue
-    prisma.rent.findMany({
+    timed("dashboard:overdueRents", () => prisma.rent.findMany({
       where: {
         tenantId: dbUser.tenantId,
         status: { in: ["DUE", "PARTIAL", "OVERDUE_1M", "OVERDUE_2M", "OVERDUE_3M"] },
@@ -186,10 +181,10 @@ export default async function DashboardPage({ searchParams }: PageProps) {
         status: true,
         contract: { select: { lessee: { select: { id: true, legalName: true } } } },
       },
-    }),
+    })),
 
     // Detalle de pagos para resumen por LE y ranking de plazas (sin filtro de LE)
-    prisma.payment.findMany({
+    timed("dashboard:paymentsDetail", () => prisma.payment.findMany({
       where: { tenantId: dbUser.tenantId, paymentDate: { gte: periodStart, lt: periodEnd } },
       select: {
         amount: true,
@@ -200,35 +195,40 @@ export default async function DashboardPage({ searchParams }: PageProps) {
           },
         },
       },
-    }),
+    })),
 
     // Detalle de egresos para resumen por LE y egresos por tipo (sin filtro de LE)
-    prisma.expense.findMany({
+    timed("dashboard:expensesDetail", () => prisma.expense.findMany({
       where: { tenantId: dbUser.tenantId, expenseDate: { gte: periodStart, lt: periodEnd } },
       select: {
         amount: true,
         legalEntityId: true,
         category: { select: { type: true } },
       },
-    }),
+    })),
 
     // Razones sociales activas
-    prisma.legalEntity.findMany({
+    timed("dashboard:legalEntities", () => prisma.legalEntity.findMany({
       where: { tenantId: dbUser.tenantId, isActive: true },
       select: { id: true, code: true },
       orderBy: { code: "asc" },
-    }),
+    })),
 
     // Cobranza del mes en curso (independiente del periodo del dashboard)
-    prisma.rent.findMany({
+    timed("dashboard:cobranzaMonthRents", () => prisma.rent.findMany({
       where: {
         tenantId: dbUser.tenantId,
         period: currentMonthStart,
         ...leFilter,
       },
       select: { status: true, amountDue: true, amountPaid: true },
-    }),
+    })),
   ]);
+  if (process.env["NODE_ENV"] !== "production" || process.env["PERF_LOG"] === "1") {
+    console.log(
+      `[PERF] / (dashboard) TOTAL: ${Math.round(performance.now() - pageStart)}ms`,
+    );
+  }
 
   // ── Cobranza mes en curso ──────────────────────────────────────────────────
   const cobranzaExpected  = cobranzaMonthRents.reduce((s, r) => s + Number(r.amountDue), 0);
@@ -271,12 +271,6 @@ export default async function DashboardPage({ searchParams }: PageProps) {
     ? `Ene – Dic ${currentYear}`
     : `${MONTHS[selectedMonth] ?? ""} ${currentYear}`;
 
-  const tablero = [
-    { label: "Ventas con IVA",     value: MXN.format(ventasTotal),  note: "Ingresos cobrados",       color: "" },
-    { label: "Costo de Operación", value: MXN.format(egresosTotal), note: "Egresos registrados",     color: "" },
-    { label: "Utilidad Bruta",     value: MXN.format(utilidad),     note: `Rentabilidad ${PCT.format(rentabilidad)}`, color: utilidad >= 0 ? "text-emerald-600" : "text-rose-600" },
-    { label: "CxC con IVA",        value: MXN.format(cxc),          note: "Por cobrar a inquilinos", color: cxc > 0 ? "text-amber-600" : "text-emerald-600" },
-  ];
 
   // ── Resumen por Razón Social ───────────────────────────────────────────────
   const incomeByLE   = new Map<string, number>();
@@ -385,7 +379,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
           <p className="text-sm text-muted-foreground">{periodLabel}</p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <div className="flex rounded-lg bg-muted p-1 text-sm">
             <Link
               href="?mode=anual"
@@ -406,7 +400,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
           </div>
 
           {mode === "mensual" && (
-            <div className="flex flex-wrap gap-1">
+            <div className="flex w-full flex-wrap gap-1 sm:w-auto">
               {MONTHS.map((m, i) => (
                 <Link
                   key={m}
@@ -427,41 +421,46 @@ export default async function DashboardPage({ searchParams }: PageProps) {
 
       {/* ── KPI Cards ── */}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        {tablero.map((item) => (
-          <Card key={item.label}>
-            <CardContent className="pt-5">
-              <p className="text-xs text-muted-foreground">{item.label}</p>
-              <p className={`mt-2 text-2xl font-bold tabular-nums ${item.color}`}>{item.value}</p>
-              <p className="mt-1 text-xs text-muted-foreground">{item.note}</p>
-            </CardContent>
-          </Card>
-        ))}
+        <MetricCard
+          label="Ventas con IVA"
+          value={<span className="tabular-nums">{MXN.format(ventasTotal)}</span>}
+          subValue="Ingresos cobrados"
+          icon={TrendingUp}
+        />
+        <MetricCard
+          label="Costo de Operación"
+          value={<span className="tabular-nums">{MXN.format(egresosTotal)}</span>}
+          subValue="Egresos registrados"
+          icon={TrendingDown}
+        />
+        <MetricCard
+          label="Utilidad Bruta"
+          value={<span className="tabular-nums">{MXN.format(utilidad)}</span>}
+          subValue={`Rentabilidad ${PCT.format(rentabilidad)}`}
+          icon={BarChart2}
+          color={utilidad >= 0 ? "success" : "danger"}
+        />
+        <MetricCard
+          label="CxC con IVA"
+          value={<span className="tabular-nums">{MXN.format(cxc)}</span>}
+          subValue="Por cobrar a inquilinos"
+          icon={Clock}
+          color={cxc > 0 ? "warning" : "success"}
+        />
       </div>
-
-      {/* ── Histórico anual ── */}
-      {mode === "anual" && (
-        <Card>
-          <CardContent className="pt-5">
-            <p className="mb-4 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-              Ventas vs Egresos — histórico 2009–{currentYear}
-            </p>
-            <FinancialHistoryChart current={{ year: currentYear, ventas: ventasTotal, egresos: egresosTotal }} />
-          </CardContent>
-        </Card>
-      )}
 
       {/* ── Cobranza mes en curso ── */}
       <Card>
-        <CardContent className="pt-5">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-                Cobranza
-              </p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                {MONTHS[currentMonth] ?? ""} {currentYear}
-              </p>
-            </div>
+        <CardHeader>
+          <CardTitle className="text-sm font-semibold">
+            Cobranza — {MONTHS[currentMonth] ?? ""} {currentYear}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-xs text-muted-foreground">
+              {MXN.format(cobranzaCollected)} cobrados de {MXN.format(cobranzaExpected)} esperados
+            </p>
             <p className={`text-4xl font-bold tabular-nums ${cobranzaToneText[cobranzaTone]}`}>
               {cobranzaPct}%
             </p>
@@ -471,10 +470,6 @@ export default async function DashboardPage({ searchParams }: PageProps) {
               className={`h-full rounded-full transition-all ${cobranzaToneBar[cobranzaTone]}`}
               style={{ width: `${Math.min(cobranzaPct, 100)}%` }}
             />
-          </div>
-          <div className="mt-2 flex items-center justify-between text-xs tabular-nums text-muted-foreground">
-            <span>{MXN.format(cobranzaCollected)}</span>
-            <span>{MXN.format(cobranzaExpected)}</span>
           </div>
           <div className="mt-4 grid grid-cols-4 gap-2 text-center">
             <div className="rounded-lg border bg-background/70 px-2 py-2">
@@ -497,127 +492,13 @@ export default async function DashboardPage({ searchParams }: PageProps) {
         </CardContent>
       </Card>
 
-      {/* ── Resumen por Razón Social + Ranking de Plazas ── */}
+      {/* ── Alertas + Inquilinos con Adeudo ── */}
       <div className="grid gap-4 lg:grid-cols-2">
-
-        {/* Razón Social */}
         <Card>
-          <CardContent className="pt-5">
-            <p className="mb-4 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-              Por Razón Social
-            </p>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b text-xs text-muted-foreground">
-                    <th className="pb-2 text-left font-medium">Entidad</th>
-                    <th className="pb-2 text-right font-medium">Ingresos</th>
-                    <th className="pb-2 text-right font-medium">Egresos</th>
-                    <th className="pb-2 text-right font-medium">Utilidad</th>
-                    <th className="pb-2 text-right font-medium">Rentabilidad</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y">
-                  {byLegalEntity.map((le) => (
-                    <tr key={le.code} className="hover:bg-muted/30">
-                      <td className="py-2.5 font-semibold">{le.code}</td>
-                      <td className="py-2.5 text-right tabular-nums">{MXN.format(le.income)}</td>
-                      <td className="py-2.5 text-right tabular-nums text-muted-foreground">{MXN.format(le.expenses)}</td>
-                      <td className={`py-2.5 text-right tabular-nums font-medium ${le.profit >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
-                        {MXN.format(le.profit)}
-                      </td>
-                      <td className="py-2.5 text-right tabular-nums text-muted-foreground">
-                        {le.income > 0 ? PCT.format(le.rent) : "—"}
-                      </td>
-                    </tr>
-                  ))}
-                  {byLegalEntity.length === 0 && (
-                    <tr>
-                      <td colSpan={5} className="py-6 text-center text-xs text-muted-foreground">
-                        Sin movimientos en el período
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Ranking de Plazas */}
-        <Card>
-          <CardContent className="pt-5">
-            <p className="mb-4 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-              Renta mensual esperada
-            </p>
-            <div className="space-y-3">
-              {rankingPlazas.map((p) => (
-                <div key={p.id}>
-                  <div className="mb-1 flex items-center justify-between text-sm">
-                    <Link href={`/properties/${p.id}`} className="truncate font-medium hover:underline">
-                      {p.name}
-                    </Link>
-                    <span className="ml-2 shrink-0 tabular-nums text-xs text-muted-foreground">
-                      {MXN.format(p.expectedMonthly)}
-                    </span>
-                  </div>
-                  <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
-                    <div
-                      className="h-full rounded-full bg-primary"
-                      style={{ width: `${Math.round((p.expectedMonthly / maxExpected) * 100)}%` }}
-                    />
-                  </div>
-                  <p className="mt-0.5 text-xs text-muted-foreground">
-                    {p.rentedUnits}/{p.totalUnits} ocupados
-                  </p>
-                </div>
-              ))}
-              {rankingPlazas.length === 0 && (
-                <p className="py-6 text-center text-xs text-muted-foreground">Sin contratos activos</p>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* ── Egresos por Tipo + Alertas ── */}
-      <div className="grid gap-4 lg:grid-cols-2">
-
-        {/* Egresos por categoría */}
-        <Card>
-          <CardContent className="pt-5">
-            <p className="mb-4 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-              Egresos por Categoría
-            </p>
-            {expensesByTypeArr.length > 0 ? (
-              <div className="space-y-3">
-                {expensesByTypeArr.map((item) => (
-                  <div key={item.type}>
-                    <div className="mb-1 flex items-center justify-between text-sm">
-                      <span className="text-sm">{item.label}</span>
-                      <span className="tabular-nums text-xs text-muted-foreground">{MXN.format(item.total)}</span>
-                    </div>
-                    <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
-                      <div
-                        className="h-full rounded-full bg-rose-400"
-                        style={{ width: `${Math.round((item.total / maxExpType) * 100)}%` }}
-                      />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="py-6 text-center text-xs text-muted-foreground">Sin egresos en el período</p>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Alertas */}
-        <Card>
-          <CardContent className="pt-5">
-            <p className="mb-4 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-              Alertas
-            </p>
+          <CardHeader>
+            <CardTitle className="text-sm font-semibold">Alertas</CardTitle>
+          </CardHeader>
+          <CardContent>
             {alerts.length > 0 ? (
               <div className="space-y-3">
                 {alerts.map((a, i) => (
@@ -648,92 +529,161 @@ export default async function DashboardPage({ searchParams }: PageProps) {
             )}
           </CardContent>
         </Card>
-      </div>
 
-      {/* ── Cobranza por Plaza ── */}
-      {propertiesWithUnits.length > 0 && (
-        <div>
-          <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-            Cobranza por Plaza — {MONTHS[currentMonth] ?? ""} {currentYear}
-          </p>
-          <div className="grid gap-4 lg:grid-cols-2">
-            {propertiesWithUnits.map((property) => {
-              const totalUnits  = property.units.length;
-              const rentedUnits = property.units.filter((u) => u.status === "RENTADA").length;
-              return (
-                <Card key={property.id}>
-                  <CardContent className="pt-4">
-                    <div className="mb-3 flex items-center justify-between gap-2">
-                      <Link href={`/properties/${property.id}`} className="truncate font-semibold hover:underline">
-                        {property.name}
-                      </Link>
-                      <span className="shrink-0 text-xs text-muted-foreground">
-                        {rentedUnits}/{totalUnits} ocupados
-                      </span>
-                    </div>
-                    <div className="space-y-0.5">
-                      {property.units.map((unit) => {
-                        const contract   = unit.contracts[0];
-                        const rentStatus = contract?.rents[0]?.status;
-
-                        let statusKey: string;
-                        if (unit.status !== "RENTADA" || !contract) statusKey = "NO_RENTADO";
-                        else if (!rentStatus)                          statusKey = "PENDIENTE";
-                        else if (rentStatus === "PAID")                statusKey = "PAGADO";
-                        else                                           statusKey = "NO_PAGO";
-
-                        const badge      = unitBadge(statusKey);
-                        const lesseeName = contract?.lessee.legalName ?? "— disponible —";
-                        const amount     = contract ? MXN.format(Number(contract.monthlyAmount)) : "—";
-
-                        return (
-                          <div key={unit.id} className="flex items-center gap-2 rounded-md px-2 py-1 text-sm hover:bg-muted/40">
-                            <span className="w-8 shrink-0 font-mono text-xs text-muted-foreground">{unit.code}</span>
-                            <span className="min-w-0 flex-1 truncate">{lesseeName}</span>
-                            <span className="shrink-0 tabular-nums text-xs text-muted-foreground">{amount}</span>
-                            <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${badge.cls}`}>
-                              {badge.label}
-                            </span>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* ── Top Inquilinos con Adeudo ── */}
-      {topOverdue.length > 0 && (
-        <div>
-          <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-            Inquilinos con Adeudo
-          </p>
-          <Card>
-            <CardContent className="pt-4">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm font-semibold">Inquilinos con Adeudo</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {topOverdue.length > 0 ? (
               <div className="space-y-0.5">
                 {topOverdue.map((row) => {
                   const badge = overdueBadge(row.worstStatus);
                   return (
-                    <div key={row.legalName} className="flex items-center gap-3 rounded-md px-2 py-1.5 text-sm hover:bg-muted/40">
+                    <div
+                      key={row.legalName}
+                      className="flex flex-col gap-1 rounded-md px-2 py-1.5 text-sm hover:bg-muted/40 sm:flex-row sm:items-center sm:gap-3"
+                    >
                       <span className="min-w-0 flex-1 truncate font-medium">{row.legalName}</span>
-                      <span className="shrink-0 tabular-nums font-semibold text-rose-600">{MXN.format(row.total)}</span>
-                      <span className="w-16 shrink-0 text-right text-xs text-muted-foreground">
-                        {row.count} {row.count === 1 ? "renta" : "rentas"}
-                      </span>
-                      <span className={`w-20 shrink-0 rounded-full px-2 py-0.5 text-center text-xs font-medium ${badge.cls}`}>
-                        {badge.label}
-                      </span>
+                      <div className="flex items-center justify-between gap-3 sm:justify-end">
+                        <span className="shrink-0 tabular-nums font-semibold text-rose-600">{MXN.format(row.total)}</span>
+                        <span className="shrink-0 text-right text-xs text-muted-foreground sm:w-16">
+                          {row.count} {row.count === 1 ? "renta" : "rentas"}
+                        </span>
+                        <span className={`shrink-0 rounded-full px-2 py-0.5 text-center text-xs font-medium sm:w-20 ${badge.cls}`}>
+                          {badge.label}
+                        </span>
+                      </div>
                     </div>
                   );
                 })}
               </div>
-            </CardContent>
-          </Card>
-        </div>
+            ) : (
+              <p className="py-6 text-center text-xs text-muted-foreground">Sin adeudos activos</p>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* ── Renta Mensual Esperada + Egresos por Categoría ── */}
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm font-semibold">Renta Mensual Esperada</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {rankingPlazas.map((p) => (
+                <div key={p.id}>
+                  <div className="mb-1 flex items-center justify-between text-sm">
+                    <span className="truncate font-medium">{p.name}</span>
+                    <span className="ml-2 shrink-0 tabular-nums text-xs text-muted-foreground">
+                      {MXN.format(p.expectedMonthly)}
+                    </span>
+                  </div>
+                  <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+                    <div
+                      className="h-full rounded-full bg-primary"
+                      style={{ width: `${Math.round((p.expectedMonthly / maxExpected) * 100)}%` }}
+                    />
+                  </div>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    {p.rentedUnits}/{p.totalUnits} ocupados
+                  </p>
+                </div>
+              ))}
+              {rankingPlazas.length === 0 && (
+                <p className="py-6 text-center text-xs text-muted-foreground">Sin contratos activos</p>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm font-semibold">Egresos por Categoría</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {expensesByTypeArr.length > 0 ? (
+              <div className="space-y-3">
+                {expensesByTypeArr.map((item) => (
+                  <div key={item.type}>
+                    <div className="mb-1 flex items-center justify-between text-sm">
+                      <span>{item.label}</span>
+                      <span className="tabular-nums text-xs text-muted-foreground">{MXN.format(item.total)}</span>
+                    </div>
+                    <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+                      <div
+                        className="h-full rounded-full bg-rose-400"
+                        style={{ width: `${Math.round((item.total / maxExpType) * 100)}%` }}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="py-6 text-center text-xs text-muted-foreground">Sin egresos en el período</p>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* ── Resumen por Razón Social ── */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-sm font-semibold">Por Razón Social — {periodLabel}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b text-xs text-muted-foreground">
+                  <th className="pb-2 text-left font-medium">Entidad</th>
+                  <th className="pb-2 text-right font-medium">Ingresos</th>
+                  <th className="pb-2 text-right font-medium">Egresos</th>
+                  <th className="pb-2 text-right font-medium">Utilidad</th>
+                  <th className="pb-2 text-right font-medium">Rentabilidad</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y">
+                {byLegalEntity.map((le) => (
+                  <tr key={le.code} className="hover:bg-muted/30">
+                    <td className="py-2.5 font-semibold">{le.code}</td>
+                    <td className="py-2.5 text-right tabular-nums">{MXN.format(le.income)}</td>
+                    <td className="py-2.5 text-right tabular-nums text-muted-foreground">{MXN.format(le.expenses)}</td>
+                    <td className={`py-2.5 text-right tabular-nums font-medium ${le.profit >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
+                      {MXN.format(le.profit)}
+                    </td>
+                    <td className="py-2.5 text-right tabular-nums text-muted-foreground">
+                      {le.income > 0 ? PCT.format(le.rent) : "—"}
+                    </td>
+                  </tr>
+                ))}
+                {byLegalEntity.length === 0 && (
+                  <tr>
+                    <td colSpan={5} className="py-6 text-center text-xs text-muted-foreground">
+                      Sin movimientos en el período
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* ── Histórico anual (al fondo — contexto de largo plazo) ── */}
+      {mode === "anual" && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm font-semibold">
+              Ventas vs Egresos — histórico 2009–{currentYear}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <FinancialHistoryChart current={{ year: currentYear, ventas: ventasTotal, egresos: egresosTotal }} />
+          </CardContent>
+        </Card>
       )}
 
     </div>

@@ -10,6 +10,7 @@ import {
   type DocumentBillingEntity,
   type DocumentTenantInfo,
 } from "./shared";
+import { capitalizeFirst } from "@/lib/utils";
 
 const MXN = new Intl.NumberFormat("es-MX", {
   style: "currency",
@@ -84,7 +85,7 @@ export function AccountStatementPdf(props: AccountStatementProps) {
 
         <Text style={sharedStyles.title}>{props.texts.title}</Text>
         <Text style={sharedStyles.subtitle}>
-          Generado el {DATE.format(props.asOfDate)}
+          Generado el {capitalizeFirst(DATE.format(props.asOfDate))}
         </Text>
 
         <View style={sharedStyles.section}>
@@ -127,8 +128,8 @@ export function AccountStatementPdf(props: AccountStatementProps) {
                 Number(r.amountDue) - Number(r.amountPaid);
               return (
                 <View key={idx} style={sharedStyles.tableRow}>
-                  <Text style={[cell.period, { textTransform: "capitalize" }]}>
-                    {PERIOD.format(r.period)}
+                  <Text style={cell.period}>
+                    {capitalizeFirst(PERIOD.format(r.period))}
                   </Text>
                   <Text style={cell.due}>
                     {MXN.format(Number(r.amountDue))}

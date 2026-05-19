@@ -12,6 +12,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { capitalizeFirst } from "@/lib/utils";
 
 // Histórico real extraído del Excel del cliente (2009–2025)
 const HISTORICAL_DATA = [
@@ -86,7 +87,7 @@ function monthShortLabel(yyyymm: string): string {
   const y = Number(yyyymm.slice(0, 4));
   const m = Number(yyyymm.slice(5, 7));
   if (!Number.isFinite(y) || !Number.isFinite(m)) return yyyymm;
-  return MONTH_LABEL.format(new Date(Date.UTC(y, m - 1, 1)));
+  return capitalizeFirst(MONTH_LABEL.format(new Date(Date.UTC(y, m - 1, 1))));
 }
 
 export interface IncomeChartProps {

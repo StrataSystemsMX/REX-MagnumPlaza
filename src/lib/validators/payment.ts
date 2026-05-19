@@ -36,6 +36,26 @@ export const registerPaymentSchema = z.object({
 
 export type RegisterPaymentInput = z.infer<typeof registerPaymentSchema>;
 
+export const waiveRentsSchema = z.object({
+  items: z
+    .array(
+      z.object({
+        rentId: z.string().min(1, "Identificador de renta inválido."),
+        amount: z
+          .number({ message: "Monto inválido." })
+          .nonnegative("El monto no puede ser negativo."),
+      }),
+    )
+    .min(1, "Selecciona al menos una renta para condonar."),
+  reason: z
+    .string()
+    .trim()
+    .min(5, "Indica el motivo de la condonación (mínimo 5 caracteres).")
+    .max(500, "Máximo 500 caracteres."),
+});
+
+export type WaiveRentsInput = z.infer<typeof waiveRentsSchema>;
+
 /**
  * Pago "bulk" — un movimiento de dinero (transferencia, depósito) que cubre
  * varias rentas en una sola operación. La suma de splitByRent debe igualar

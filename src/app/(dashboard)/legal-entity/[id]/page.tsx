@@ -23,6 +23,7 @@ import { getUserRoleCodes } from "@/lib/auth/permissions";
 import { propertyTypeLabel } from "@/lib/i18n/enums";
 import { getLegalEntityMetrics } from "@/lib/services/legal-entity-queries";
 import type { PropertyType } from "@/generated/prisma/enums";
+import { capitalizeFirst } from "@/lib/utils";
 
 const MXN = new Intl.NumberFormat("es-MX", {
   style: "currency",
@@ -136,7 +137,7 @@ export default async function LegalEntityPage({ params, searchParams }: PageProp
           <CardDescription>Ingresos, egresos y utilidad por mes</CardDescription>
         </CardHeader>
         <CardContent>
-          <Table>
+          <Table className="min-w-[1100px]">
             <TableHeader>
               <TableRow>
                 <TableHead>Concepto</TableHead>
@@ -258,12 +259,7 @@ export default async function LegalEntityPage({ params, searchParams }: PageProp
                 {[...data.ownedProperties, ...data.managedProperties].map((p) => (
                   <TableRow key={`${p.id}-${p.isOwner ? "o" : "m"}`}>
                     <TableCell>
-                      <Link
-                        href={`/properties/${p.id}`}
-                        className="font-medium hover:underline"
-                      >
-                        {p.name}
-                      </Link>
+                      <span className="font-medium">{p.name}</span>
                     </TableCell>
                     <TableCell className="text-xs text-muted-foreground">
                       {propertyTypeLabel(p.type as PropertyType)}
@@ -315,7 +311,7 @@ export default async function LegalEntityPage({ params, searchParams }: PageProp
               <TableBody>
                 {data.recentExpenses.map((e) => (
                   <TableRow key={e.id}>
-                    <TableCell className="whitespace-nowrap">{DATE.format(e.expenseDate)}</TableCell>
+                    <TableCell className="whitespace-nowrap">{capitalizeFirst(DATE.format(e.expenseDate))}</TableCell>
                     <TableCell>
                       <Badge variant="outline">{e.category}</Badge>
                     </TableCell>

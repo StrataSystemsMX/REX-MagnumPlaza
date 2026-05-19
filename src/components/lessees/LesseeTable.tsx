@@ -1,28 +1,8 @@
 "use client";
 
-import {
-  flexRender,
-  getCoreRowModel,
-  getFilteredRowModel,
-  getSortedRowModel,
-  type ColumnDef,
-  useReactTable,
-} from "@tanstack/react-table";
-import { ExternalLink, LayoutGrid, List, MoreHorizontal, Pencil, Plus, Trash2 } from "lucide-react";
-import Link from "next/link";
+import { ChevronDown, ChevronRight, Plus } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useMemo, useState, useTransition } from "react";
-import { toast } from "sonner";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+import { useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -33,41 +13,48 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { LesseeForm } from "@/components/forms/LesseeForm";
 import { TenantCard } from "@/components/lessees/TenantCard";
-import { cn } from "@/lib/utils";
-import { communicationChannelLabel } from "@/lib/i18n/enums";
-import { actionDeleteLessee } from "@/lib/services/lessees";
 import type { LesseeListItem } from "@/lib/services/lessees-queries";
+import type { PropertyType } from "@/generated/prisma/enums";
 
 interface LesseeTableProps {
   lessees: ReadonlyArray<LesseeListItem>;
 }
 
+type LesseeGroup = {
+  key: string;
+  label: string;
+  /** "plaza" para PLAZA_COMERCIAL, "inmueble" para los demás, "none" para sin contrato activo. */
+  kind: "plaza" | "inmueble" | "none";
+  lessees: LesseeListItem[];
+};
+
+function groupRank(kind: LesseeGroup["kind"]) {
+  if (kind === "plaza") return 0;
+  if (kind === "inmueble") return 1;
+  return 2;
+}
+
+function kindFromType(type: PropertyType): "plaza" | "inmueble" {
+  return type === "PLAZA_COMERCIAL" ? "plaza" : "inmueble";
+}
+
 export function LesseeTable({ lessees }: LesseeTableProps) {
   const router = useRouter();
   const [search, setSearch] = useState("");
-  const [view, setView] = useState<"table" | "cards">("cards");
   const [createOpen, setCreateOpen] = useState(false);
-  const [editTarget, setEditTarget] = useState<LesseeListItem | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<LesseeListItem | null>(null);
-  const [pending, startTransition] = useTransition();
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+
+  function toggleCollapsed(key: string) {
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -81,174 +68,51 @@ export function LesseeTable({ lessees }: LesseeTableProps) {
     });
   }, [lessees, search]);
 
-  const columns = useMemo<ColumnDef<LesseeListItem>[]>(
-    () => [
-      {
-        accessorKey: "legalName",
-        header: "Razón social",
-        cell: ({ row }) => (
-          <div>
-            <Link
-              href={`/lessees/${row.original.id}`}
-              className="font-medium hover:underline"
-            >
-              {row.original.legalName}
-            </Link>
-            {row.original.rfc ? (
-              <p className="text-xs text-muted-foreground font-mono">{row.original.rfc}</p>
-            ) : null}
-          </div>
-        ),
-      },
-      {
-        accessorKey: "contactName",
-        header: "Contacto",
-        cell: ({ row }) => (
-          <span className="text-sm">{row.original.contactName ?? "—"}</span>
-        ),
-      },
-      {
-        id: "phones",
-        header: "Teléfono / WhatsApp",
-        cell: ({ row }) => (
-          <div className="text-xs">
-            {row.original.phone ? <p>📞 {row.original.phone}</p> : null}
-            {row.original.whatsapp ? <p>💬 {row.original.whatsapp}</p> : null}
-            {!row.original.phone && !row.original.whatsapp ? (
-              <span className="text-muted-foreground">—</span>
-            ) : null}
-          </div>
-        ),
-      },
-      {
-        accessorKey: "preferredChannel",
-        header: "Canal preferido",
-        cell: ({ row }) => (
-          <Badge variant="secondary">
-            {communicationChannelLabel(row.original.preferredChannel)}
-          </Badge>
-        ),
-      },
-      {
-        accessorKey: "activeContractsCount",
-        header: () => <span>Contratos activos</span>,
-        cell: ({ row }) => {
-          const n = row.original.activeContractsCount;
-          return (
-            <span className="text-sm tabular-nums">
-              {n > 0 ? (
-                <Badge>{n}</Badge>
-              ) : (
-                <span className="text-muted-foreground">0</span>
-              )}
-            </span>
-          );
-        },
-      },
-      {
-        id: "actions",
-        header: () => <span className="sr-only">Acciones</span>,
-        cell: ({ row }) => (
-          <div className="text-right">
-            <DropdownMenu>
-              <DropdownMenuTrigger render={<Button variant="ghost" size="icon" />}>
-                <MoreHorizontal className="size-4" />
-                <span className="sr-only">Acciones</span>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem render={<Link href={`/lessees/${row.original.id}`} />}>
-                  <ExternalLink className="size-4" />
-                  Ver detalle
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setEditTarget(row.original)}>
-                  <Pencil className="size-4" />
-                  Editar
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  className="text-destructive focus:text-destructive"
-                  onClick={() => setDeleteTarget(row.original)}
-                >
-                  <Trash2 className="size-4" />
-                  Eliminar
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        ),
-      },
-    ],
-    [],
-  );
-
-  const table = useReactTable({
-    data: filtered as LesseeListItem[],
-    columns,
-    getCoreRowModel: getCoreRowModel(),
-    getFilteredRowModel: getFilteredRowModel(),
-    getSortedRowModel: getSortedRowModel(),
-  });
-
-  function confirmDelete() {
-    if (!deleteTarget) return;
-    const target = deleteTarget;
-    startTransition(async () => {
-      try {
-        await actionDeleteLessee(target.id);
-        toast.success(`Inquilino "${target.legalName}" eliminado.`);
-        setDeleteTarget(null);
-        router.refresh();
-      } catch (error) {
-        const msg = error instanceof Error ? error.message : "Error al eliminar.";
-        toast.error(msg);
+  const grouped = useMemo<LesseeGroup[]>(() => {
+    const map = new Map<string, LesseeGroup>();
+    for (const l of filtered) {
+      if (l.properties.length === 0) {
+        const key = "__none__";
+        if (!map.has(key)) {
+          map.set(key, {
+            key,
+            label: "Sin contrato activo",
+            kind: "none",
+            lessees: [],
+          });
+        }
+        map.get(key)!.lessees.push(l);
+      } else {
+        for (const p of l.properties) {
+          if (!map.has(p.id)) {
+            map.set(p.id, {
+              key: p.id,
+              label: p.name,
+              kind: kindFromType(p.type),
+              lessees: [],
+            });
+          }
+          map.get(p.id)!.lessees.push(l);
+        }
       }
+    }
+    return Array.from(map.values()).sort((a, b) => {
+      const rankDiff = groupRank(a.kind) - groupRank(b.kind);
+      if (rankDiff !== 0) return rankDiff;
+      return a.label.localeCompare(b.label, "es");
     });
-  }
+  }, [filtered]);
 
   return (
     <>
-      <div className="flex items-center justify-between gap-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
         <Input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="max-w-sm"
+          placeholder="Buscar por razón social, contacto o RFC..."
+          className="w-full sm:max-w-sm"
         />
-        <div className="flex items-center gap-2">
-          <div
-            role="group"
-            aria-label="Cambiar vista"
-            className="inline-flex h-8 overflow-hidden rounded-lg ring-1 ring-foreground/10"
-          >
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              aria-pressed={view === "table"}
-              onClick={() => setView("table")}
-              className={cn(
-                "h-8 rounded-none px-2.5",
-                view === "table" && "bg-muted text-foreground",
-              )}
-            >
-              <List className="size-3.5" />
-              Tabla
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              aria-pressed={view === "cards"}
-              onClick={() => setView("cards")}
-              className={cn(
-                "h-8 rounded-none px-2.5",
-                view === "cards" && "bg-muted text-foreground",
-              )}
-            >
-              <LayoutGrid className="size-3.5" />
-              Tarjetas
-            </Button>
-          </div>
-          <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+        <Dialog open={createOpen} onOpenChange={setCreateOpen}>
           <DialogTrigger render={<Button />}>
             <Plus className="size-4" />
             Nuevo inquilino
@@ -269,121 +133,71 @@ export function LesseeTable({ lessees }: LesseeTableProps) {
             />
           </DialogContent>
         </Dialog>
-        </div>
       </div>
 
-      {view === "table" ? (
-        <div className="rounded-md border bg-card">
-          <Table>
-            <TableHeader>
-              {table.getHeaderGroups().map((hg) => (
-                <TableRow key={hg.id}>
-                  {hg.headers.map((h) => (
-                    <TableHead key={h.id}>
-                      {h.isPlaceholder
-                        ? null
-                        : flexRender(h.column.columnDef.header, h.getContext())}
-                    </TableHead>
-                  ))}
-                </TableRow>
-              ))}
-            </TableHeader>
-            <TableBody>
-              {table.getRowModel().rows.length === 0 ? (
-                <TableRow>
-                  <TableCell
-                    colSpan={columns.length}
-                    className="text-center text-sm text-muted-foreground"
-                  >
-                    No hay inquilinos registrados.
-                  </TableCell>
-                </TableRow>
-              ) : (
-                table.getRowModel().rows.map((row) => (
-                  <TableRow key={row.id}>
-                    {row.getVisibleCells().map((cell) => (
-                      <TableCell key={cell.id}>
-                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                      </TableCell>
-                    ))}
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </div>
-      ) : filtered.length === 0 ? (
+      {grouped.length === 0 ? (
         <div className="rounded-xl border border-dashed p-10 text-center text-sm text-muted-foreground">
           No hay inquilinos registrados.
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
-          {filtered.map((lessee) => (
-            <TenantCard key={lessee.id} lessee={lessee} />
-          ))}
+        <div className="space-y-6">
+          {grouped.map((group) => {
+            const isCollapsed = collapsed.has(group.key);
+            return (
+              <section key={group.key} className="space-y-3">
+                <GroupHeader
+                  group={group}
+                  collapsed={isCollapsed}
+                  onToggle={() => toggleCollapsed(group.key)}
+                />
+                {!isCollapsed ? (
+                  <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+                    {group.lessees.map((lessee) => (
+                      <TenantCard key={lessee.id} lessee={lessee} />
+                    ))}
+                  </div>
+                ) : null}
+              </section>
+            );
+          })}
         </div>
       )}
-
-      <Dialog
-        open={editTarget !== null}
-        onOpenChange={(open) => !open && setEditTarget(null)}
-      >
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>Editar inquilino</DialogTitle>
-            <DialogDescription>
-              Modifica la información de {editTarget?.legalName}.
-            </DialogDescription>
-          </DialogHeader>
-          {editTarget ? (
-            <LesseeForm
-              initial={{
-                id: editTarget.id,
-                legalName: editTarget.legalName,
-                contactName: editTarget.contactName,
-                rfc: editTarget.rfc,
-                email: editTarget.email,
-                phone: editTarget.phone,
-                whatsapp: editTarget.whatsapp,
-                preferredChannel: editTarget.preferredChannel,
-                notes: editTarget.notes,
-              }}
-              onSuccess={() => {
-                setEditTarget(null);
-                router.refresh();
-              }}
-              submitLabel="Guardar cambios"
-            />
-          ) : null}
-        </DialogContent>
-      </Dialog>
-
-      <AlertDialog
-        open={deleteTarget !== null}
-        onOpenChange={(open) => !open && setDeleteTarget(null)}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>¿Eliminar inquilino?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Se marcará como inactivo &quot;{deleteTarget?.legalName}&quot;. Sus contratos y
-              pagos históricos se conservan.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={pending}>Cancelar</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={(e) => {
-                e.preventDefault();
-                confirmDelete();
-              }}
-              disabled={pending}
-            >
-              {pending ? "Eliminando..." : "Eliminar"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </>
+  );
+}
+
+function GroupHeader({
+  group,
+  collapsed,
+  onToggle,
+}: {
+  group: LesseeGroup;
+  collapsed: boolean;
+  onToggle: () => void;
+}) {
+  const tagLabel =
+    group.kind === "plaza" ? "Plaza" : group.kind === "inmueble" ? "Inmueble" : null;
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-expanded={!collapsed}
+      className="flex w-full items-center gap-2 rounded-md px-1 py-1 text-left transition hover:bg-muted/50"
+    >
+      {collapsed ? (
+        <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
+      ) : (
+        <ChevronDown className="size-4 shrink-0 text-muted-foreground" />
+      )}
+      {tagLabel ? (
+        <Badge variant="outline" className="text-[10px] uppercase tracking-wide">
+          {tagLabel}
+        </Badge>
+      ) : null}
+      <h3 className="text-base font-semibold tracking-tight">{group.label}</h3>
+      <span className="text-xs text-muted-foreground">
+        {group.lessees.length} inquilino{group.lessees.length === 1 ? "" : "s"}
+      </span>
+    </button>
   );
 }
