@@ -8,6 +8,16 @@ const UNIT_STATUS_VALUES = [
   "NO_DISPONIBLE",
 ] as const;
 
+const INCLUDED_SERVICE_VALUES = [
+  "AGUA",
+  "LUZ",
+  "GAS",
+  "INTERNET",
+  "MANTENIMIENTO",
+  "VIGILANCIA",
+  "ESTACIONAMIENTO",
+] as const;
+
 export const createUnitSchema = z.object({
   propertyId: z.string().min(1, "El inmueble es requerido."),
   code: z
@@ -30,6 +40,24 @@ export const createUnitSchema = z.object({
     .nonnegative("La renta no puede ser negativa.")
     .optional(),
   status: z.enum(UNIT_STATUS_VALUES, { message: "Selecciona el estado." }),
+  depositMonths: z
+    .number({ message: "Debe ser numérico." })
+    .int("Solo meses completos.")
+    .min(0, "No puede ser negativo.")
+    .max(36, "Máximo 36 meses.")
+    .optional(),
+  minContractMonths: z
+    .number({ message: "Debe ser numérico." })
+    .int("Solo meses completos.")
+    .min(0, "No puede ser negativo.")
+    .max(120, "Máximo 120 meses.")
+    .optional(),
+  maintenanceFee: z
+    .number({ message: "Debe ser numérico." })
+    .nonnegative("No puede ser negativo.")
+    .optional(),
+  availableFrom: z.coerce.date().optional(),
+  includedServices: z.array(z.enum(INCLUDED_SERVICE_VALUES)).optional(),
   notes: z
     .string()
     .trim()
