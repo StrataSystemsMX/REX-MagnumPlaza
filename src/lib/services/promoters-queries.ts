@@ -9,7 +9,20 @@ export async function getPromoters() {
     include: {
       links: {
         where: { isActive: true, expiresAt: { gt: new Date() } },
-        select: { id: true, unitId: true, expiresAt: true, resultedInRent: true, visitCount: true },
+        select: {
+          id: true,
+          unitId: true,
+          publicToken: true,
+          expiresAt: true,
+          resultedInRent: true,
+          visitCount: true,
+          unit: {
+            select: {
+              code: true,
+              property: { select: { name: true } },
+            },
+          },
+        },
       },
     },
   });
@@ -31,7 +44,7 @@ export async function getAvailableUnitsForPromoterLink() {
       code: true,
       name: true,
       estimatedRent: true,
-      property: { select: { id: true, name: true } },
+      property: { select: { id: true, name: true, type: true } },
     },
   });
   return units.map((u) => ({ ...u, estimatedRent: u.estimatedRent?.toNumber() ?? null }));

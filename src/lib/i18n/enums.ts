@@ -7,6 +7,7 @@ import type {
   DocumentType,
   ExpenseType,
   GuaranteeStatus,
+  IncludedService,
   MaintenanceResponsibility,
   MaintenanceStatus,
   MaintenanceType,
@@ -472,3 +473,25 @@ export function auditActionLabel(a: AuditAction): string {
       return exhaustive(a);
   }
 }
+
+export function includedServiceLabel(s: IncludedService): string {
+  switch (s) {
+    case "AGUA":
+      return "Agua";
+    case "LUZ":
+      return "Luz";
+    case "GAS":
+      return "Gas";
+    case "INTERNET":
+      return "Internet";
+    case "MANTENIMIENTO":
+      return "Mantenimiento";
+    case "VIGILANCIA":
+      return "Vigilancia";
+    case "ESTACIONAMIENTO":
+      return "Estacionamiento";
+    default:
+      return exhaustive(s);
+  }
+}
+

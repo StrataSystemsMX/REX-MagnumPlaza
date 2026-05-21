@@ -1,7 +1,7 @@
 "use client";
 
-import { useTransition, useState } from "react";
-import { Link2, Link2Off, UserCheck, UserX, Plus } from "lucide-react";
+import { useTransition, useState, useEffect } from "react";
+import { Link2, Link2Off, UserCheck, UserX, Plus, Copy } from "lucide-react";
 import { toast } from "sonner";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm, type Resolver } from "react-hook-form";
@@ -68,6 +68,19 @@ function LinkDialog({ promoterId, units }: { promoterId: string; units: UnitForL
     defaultValues: { promoterId, unitId: "", expiresInDays: 30 },
   });
 
+  // Para plazas mostramos el local específico; para inmuebles independientes
+  // (oficina, casa, espectacular, etc.) basta con el nombre del inmueble.
+  function formatUnitLabel(u: UnitForLink): string {
+    const base =
+      u.property.type === "PLAZA_COMERCIAL"
+        ? `${u.property.name} · ${u.code}`
+        : u.property.name;
+    return u.estimatedRent ? `${base} — ${MXN.format(u.estimatedRent)}` : base;
+  }
+
+  const unitLabels = Object.fromEntries(units.map((u) => [u.id, formatUnitLabel(u)]));
+  const expiresLabels = Object.fromEntries([7, 15, 30, 60, 90].map((d) => [String(d), `${d} días`]));
+
   async function onSubmit(values: CreatePromoterLinkInput) {
     try {
       const { publicToken } = await actionCreatePromoterLink(values);
@@ -87,18 +100,19 @@ function LinkDialog({ promoterId, units }: { promoterId: string; units: UnitForL
       </DialogTrigger>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>Generar link de local</DialogTitle>
+          <DialogTitle>Generar link de local o inmueble</DialogTitle>
         </DialogHeader>
         {generatedLink ? (
           <div className="space-y-3">
             <p className="text-sm text-muted-foreground">
               Comparte este link con el promotor. Expira según configuración.
             </p>
-            <div className="flex items-center gap-2 rounded-md border bg-muted px-3 py-2">
-              <code className="flex-1 overflow-hidden text-ellipsis text-xs">{generatedLink}</code>
+            <div className="flex items-start gap-2 rounded-md border bg-muted px-3 py-2">
+              <code className="min-w-0 flex-1 break-all text-xs">{generatedLink}</code>
               <Button
                 size="sm"
                 variant="ghost"
+                className="shrink-0"
                 onClick={() => { navigator.clipboard.writeText(generatedLink); toast.success("Copiado."); }}
               >
                 Copiar
@@ -116,18 +130,17 @@ function LinkDialog({ promoterId, units }: { promoterId: string; units: UnitForL
                 name="unitId"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Local disponible</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
+                    <FormLabel>Local o inmueble disponible</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value} items={unitLabels}>
                       <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Selecciona un local" />
+                        <SelectTrigger className="w-full">
+                          <SelectValue placeholder="Selecciona un local o inmueble" />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
                         {units.map((u) => (
                           <SelectItem key={u.id} value={u.id}>
-                            {u.property.name} {u.code}
-                            {u.estimatedRent ? ` — ${MXN.format(u.estimatedRent)}` : ""}
+                            {formatUnitLabel(u)}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -145,9 +158,10 @@ function LinkDialog({ promoterId, units }: { promoterId: string; units: UnitForL
                     <Select
                       onValueChange={(v) => field.onChange(Number(v))}
                       value={String(field.value)}
+                      items={expiresLabels}
                     >
                       <FormControl>
-                        <SelectTrigger>
+                        <SelectTrigger className="w-full">
                           <SelectValue />
                         </SelectTrigger>
                       </FormControl>
@@ -187,6 +201,16 @@ interface Props {
 
 export function PromotersTable({ promoters, units, canManage }: Props) {
   const [isPending, startTransition] = useTransition();
+  const [origin, setOrigin] = useState("");
+
+  useEffect(() => {
+    setOrigin(window.location.origin);
+  }, []);
+
+  function copyLink(url: string) {
+    navigator.clipboard.writeText(url);
+    toast.success("Link copiado.");
+  }
 
   function toggleActive(promoterId: string, current: boolean) {
     startTransition(async () => {
@@ -276,36 +300,64 @@ export function PromotersTable({ promoters, units, canManage }: Props) {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {p.links.map((l) => (
-                    <TableRow key={l.id}>
-                      <TableCell className="text-sm font-mono">{l.unitId.slice(0, 8)}…</TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        {DATE.format(l.expiresAt)}
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums text-sm">
-                        {l.visitCount}
-                      </TableCell>
-                      <TableCell>
-                        {l.resultedInRent ? (
-                          <span className="text-xs font-medium text-emerald-700">Sí</span>
-                        ) : (
-                          <span className="text-xs text-muted-foreground">No</span>
-                        )}
-                      </TableCell>
-                      {canManage && (
-                        <TableCell className="text-right">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="text-muted-foreground hover:text-destructive"
-                            onClick={() => deactivateLink(l.id)}
-                          >
-                            <Link2Off className="size-3.5" />
-                          </Button>
+                  {p.links.map((l) => {
+                    const url = origin ? `${origin}/p/${l.publicToken}` : `/p/${l.publicToken}`;
+                    return (
+                      <TableRow key={l.id}>
+                        <TableCell className="text-sm">
+                          <div className="flex flex-col gap-1">
+                            <span className="font-medium">
+                              {l.unit.property.name} · {l.unit.code}
+                            </span>
+                            <div className="flex items-center gap-1.5">
+                              <a
+                                href={url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="truncate font-mono text-xs text-blue-600 hover:underline"
+                              >
+                                {url}
+                              </a>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="size-6 shrink-0 p-0 text-muted-foreground"
+                                onClick={() => copyLink(url)}
+                                title="Copiar link"
+                              >
+                                <Copy className="size-3" />
+                              </Button>
+                            </div>
+                          </div>
                         </TableCell>
-                      )}
-                    </TableRow>
-                  ))}
+                        <TableCell className="text-sm text-muted-foreground">
+                          {DATE.format(l.expiresAt)}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums text-sm">
+                          {l.visitCount}
+                        </TableCell>
+                        <TableCell>
+                          {l.resultedInRent ? (
+                            <span className="text-xs font-medium text-emerald-700">Sí</span>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">No</span>
+                          )}
+                        </TableCell>
+                        {canManage && (
+                          <TableCell className="text-right">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="text-muted-foreground hover:text-destructive"
+                              onClick={() => deactivateLink(l.id)}
+                            >
+                              <Link2Off className="size-3.5" />
+                            </Button>
+                          </TableCell>
+                        )}
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </CardContent>
