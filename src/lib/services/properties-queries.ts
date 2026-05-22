@@ -55,11 +55,6 @@ export async function getProperties(filters: PropertyFilters = {}) {
           area: true,
           notes: true,
           propertyId: true,
-          parentUnitId: true,
-          childUnits: {
-            select: { id: true, code: true, area: true },
-            orderBy: { code: "asc" },
-          },
           contracts: {
             where: { status: "ACTIVE" },
             orderBy: { startDate: "desc" },
@@ -74,10 +69,7 @@ export async function getProperties(filters: PropertyFilters = {}) {
           },
           documents: {
             where: { type: "UNIT_PHOTO" },
-            orderBy: [
-              { sortOrder: { sort: "asc", nulls: "last" } },
-              { createdAt: "desc" },
-            ],
+            orderBy: { createdAt: "desc" },
             take: 50,
             select: { id: true, url: true, filename: true },
           },
@@ -85,10 +77,7 @@ export async function getProperties(filters: PropertyFilters = {}) {
       },
       documents: {
         where: { type: "PROPERTY_PHOTO" },
-        orderBy: [
-          { sortOrder: { sort: "asc", nulls: "last" } },
-          { createdAt: "desc" },
-        ],
+        orderBy: { createdAt: "desc" },
         take: 50,
         select: { id: true, url: true, filename: true },
       },

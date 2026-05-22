@@ -1,9 +1,9 @@
 "use client";
 
-import { GripVertical, ImagePlus, Loader2, Star, Trash2 } from "lucide-react";
+import { ImagePlus, Loader2, Trash2 } from "lucide-react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { useEffect, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 import { toast } from "sonner";
 import {
   AlertDialog,
@@ -23,10 +23,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { PropertyPhotoUploader } from "@/components/properties/PropertyPhotoUploader";
-import {
-  actionDeletePropertyPhoto,
-  actionReorderPropertyPhotos,
-} from "@/lib/services/property-photos";
+import { actionDeletePropertyPhoto } from "@/lib/services/property-photos";
 
 interface Photo {
   id: string;
@@ -55,15 +52,6 @@ export function PropertyPhotoGallery({
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Photo | null>(null);
   const [pending, startTransition] = useTransition();
-  const [, startReorderTransition] = useTransition();
-
-  const [localPhotos, setLocalPhotos] = useState<ReadonlyArray<Photo>>(photos);
-  const [draggedId, setDraggedId] = useState<string | null>(null);
-  const [dragOverId, setDragOverId] = useState<string | null>(null);
-
-  useEffect(() => {
-    setLocalPhotos(photos);
-  }, [photos]);
 
   function confirmDelete() {
     if (!deleteTarget) return;
@@ -81,138 +69,57 @@ export function PropertyPhotoGallery({
     });
   }
 
-  function reorder(fromIdx: number, toIdx: number) {
-    if (fromIdx === toIdx || fromIdx < 0 || toIdx < 0) return;
-    const next = [...localPhotos];
-    const [moved] = next.splice(fromIdx, 1);
-    if (!moved) return;
-    next.splice(toIdx, 0, moved);
-    setLocalPhotos(next);
-
-    const orderedIds = next.map((p) => p.id);
-    startReorderTransition(async () => {
-      try {
-        await actionReorderPropertyPhotos({ propertyId, orderedIds });
-        router.refresh();
-      } catch (error) {
-        setLocalPhotos(photos);
-        const msg = error instanceof Error ? error.message : "Error al reordenar.";
-        toast.error(msg);
-      }
-    });
-  }
-
-  function handleDragStart(e: React.DragEvent<HTMLDivElement>, id: string) {
-    setDraggedId(id);
-    e.dataTransfer.effectAllowed = "move";
-    e.dataTransfer.setData("text/plain", id);
-  }
-
-  function handleDragOver(e: React.DragEvent<HTMLDivElement>, id: string) {
-    if (!draggedId) return;
-    e.preventDefault();
-    e.dataTransfer.dropEffect = "move";
-    if (draggedId !== id) setDragOverId(id);
-  }
-
-  function handleDrop(e: React.DragEvent<HTMLDivElement>, targetId: string) {
-    e.preventDefault();
-    if (draggedId && draggedId !== targetId) {
-      const fromIdx = localPhotos.findIndex((p) => p.id === draggedId);
-      const toIdx = localPhotos.findIndex((p) => p.id === targetId);
-      reorder(fromIdx, toIdx);
-    }
-    setDraggedId(null);
-    setDragOverId(null);
-  }
-
-  function handleDragEnd() {
-    setDraggedId(null);
-    setDragOverId(null);
-  }
-
-  const emptySlots = Math.max(0, MIN_SLOTS - localPhotos.length);
+  const emptySlots = Math.max(0, MIN_SLOTS - photos.length);
 
   return (
     <>
       <p className="text-sm text-muted-foreground">
-        {localPhotos.length === 0
+        {photos.length === 0
           ? "Aún no hay fotos. Haz click en cualquier recuadro para subir."
-          : canEdit
-            ? `${localPhotos.length} foto${localPhotos.length === 1 ? "" : "s"}. Arrastra para reordenar — la primera es la portada.`
-            : `${localPhotos.length} foto${localPhotos.length === 1 ? "" : "s"}.`}
+          : `${photos.length} foto${photos.length === 1 ? "" : "s"}. La más reciente aparece como portada.`}
       </p>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {localPhotos.map((photo, idx) => {
-          const isCover = idx === 0;
-          const isDragged = draggedId === photo.id;
-          const isOver = dragOverId === photo.id;
-          return (
-            <div
-              key={photo.id}
-              draggable={canEdit}
-              onDragStart={canEdit ? (e) => handleDragStart(e, photo.id) : undefined}
-              onDragOver={canEdit ? (e) => handleDragOver(e, photo.id) : undefined}
-              onDrop={canEdit ? (e) => handleDrop(e, photo.id) : undefined}
-              onDragEnd={canEdit ? handleDragEnd : undefined}
-              className={`group relative aspect-square overflow-hidden rounded-lg border bg-muted transition ${
-                canEdit ? "cursor-grab active:cursor-grabbing" : ""
-              } ${isDragged ? "opacity-40" : ""} ${
-                isOver ? "ring-2 ring-primary ring-offset-2" : ""
-              }`}
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+        {photos.map((photo) => (
+          <div
+            key={photo.id}
+            className="group relative aspect-square overflow-hidden rounded-lg border bg-muted"
+          >
+            <button
+              type="button"
+              onClick={() => setPreviewUrl(photo.url)}
+              className="absolute inset-0"
+              aria-label={`Ver ${photo.filename}`}
             >
+              <Image
+                src={photo.url}
+                alt=""
+                aria-hidden
+                fill
+                sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
+                className="scale-110 object-cover blur-xl"
+              />
+              <div className="absolute inset-0 bg-background/30" />
+              <Image
+                src={photo.url}
+                alt={photo.filename}
+                fill
+                sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
+                className="object-contain transition-transform group-hover:scale-105"
+              />
+            </button>
+            {canEdit ? (
               <button
                 type="button"
-                onClick={() => setPreviewUrl(photo.url)}
-                className="absolute inset-0"
-                aria-label={`Ver ${photo.filename}`}
+                onClick={() => setDeleteTarget(photo)}
+                className="absolute right-2 top-2 rounded-full bg-background/90 p-1.5 opacity-0 shadow transition-opacity hover:bg-background group-hover:opacity-100"
+                aria-label={`Eliminar ${photo.filename}`}
               >
-                <Image
-                  src={photo.url}
-                  alt=""
-                  aria-hidden
-                  fill
-                  sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
-                  className="scale-110 object-cover blur-xl"
-                />
-                <div className="absolute inset-0 bg-background/30" />
-                <Image
-                  src={photo.url}
-                  alt={photo.filename}
-                  fill
-                  sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
-                  className="pointer-events-none object-contain transition-transform group-hover:scale-105"
-                />
+                <Trash2 className="size-4 text-destructive" />
               </button>
-              {isCover ? (
-                <span className="pointer-events-none absolute left-2 top-2 inline-flex items-center gap-1 rounded-full bg-amber-500 px-2.5 py-1 text-xs font-semibold uppercase tracking-wider text-white shadow">
-                  <Star className="size-3.5 fill-current" />
-                  Portada
-                </span>
-              ) : null}
-              {canEdit ? (
-                <span
-                  aria-hidden
-                  className="pointer-events-none absolute bottom-2 left-2 rounded-md bg-background/90 p-1.5 opacity-0 shadow transition-opacity group-hover:opacity-100"
-                  title="Arrastra para reordenar"
-                >
-                  <GripVertical className="size-4 text-muted-foreground" />
-                </span>
-              ) : null}
-              {canEdit ? (
-                <button
-                  type="button"
-                  onClick={() => setDeleteTarget(photo)}
-                  className="absolute right-2 top-2 rounded-full bg-background/90 p-1.5 opacity-0 shadow transition-opacity hover:bg-background group-hover:opacity-100"
-                  aria-label={`Eliminar ${photo.filename}`}
-                >
-                  <Trash2 className="size-4 text-destructive" />
-                </button>
-              ) : null}
-            </div>
-          );
-        })}
+            ) : null}
+          </div>
+        ))}
 
         {canEdit
           ? Array.from({ length: emptySlots }).map((_, i) => (

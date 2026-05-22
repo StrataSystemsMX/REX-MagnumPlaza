@@ -1,9 +1,9 @@
 "use client";
 
-import { GripVertical, ImagePlus, Loader2, Star, Trash2 } from "lucide-react";
+import { ImagePlus, Loader2, Trash2 } from "lucide-react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { useEffect, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 import { toast } from "sonner";
 import {
   AlertDialog,
@@ -23,10 +23,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { UnitPhotoUploader } from "@/components/properties/UnitPhotoUploader";
-import {
-  actionDeleteUnitPhoto,
-  actionReorderUnitPhotos,
-} from "@/lib/services/unit-photos";
+import { actionDeleteUnitPhoto } from "@/lib/services/unit-photos";
 
 interface Photo {
   id: string;
@@ -47,17 +44,6 @@ export function UnitPhotoGallery({ unitId, photos }: Props) {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Photo | null>(null);
   const [pending, startTransition] = useTransition();
-  const [, startReorderTransition] = useTransition();
-
-  // Estado local para UI optimista en drag-and-drop. Re-sincroniza con props
-  // tras router.refresh().
-  const [localPhotos, setLocalPhotos] = useState<ReadonlyArray<Photo>>(photos);
-  const [draggedId, setDraggedId] = useState<string | null>(null);
-  const [dragOverId, setDragOverId] = useState<string | null>(null);
-
-  useEffect(() => {
-    setLocalPhotos(photos);
-  }, [photos]);
 
   function confirmDelete() {
     if (!deleteTarget) return;
@@ -75,130 +61,55 @@ export function UnitPhotoGallery({ unitId, photos }: Props) {
     });
   }
 
-  function reorder(fromIdx: number, toIdx: number) {
-    if (fromIdx === toIdx || fromIdx < 0 || toIdx < 0) return;
-    const next = [...localPhotos];
-    const [moved] = next.splice(fromIdx, 1);
-    if (!moved) return;
-    next.splice(toIdx, 0, moved);
-    setLocalPhotos(next);
-
-    const orderedIds = next.map((p) => p.id);
-    startReorderTransition(async () => {
-      try {
-        await actionReorderUnitPhotos({ unitId, orderedIds });
-        router.refresh();
-      } catch (error) {
-        setLocalPhotos(photos); // revert
-        const msg = error instanceof Error ? error.message : "Error al reordenar.";
-        toast.error(msg);
-      }
-    });
-  }
-
-  function handleDragStart(e: React.DragEvent<HTMLDivElement>, id: string) {
-    setDraggedId(id);
-    e.dataTransfer.effectAllowed = "move";
-    e.dataTransfer.setData("text/plain", id);
-  }
-
-  function handleDragOver(e: React.DragEvent<HTMLDivElement>, id: string) {
-    if (!draggedId) return;
-    e.preventDefault();
-    e.dataTransfer.dropEffect = "move";
-    if (draggedId !== id) setDragOverId(id);
-  }
-
-  function handleDrop(e: React.DragEvent<HTMLDivElement>, targetId: string) {
-    e.preventDefault();
-    if (draggedId && draggedId !== targetId) {
-      const fromIdx = localPhotos.findIndex((p) => p.id === draggedId);
-      const toIdx = localPhotos.findIndex((p) => p.id === targetId);
-      reorder(fromIdx, toIdx);
-    }
-    setDraggedId(null);
-    setDragOverId(null);
-  }
-
-  function handleDragEnd() {
-    setDraggedId(null);
-    setDragOverId(null);
-  }
-
-  const emptySlots = Math.max(0, MIN_SLOTS - localPhotos.length);
+  const emptySlots = Math.max(0, MIN_SLOTS - photos.length);
 
   return (
     <>
       <p className="text-sm text-muted-foreground">
-        {localPhotos.length === 0
+        {photos.length === 0
           ? "Aún no hay fotos. Haz click en cualquier recuadro para subir."
-          : `${localPhotos.length} foto${localPhotos.length === 1 ? "" : "s"}. Arrastra para reordenar — la primera es la portada.`}
+          : `${photos.length} foto${photos.length === 1 ? "" : "s"}. La más reciente aparece como portada.`}
       </p>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {localPhotos.map((photo, idx) => {
-          const isCover = idx === 0;
-          const isDragged = draggedId === photo.id;
-          const isOver = dragOverId === photo.id;
-          return (
-            <div
-              key={photo.id}
-              draggable
-              onDragStart={(e) => handleDragStart(e, photo.id)}
-              onDragOver={(e) => handleDragOver(e, photo.id)}
-              onDrop={(e) => handleDrop(e, photo.id)}
-              onDragEnd={handleDragEnd}
-              className={`group relative aspect-square cursor-grab overflow-hidden rounded-lg border bg-muted transition active:cursor-grabbing ${
-                isDragged ? "opacity-40" : ""
-              } ${isOver ? "ring-2 ring-primary ring-offset-2" : ""}`}
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+        {photos.map((photo) => (
+          <div
+            key={photo.id}
+            className="group relative aspect-square overflow-hidden rounded-lg border bg-muted"
+          >
+            <button
+              type="button"
+              onClick={() => setPreviewUrl(photo.url)}
+              className="absolute inset-0"
+              aria-label={`Ver ${photo.filename}`}
             >
-              <button
-                type="button"
-                onClick={() => setPreviewUrl(photo.url)}
-                className="absolute inset-0"
-                aria-label={`Ver ${photo.filename}`}
-              >
-                <Image
-                  src={photo.url}
-                  alt=""
-                  aria-hidden
-                  fill
-                  sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
-                  className="scale-110 object-cover blur-xl"
-                />
-                <div className="absolute inset-0 bg-background/30" />
-                <Image
-                  src={photo.url}
-                  alt={photo.filename}
-                  fill
-                  sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
-                  className="pointer-events-none object-contain transition-transform group-hover:scale-105"
-                />
-              </button>
-              {isCover ? (
-                <span className="pointer-events-none absolute left-2 top-2 inline-flex items-center gap-1 rounded-full bg-amber-500 px-2.5 py-1 text-xs font-semibold uppercase tracking-wider text-white shadow">
-                  <Star className="size-3.5 fill-current" />
-                  Portada
-                </span>
-              ) : null}
-              <span
+              <Image
+                src={photo.url}
+                alt=""
                 aria-hidden
-                className="pointer-events-none absolute bottom-2 left-2 rounded-md bg-background/90 p-1.5 opacity-0 shadow transition-opacity group-hover:opacity-100"
-                title="Arrastra para reordenar"
-              >
-                <GripVertical className="size-4 text-muted-foreground" />
-              </span>
-              <button
-                type="button"
-                onClick={() => setDeleteTarget(photo)}
-                className="absolute right-2 top-2 rounded-full bg-background/90 p-1.5 opacity-0 shadow transition-opacity hover:bg-background group-hover:opacity-100"
-                aria-label={`Eliminar ${photo.filename}`}
-              >
-                <Trash2 className="size-4 text-destructive" />
-              </button>
-            </div>
-          );
-        })}
+                fill
+                sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
+                className="scale-110 object-cover blur-xl"
+              />
+              <div className="absolute inset-0 bg-background/30" />
+              <Image
+                src={photo.url}
+                alt={photo.filename}
+                fill
+                sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
+                className="object-contain transition-transform group-hover:scale-105"
+              />
+            </button>
+            <button
+              type="button"
+              onClick={() => setDeleteTarget(photo)}
+              className="absolute right-2 top-2 rounded-full bg-background/90 p-1.5 opacity-0 shadow transition-opacity hover:bg-background group-hover:opacity-100"
+              aria-label={`Eliminar ${photo.filename}`}
+            >
+              <Trash2 className="size-4 text-destructive" />
+            </button>
+          </div>
+        ))}
 
         {Array.from({ length: emptySlots }).map((_, i) => (
           <button

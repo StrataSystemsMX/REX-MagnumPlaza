@@ -6,21 +6,12 @@ import {
   getFilteredRowModel,
   getSortedRowModel,
   type ColumnDef,
-  type Row,
   useReactTable,
 } from "@tanstack/react-table";
-import {
-  Building2,
-  ChevronDown,
-  ChevronRight,
-  FileDown,
-  HandCoins,
-  Plus,
-  Store,
-} from "lucide-react";
+import { FileDown, HandCoins, Plus } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Fragment, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -45,7 +36,6 @@ import {
 } from "@/components/collections/RegisterPaymentDialog";
 import { SendWhatsAppButton } from "@/components/collections/SendWhatsAppButton";
 import { RentStatusBadge } from "@/components/shared/RentStatusBadge";
-import { Badge } from "@/components/ui/badge";
 import { OUTSTANDING_STATUSES } from "@/lib/constants/rent-statuses";
 import { rentStatusLabel } from "@/lib/i18n/enums";
 import type { OutstandingRent } from "@/lib/services/payments-queries";
@@ -102,16 +92,6 @@ export function OutstandingRentsTable({
     null,
   );
   const [bulkOpen, setBulkOpen] = useState(false);
-  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
-
-  function toggleGroup(unitId: string) {
-    setCollapsed((prev) => {
-      const next = new Set(prev);
-      if (next.has(unitId)) next.delete(unitId);
-      else next.add(unitId);
-      return next;
-    });
-  }
 
   const activeEscalonChip = ESCALON_CHIPS.find((c) => c.key === escalon) ?? ESCALON_CHIPS[0];
   const reminderLevel = "level" in activeEscalonChip ? activeEscalonChip.level : null;
@@ -175,15 +155,15 @@ export function OutstandingRentsTable({
         id: "lessee",
         header: "Inquilino",
         cell: ({ row }) => (
-          <div className="min-w-0">
+          <div className="text-sm">
             <Link
               href={`/lessees/${row.original.contract.lessee.id}`}
-              className="truncate font-medium hover:underline"
+              className="font-medium hover:underline"
             >
               {row.original.contract.lessee.legalName}
             </Link>
             {row.original.contract.lessee.contactName ? (
-              <p className="truncate text-[10px] text-muted-foreground">
+              <p className="text-xs text-muted-foreground">
                 {row.original.contract.lessee.contactName}
               </p>
             ) : null}
@@ -191,39 +171,52 @@ export function OutstandingRentsTable({
         ),
       },
       {
-        accessorKey: "period",
-        header: "Periodo",
+        id: "unit",
+        header: "Unidad",
         cell: ({ row }) => (
-          <div className="text-center text-xs tabular-nums text-muted-foreground">
-            {capitalizeFirst(PERIOD.format(row.original.period))}
+          <div className="text-sm">
+            <p>{row.original.contract.unit.property.name}</p>
+            <p className="text-xs text-muted-foreground">
+              {row.original.contract.unit.code}
+              {row.original.contract.unit.name
+                ? ` — ${row.original.contract.unit.name}`
+                : ""}
+            </p>
           </div>
+        ),
+      },
+      {
+        accessorKey: "period",
+        header: () => <div className="text-center">Periodo</div>,
+        cell: ({ row }) => (
+          <div className="text-center text-sm">{capitalizeFirst(PERIOD.format(row.original.period))}</div>
         ),
       },
       {
         accessorKey: "amountDue",
-        header: "Cargo",
+        header: () => <span className="text-right">Cargo</span>,
         cell: ({ row }) => (
-          <div className="text-right tabular-nums">
+          <span className="text-right tabular-nums">
             {MXN.format(Number(row.original.amountDue))}
-          </div>
+          </span>
         ),
       },
       {
         accessorKey: "amountPaid",
-        header: "Pagado",
+        header: () => <span className="text-right">Pagado</span>,
         cell: ({ row }) => (
-          <div className="text-right tabular-nums text-muted-foreground">
+          <span className="text-right tabular-nums text-muted-foreground">
             {MXN.format(Number(row.original.amountPaid))}
-          </div>
+          </span>
         ),
       },
       {
         id: "balance",
-        header: "Saldo",
+        header: () => <span className="text-right">Saldo</span>,
         cell: ({ row }) => (
-          <div className="text-right font-medium tabular-nums">
+          <span className="text-right tabular-nums font-medium">
             {MXN.format(Number(row.original.balance))}
-          </div>
+          </span>
         ),
       },
       {
@@ -231,34 +224,19 @@ export function OutstandingRentsTable({
         header: "Vencido",
         cell: ({ row }) => {
           const d = row.original.daysOverdue;
-          if (d <= 0) {
-            return (
-              <div className="text-center text-xs text-muted-foreground">—</div>
-            );
-          }
-          const tone =
+          if (d <= 0) return <span className="text-xs text-muted-foreground">—</span>;
+          const cls =
             d >= 60
-              ? "bg-rose-50 text-rose-700 ring-rose-200"
+              ? "text-destructive font-medium"
               : d >= 30
-                ? "bg-amber-50 text-amber-700 ring-amber-200"
-                : "bg-muted text-muted-foreground ring-foreground/10";
-          return (
-            <div className="text-center">
-              <span
-                className={cn(
-                  "inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium tabular-nums ring-1",
-                  tone,
-                )}
-              >
-                {d}d
-              </span>
-            </div>
-          );
+                ? "text-orange-600 dark:text-orange-400 font-medium"
+                : "text-foreground";
+          return <span className={`text-xs ${cls}`}>{d}d</span>;
         },
       },
       {
         accessorKey: "status",
-        header: "Estado",
+        header: () => <div className="text-center">Estado</div>,
         cell: ({ row }) => (
           <div className="text-center">
             <RentStatusBadge status={row.original.status} />
@@ -323,30 +301,6 @@ export function OutstandingRentsTable({
     getFilteredRowModel: getFilteredRowModel(),
     getSortedRowModel: getSortedRowModel(),
   });
-
-  const tableRows = table.getRowModel().rows;
-  const groupedRows = useMemo(() => {
-    const map = new Map<
-      string,
-      {
-        unit: OutstandingRent["contract"]["unit"];
-        rows: Row<OutstandingRent>[];
-      }
-    >();
-    for (const row of tableRows) {
-      const unit = row.original.contract.unit;
-      const existing = map.get(unit.id);
-      if (existing) {
-        existing.rows.push(row);
-      } else {
-        map.set(unit.id, { unit, rows: [row] });
-      }
-    }
-    return Array.from(map.values()).sort((a, b) => {
-      const p = a.unit.property.name.localeCompare(b.unit.property.name);
-      return p !== 0 ? p : a.unit.code.localeCompare(b.unit.code);
-    });
-  }, [tableRows]);
 
   return (
     <div className="space-y-3">
@@ -438,104 +392,41 @@ export function OutstandingRentsTable({
         </div>
       </div>
 
-      <div className="overflow-hidden rounded-lg border bg-card">
-        <Table className="min-w-[720px]">
+      <div className="overflow-x-auto rounded-md border bg-card">
+        <Table className="min-w-[820px]">
           <TableHeader>
             {table.getHeaderGroups().map((hg) => (
-              <TableRow key={hg.id} className="hover:bg-transparent">
-                {hg.headers.map((h) => {
-                  const align = h.column.id === "lessee"
-                    ? ""
-                    : h.column.id === "actions"
-                      ? "text-right"
-                      : h.column.id === "amountDue" ||
-                          h.column.id === "amountPaid" ||
-                          h.column.id === "balance"
-                        ? "text-right"
-                        : "text-center";
-                  return (
-                    <TableHead
-                      key={h.id}
-                      className={cn(
-                        "text-xs font-medium uppercase tracking-wide text-muted-foreground",
-                        align,
-                      )}
-                    >
-                      {h.isPlaceholder
-                        ? null
-                        : flexRender(
-                            h.column.columnDef.header,
-                            h.getContext(),
-                          )}
-                    </TableHead>
-                  );
-                })}
+              <TableRow key={hg.id}>
+                {hg.headers.map((h) => (
+                  <TableHead key={h.id}>
+                    {h.isPlaceholder
+                      ? null
+                      : flexRender(h.column.columnDef.header, h.getContext())}
+                  </TableHead>
+                ))}
               </TableRow>
             ))}
           </TableHeader>
           <TableBody>
-            {groupedRows.length === 0 ? (
+            {table.getRowModel().rows.length === 0 ? (
               <TableRow>
                 <TableCell
                   colSpan={columns.length}
-                  className="py-10 text-center text-sm text-muted-foreground"
+                  className="text-center text-sm text-muted-foreground"
                 >
                   Sin rentas pendientes para los filtros aplicados.
                 </TableCell>
               </TableRow>
             ) : (
-              groupedRows.map((group) => {
-                const isCollapsed = collapsed.has(group.unit.id);
-                const isPlaza =
-                  group.unit.property.type === "PLAZA_COMERCIAL";
-                const Icon = isPlaza ? Store : Building2;
-                const Chevron = isCollapsed ? ChevronRight : ChevronDown;
-                return (
-                  <Fragment key={group.unit.id}>
-                    <TableRow
-                      className="cursor-pointer bg-muted/40 hover:bg-muted/60"
-                      onClick={() => toggleGroup(group.unit.id)}
-                    >
-                      <TableCell
-                        colSpan={columns.length}
-                        className="py-2"
-                      >
-                        <div className="flex items-center gap-2">
-                          <Chevron className="size-4 text-muted-foreground" />
-                          <Icon className="size-4 text-muted-foreground" />
-                          <span className="font-medium">
-                            {group.unit.property.name}
-                          </span>
-                          <span className="text-xs text-muted-foreground">
-                            {group.unit.code}
-                            {group.unit.name ? ` — ${group.unit.name}` : ""}
-                          </span>
-                          <Badge variant="outline" className="text-[10px]">
-                            {isPlaza ? "Plaza" : "Inmueble"}
-                          </Badge>
-                          <span className="ml-auto text-xs text-muted-foreground">
-                            {group.rows.length}{" "}
-                            {group.rows.length === 1 ? "renta" : "rentas"}
-                          </span>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                    {!isCollapsed &&
-                      group.rows.map((row) => (
-                        <TableRow key={row.id}>
-                          {row.getVisibleCells().map((cell) => (
-                            <TableCell key={cell.id} className="py-3">
-                              {flexRender(
-                                cell.column.columnDef.cell,
-                                cell.getContext(),
-                              )}
-                            </TableCell>
-                          ))}
-                        </TableRow>
-                      ))}
-                  </Fragment>
-                );
-              })
+              table.getRowModel().rows.map((row) => (
+                <TableRow key={row.id}>
+                  {row.getVisibleCells().map((cell) => (
+                    <TableCell key={cell.id}>
+                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                    </TableCell>
+                  ))}
+                </TableRow>
+              ))
             )}
           </TableBody>
         </Table>

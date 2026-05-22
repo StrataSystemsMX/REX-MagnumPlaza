@@ -73,12 +73,7 @@ export async function getContractById(id: string) {
       // Las entidades se cargan abajo en una sola query para evitar dos
       // SELECT legal_entities IN ($1) duplicados que Prisma dispara cuando
       // hacemos include de ownerEntity + managerEntity por separado.
-      unit: {
-        include: {
-          property: true,
-          childUnits: { select: { id: true, code: true }, orderBy: { code: "asc" } },
-        },
-      },
+      unit: { include: { property: true } },
       rents: {
         // Traemos sólo los últimos 24 meses para evitar cargar 5+ años en contratos viejos.
         orderBy: { period: "desc" },

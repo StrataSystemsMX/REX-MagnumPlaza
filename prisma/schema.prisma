@@ -267,7 +267,6 @@ model Unit {
   maintenanceFee    Decimal?          @db.Decimal(12, 2) // cuota mensual extra
   availableFrom     DateTime? // null = disponible inmediato
   includedServices  IncludedService[] @default([])
-  parentUnitId      String? // si != null, este local está agrupado bajo otro (mismo Property)
   notes             String?
   isActive          Boolean           @default(true)
   createdAt         DateTime          @default(now())
@@ -279,13 +278,10 @@ model Unit {
   documents     Document[]
   maintenances  Maintenance[]
   promoterLinks PromoterLink[]
-  parentUnit    Unit?          @relation("UnitGroup", fields: [parentUnitId], references: [id], onDelete: SetNull)
-  childUnits    Unit[]         @relation("UnitGroup")
 
   @@unique([propertyId, code])
   @@index([tenantId])
   @@index([propertyId])
-  @@index([parentUnitId])
   @@map("units")
 }
 
@@ -863,7 +859,6 @@ model Document {
   sizeBytes    Int?
   uploadedById String?
   notes        String?
-  sortOrder    Int? // posición manual (asc = primero). null = sin asignar, ordena por createdAt.
   createdAt    DateTime     @default(now())
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)

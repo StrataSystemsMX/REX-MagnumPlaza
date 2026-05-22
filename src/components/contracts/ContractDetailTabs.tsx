@@ -70,20 +70,9 @@ export function ContractDetailTabs({
           <Card title="Unidad">
             <p className="font-medium">{contract.unit.property.name}</p>
             <p className="text-sm text-muted-foreground">
-              {[
-                contract.unit.code,
-                ...(contract.unit.childUnits ?? []).map((c) => c.code),
-              ]
-                .sort()
-                .join("-")}
+              {contract.unit.code}
               {contract.unit.name ? ` — ${contract.unit.name}` : ""}
             </p>
-            {(contract.unit.childUnits ?? []).length > 0 ? (
-              <p className="mt-1 text-xs text-emerald-700">
-                Cubre {(contract.unit.childUnits ?? []).length + 1} locales
-                agrupados físicamente.
-              </p>
-            ) : null}
             <div className="mt-3 space-y-1 text-xs">
               <Row label="Dueña">
                 <span className="font-medium">

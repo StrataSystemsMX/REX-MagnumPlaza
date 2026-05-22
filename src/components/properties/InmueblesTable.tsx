@@ -17,7 +17,7 @@ import {
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { toast } from "sonner";
 import {
   AlertDialog,
@@ -95,19 +95,6 @@ export function InmueblesTable({
   const [view, setView] = usePropertiesViewMode(initialView);
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [pending, startTransition] = useTransition();
-
-  // Re-sincronizar los targets abiertos cuando llega data fresca del servidor
-  // (ej. tras reordenar fotos). Sin esto, el snapshot guardado queda atrás.
-  useEffect(() => {
-    if (photosTarget) {
-      const fresh = inmuebles.find((p) => p.id === photosTarget.id);
-      if (fresh && fresh !== photosTarget) setPhotosTarget(fresh);
-    }
-    if (detailTarget) {
-      const fresh = inmuebles.find((p) => p.id === detailTarget.id);
-      if (fresh && fresh !== detailTarget) setDetailTarget(fresh);
-    }
-  }, [inmuebles, photosTarget, detailTarget]);
 
   const presentTypes = useMemo(() => {
     const set = new Set<PropertyType>();

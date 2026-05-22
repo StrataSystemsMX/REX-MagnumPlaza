@@ -124,9 +124,6 @@ export function PropertyForm({
       ownerEntityId: initial?.ownerEntityId ?? "",
       managerEntityId: initial?.managerEntityId ?? "",
       cadastralKey: initial?.cadastralKey ?? "",
-      latitude: initial?.latitude ?? undefined,
-      longitude: initial?.longitude ?? undefined,
-      totalArea: initial?.totalArea ?? undefined,
       notes: initial?.notes ?? "",
     },
   });
@@ -312,108 +309,6 @@ export function PropertyForm({
               </FormItem>
             )}
           />
-          <details className="group md:col-span-2">
-            <summary className="flex cursor-pointer list-none items-start justify-between gap-3 rounded-md border bg-muted/30 px-3 py-2.5 hover:bg-muted/50">
-              <div>
-                <h3 className="text-sm font-semibold">Ubicación y superficie</h3>
-                <p className="text-xs text-muted-foreground">
-                  Latitud, longitud y área total. Opcional.
-                </p>
-              </div>
-              <span
-                aria-hidden
-                className="mt-1 inline-flex size-5 shrink-0 items-center justify-center rounded-full bg-background text-muted-foreground transition-transform group-open:rotate-180"
-              >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  className="size-3"
-                >
-                  <polyline points="6 9 12 15 18 9" />
-                </svg>
-              </span>
-            </summary>
-            <div className="grid grid-cols-1 gap-4 pt-4 md:grid-cols-2">
-              <FormField
-                control={form.control}
-                name="latitude"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Latitud</FormLabel>
-                    <FormControl>
-                      <Input
-                        type="number"
-                        step="any"
-                        placeholder="29.107456"
-                        value={field.value ?? ""}
-                        onChange={(e) =>
-                          field.onChange(
-                            e.target.value === "" ? undefined : Number(e.target.value),
-                          )
-                        }
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="longitude"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Longitud</FormLabel>
-                    <FormControl>
-                      <Input
-                        type="number"
-                        step="any"
-                        placeholder="-110.949821"
-                        value={field.value ?? ""}
-                        onChange={(e) =>
-                          field.onChange(
-                            e.target.value === "" ? undefined : Number(e.target.value),
-                          )
-                        }
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <p className="text-xs text-muted-foreground md:col-span-2">
-                Para obtener las coordenadas: abre la dirección en Google Maps, click
-                derecho sobre el pin y copia la primera línea del menú (lat, lng).
-              </p>
-              <FormField
-                control={form.control}
-                name="totalArea"
-                render={({ field }) => (
-                  <FormItem className="md:col-span-2">
-                    <FormLabel>Superficie total (m²)</FormLabel>
-                    <FormControl>
-                      <Input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        value={field.value ?? ""}
-                        onChange={(e) =>
-                          field.onChange(
-                            e.target.value === "" ? undefined : Number(e.target.value),
-                          )
-                        }
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-          </details>
           <FormField
             control={form.control}
             name="notes"

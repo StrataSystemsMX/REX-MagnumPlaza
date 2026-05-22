@@ -16,7 +16,7 @@ import {
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Fragment, useEffect, useState, useTransition } from "react";
+import { Fragment, useState, useTransition } from "react";
 import { toast } from "sonner";
 import {
   AlertDialog,
@@ -70,20 +70,6 @@ export function PlazasTable({ plazas, legalEntities, initialView }: PlazasTableP
   const [view, setView] = usePropertiesViewMode(initialView);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [pending, startTransition] = useTransition();
-
-  // Cuando los datos del servidor se refrescan (ej. tras reordenar fotos),
-  // re-sincronizar los targets abiertos para que reciban la versión fresca.
-  // Sin esto, el snapshot guardado en state queda atrás del DB.
-  useEffect(() => {
-    if (photosTarget) {
-      const fresh = plazas.find((p) => p.id === photosTarget.id);
-      if (fresh && fresh !== photosTarget) setPhotosTarget(fresh);
-    }
-    if (detailTarget) {
-      const fresh = plazas.find((p) => p.id === detailTarget.id);
-      if (fresh && fresh !== detailTarget) setDetailTarget(fresh);
-    }
-  }, [plazas, photosTarget, detailTarget]);
 
   function toggleExpanded(id: string) {
     setExpanded((prev) => {
@@ -473,21 +459,9 @@ function PlazaCard({
               </p>
             ) : (
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                {activeUnits
-                  .filter((u) => !u.parentUnitId)
-                  .map((u) => (
-                    <UnitCard
-                      key={u.id}
-                      unit={u}
-                      propertyId={plaza.id}
-                      siblings={activeUnits.map((s) => ({
-                        id: s.id,
-                        code: s.code,
-                        name: s.name,
-                        parentUnitId: s.parentUnitId ?? null,
-                      }))}
-                    />
-                  ))}
+                {activeUnits.map((u) => (
+                  <UnitCard key={u.id} unit={u} propertyId={plaza.id} />
+                ))}
               </div>
             )}
           </div>
@@ -657,21 +631,9 @@ function PlazasTableView({
                             Renta
                           </div>
                         </div>
-                        {activeUnits
-                          .filter((u) => !u.parentUnitId)
-                          .map((u) => (
-                            <UnitRow
-                              key={u.id}
-                              unit={u}
-                              propertyId={p.id}
-                              siblings={activeUnits.map((s) => ({
-                                id: s.id,
-                                code: s.code,
-                                name: s.name,
-                                parentUnitId: s.parentUnitId ?? null,
-                              }))}
-                            />
-                          ))}
+                        {activeUnits.map((u) => (
+                          <UnitRow key={u.id} unit={u} propertyId={p.id} />
+                        ))}
                       </div>
                     </div>
                   )}
