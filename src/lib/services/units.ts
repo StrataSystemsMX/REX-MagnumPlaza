@@ -10,6 +10,7 @@ import {
   type CreateUnitInput,
   type UpdateUnitInput,
 } from "@/lib/validators/unit";
+import { serializeDecimals, type Serialized } from "@/lib/utils/serialize-decimals";
 import type { UnitModel } from "@/generated/prisma/models";
 import type { Prisma } from "@/generated/prisma/client";
 
@@ -42,12 +43,89 @@ async function ensurePropertyInTenant(propertyId: string, tenantId: string): Pro
   }
 }
 
-export async function actionCreateUnit(input: CreateUnitInput): Promise<UnitModel> {
+/**
+ * Valida las invariantes para agrupar una Unit bajo un padre.
+ *
+ * - Padre existe en el mismo tenant + mismo propertyId.
+ * - Padre no es la misma unit (no self-reference).
+ * - Padre no es a su vez hijo (no chains, max 1 nivel).
+ * - La unit hija no tiene sus propios children (un hijo no puede tener hijos).
+ * - La unit hija no tiene Contract ACTIVE.
+ * - La unit hija no tiene PromoterLink vigente.
+ *
+ * Pasa `childUnitId = undefined` si la unit todavía no existe (caso create);
+ * solo se validan las invariantes que aplican al padre.
+ */
+async function validateParentUnit(
+  childUnitId: string | undefined,
+  parentUnitId: string,
+  tenantId: string,
+  expectedPropertyId: string,
+): Promise<void> {
+  if (childUnitId && parentUnitId === childUnitId) {
+    throw new Error("Un local no puede ser padre de sí mismo.");
+  }
+
+  const parent = await prisma.unit.findFirst({
+    where: { id: parentUnitId, tenantId },
+    select: { id: true, propertyId: true, parentUnitId: true },
+  });
+  if (!parent) {
+    throw new Error("El local padre no existe en tu tenant.");
+  }
+  if (parent.propertyId !== expectedPropertyId) {
+    throw new Error("El local padre debe estar en el mismo inmueble.");
+  }
+  if (parent.parentUnitId != null) {
+    throw new Error(
+      "No se permiten cadenas: el local padre ya está agrupado bajo otro.",
+    );
+  }
+
+  if (!childUnitId) return;
+
+  const [childCount, activeContractCount, activeLinkCount] = await Promise.all([
+    prisma.unit.count({ where: { tenantId, parentUnitId: childUnitId } }),
+    prisma.contract.count({
+      where: { tenantId, unitId: childUnitId, status: "ACTIVE" },
+    }),
+    prisma.promoterLink.count({
+      where: {
+        tenantId,
+        unitId: childUnitId,
+        isActive: true,
+        expiresAt: { gt: new Date() },
+      },
+    }),
+  ]);
+  if (childCount > 0) {
+    throw new Error(
+      "Este local ya tiene otros agrupados bajo él; no puede ser hijo de otro.",
+    );
+  }
+  if (activeContractCount > 0) {
+    throw new Error(
+      "El local tiene un contrato activo; rescíndelo antes de agruparlo.",
+    );
+  }
+  if (activeLinkCount > 0) {
+    throw new Error(
+      "El local tiene un link público activo; desactívalo antes de agruparlo.",
+    );
+  }
+}
+
+export async function actionCreateUnit(
+  input: CreateUnitInput,
+): Promise<Serialized<UnitModel>> {
   const { tenantId, dbUser } = await requireAuth();
   await requirePermission(dbUser.id, "unit.create");
 
   const data = createUnitSchema.parse(input);
   await ensurePropertyInTenant(data.propertyId, tenantId);
+  if (data.parentUnitId) {
+    await validateParentUnit(undefined, data.parentUnitId, tenantId, data.propertyId);
+  }
 
   const unit = await prisma.unit.create({
     data: { ...data, tenantId },
@@ -60,13 +138,13 @@ export async function actionCreateUnit(input: CreateUnitInput): Promise<UnitMode
   revalidatePath(`/properties/${data.propertyId}`);
   revalidatePath("/plazas");
   revalidatePath("/inmuebles");
-  return unit;
+  return serializeDecimals(unit);
 }
 
 export async function actionUpdateUnit(
   id: string,
   input: UpdateUnitInput,
-): Promise<UnitModel> {
+): Promise<Serialized<UnitModel>> {
   const { tenantId, dbUser } = await requireAuth();
   await requirePermission(dbUser.id, "unit.update");
 
@@ -74,6 +152,20 @@ export async function actionUpdateUnit(
   if (parsed.propertyId) {
     await ensurePropertyInTenant(parsed.propertyId, tenantId);
   }
+
+  // Si se pidió cambiar parentUnitId a un valor concreto, validar invariantes.
+  // null = desagrupar; pasa sin validación (siempre seguro).
+  if (parsed.parentUnitId) {
+    const current = await prisma.unit.findFirst({
+      where: { id, tenantId },
+      select: { propertyId: true },
+    });
+    if (!current) {
+      throw new Error("Unidad no encontrada o fuera de tu tenant.");
+    }
+    await validateParentUnit(id, parsed.parentUnitId, tenantId, current.propertyId);
+  }
+
   // updateMany no acepta FK scalars (propertyId); mover una Unit entre
   // inmuebles no es soportado por esta acción. Lo descartamos del payload.
   const { propertyId: _ignored, ...data } = parsed;
@@ -98,7 +190,40 @@ export async function actionUpdateUnit(
   revalidatePath(`/properties/${updated.propertyId}`);
   revalidatePath("/plazas");
   revalidatePath("/inmuebles");
-  return updated;
+  return serializeDecimals(updated);
+}
+
+/**
+ * Desagrupa una unit: limpia su parentUnitId. Solo aplica a child units;
+ * llamarla sobre una unit que no es child es no-op silencioso.
+ */
+export async function actionUngroupUnit(childUnitId: string): Promise<void> {
+  const { tenantId, dbUser } = await requireAuth();
+  await requirePermission(dbUser.id, "unit.update");
+
+  const target = await prisma.unit.findFirst({
+    where: { id: childUnitId, tenantId },
+    select: { id: true, propertyId: true, parentUnitId: true },
+  });
+  if (!target) {
+    throw new Error("Unidad no encontrada o fuera de tu tenant.");
+  }
+  if (target.parentUnitId == null) {
+    return; // ya está desagrupada
+  }
+
+  await prisma.unit.updateMany({
+    where: { id: childUnitId, tenantId },
+    data: { parentUnitId: null },
+  });
+
+  await logAudit(tenantId, dbUser.id, "UPDATE", childUnitId, {
+    ungroupedFrom: target.parentUnitId,
+  });
+
+  revalidatePath(`/properties/${target.propertyId}`);
+  revalidatePath("/plazas");
+  revalidatePath("/inmuebles");
 }
 
 export async function actionDeleteUnit(id: string): Promise<void> {

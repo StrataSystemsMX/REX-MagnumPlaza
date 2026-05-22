@@ -58,6 +58,7 @@ export const createUnitSchema = z.object({
     .optional(),
   availableFrom: z.coerce.date().optional(),
   includedServices: z.array(z.enum(INCLUDED_SERVICE_VALUES)).optional(),
+  parentUnitId: z.string().min(1).nullable().optional(),
   notes: z
     .string()
     .trim()

@@ -106,7 +106,10 @@ export const getUnitByPromoterToken = cache(
             documents: {
               where: { type: "PROPERTY_PHOTO", tenantId },
               select: { id: true, url: true },
-              orderBy: { createdAt: "asc" },
+              orderBy: [
+                { sortOrder: { sort: "asc", nulls: "last" } },
+                { createdAt: "desc" },
+              ],
               take: 6,
             },
           },
@@ -114,7 +117,10 @@ export const getUnitByPromoterToken = cache(
         documents: {
           where: { type: "UNIT_PHOTO", tenantId },
           select: { id: true, url: true },
-          orderBy: { createdAt: "asc" },
+          orderBy: [
+            { sortOrder: { sort: "asc", nulls: "last" } },
+            { createdAt: "desc" },
+          ],
           take: 10,
         },
       },

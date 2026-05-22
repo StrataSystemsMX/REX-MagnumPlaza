@@ -70,7 +70,7 @@ export function LesseeDetailTabs({
   return (
     <Tabs defaultValue="info" className="w-full">
       <div className="-mx-1 overflow-x-auto px-1">
-        <TabsList>
+        <TabsList variant="line">
           <TabsTrigger value="info">Información general</TabsTrigger>
           <TabsTrigger value="contracts">
             Contratos ({lessee.contracts.length})
