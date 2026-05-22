@@ -7,8 +7,10 @@ import { requirePermission } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/prisma/client";
 import {
   createMaintenanceSchema,
+  updateMaintenanceSchema,
   updateMaintenanceStatusSchema,
   type CreateMaintenanceInput,
+  type UpdateMaintenanceInput,
   type UpdateMaintenanceStatusInput,
 } from "@/lib/validators/maintenance";
 
@@ -37,9 +39,9 @@ export async function actionCreateMaintenance(input: CreateMaintenanceInput) {
 
   const data = createMaintenanceSchema.parse(input);
 
-  await prisma.property.findFirstOrThrow({
+  const property = await prisma.property.findFirstOrThrow({
     where: { id: data.propertyId, tenantId },
-    select: { id: true },
+    select: { id: true, name: true, managerEntityId: true },
   });
 
   const maintenance = await prisma.maintenance.create({
@@ -60,6 +62,46 @@ export async function actionCreateMaintenance(input: CreateMaintenanceInput) {
     },
   });
 
+  // Refleja el mantenimiento manual como egreso de la razón social que
+  // administra/factura la propiedad. Se enlaza con `[maintenance:<id>]` en
+  // notes para futuras sincronizaciones.
+  if (data.cost !== undefined && data.cost > 0) {
+    const category = await prisma.expenseCategory.findFirst({
+      where: { tenantId, code: "MANTENIMIENTO_PLAZAS" },
+      select: { id: true },
+    });
+
+    if (category) {
+      let unitCode: string | null = null;
+      if (data.unitId) {
+        const unit = await prisma.unit.findFirst({
+          where: { id: data.unitId, tenantId },
+          select: { code: true },
+        });
+        unitCode = unit?.code ?? null;
+      }
+
+      const locator = unitCode
+        ? `${property.name} ${unitCode}`
+        : property.name;
+
+      await prisma.expense.create({
+        data: {
+          tenantId,
+          legalEntityId: property.managerEntityId,
+          categoryId: category.id,
+          propertyId: data.propertyId,
+          amount: new Prisma.Decimal(data.cost),
+          expenseDate: data.scheduledDate ?? new Date(),
+          description: `Mantenimiento: ${data.title} — ${locator}`,
+          vendor: data.vendor ?? null,
+          isPaid: false,
+          notes: `Generado desde mantenimiento [maintenance:${maintenance.id}]`,
+        },
+      });
+    }
+  }
+
   await logAudit(tenantId, dbUser.id, "CREATE", maintenance.id, {
     title: data.title,
     type: data.type,
@@ -67,7 +109,61 @@ export async function actionCreateMaintenance(input: CreateMaintenanceInput) {
   });
 
   revalidatePath("/mantenimientos");
+  revalidatePath("/egresos");
   return maintenance;
+}
+
+export async function actionUpdateMaintenance(input: UpdateMaintenanceInput) {
+  const { tenantId, dbUser } = await requireAuth();
+  await requirePermission(dbUser.id, "expense.update");
+
+  const data = updateMaintenanceSchema.parse(input);
+
+  const existing = await prisma.maintenance.findFirstOrThrow({
+    where: { id: data.maintenanceId, tenantId },
+    select: { id: true, status: true, completedDate: true },
+  });
+
+  await prisma.property.findFirstOrThrow({
+    where: { id: data.propertyId, tenantId },
+    select: { id: true },
+  });
+
+  // Si se pasa a COMPLETED y no tenía fecha, ponemos hoy. Si se cambia a un
+  // estado distinto de COMPLETED, limpiamos la fecha.
+  const completedDate =
+    data.status === "COMPLETED"
+      ? existing.completedDate ?? new Date()
+      : null;
+
+  const updated = await prisma.maintenance.update({
+    where: { id: existing.id },
+    data: {
+      propertyId: data.propertyId,
+      unitId: data.unitId ?? null,
+      title: data.title,
+      description: data.description ?? null,
+      type: data.type,
+      responsibility: data.responsibility,
+      status: data.status,
+      completedDate,
+      scheduledDate: data.scheduledDate ?? null,
+      vendor: data.vendor ?? null,
+      cost: data.cost !== undefined ? new Prisma.Decimal(data.cost) : null,
+      notes: data.notes ?? null,
+    },
+  });
+
+  await logAudit(tenantId, dbUser.id, "UPDATE", existing.id, {
+    title: data.title,
+    type: data.type,
+    propertyId: data.propertyId,
+    previousStatus: existing.status,
+    newStatus: data.status,
+  });
+
+  revalidatePath("/mantenimientos");
+  return updated;
 }
 
 export async function actionUpdateMaintenanceStatus(input: UpdateMaintenanceStatusInput) {

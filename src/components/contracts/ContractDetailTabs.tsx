@@ -1,6 +1,5 @@
 "use client";
 
-import { Mail, Phone, MessageCircle } from "lucide-react";
 import {
   Table,
   TableBody,
@@ -13,8 +12,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { ContractDocumentManager } from "@/components/contracts/ContractDocumentManager";
 import { ContractNotesCard } from "@/components/contracts/ContractNotesCard";
-import { RentCalendar } from "@/components/contracts/RentCalendar";
-import { RentStatusBadge } from "@/components/shared/RentStatusBadge";
 import {
   auditActionLabel,
   contractTypeLabel,
@@ -58,55 +55,18 @@ export function ContractDetailTabs({
   return (
     <Tabs defaultValue="summary" className="w-full">
       <div className="-mx-1 overflow-x-auto px-1">
-        <TabsList>
+        <TabsList variant="line">
           <TabsTrigger value="summary">Resumen</TabsTrigger>
-          <TabsTrigger value="rents">
-            Rentas y pagos ({contract.rents.length})
-          </TabsTrigger>
           <TabsTrigger value="documents">
             Documentos ({contract.documents.length})
           </TabsTrigger>
-          <TabsTrigger value="guarantee">Garantía</TabsTrigger>
+          <TabsTrigger value="guarantee">Fianza</TabsTrigger>
           <TabsTrigger value="audit">Auditoría</TabsTrigger>
         </TabsList>
       </div>
 
       <TabsContent value="summary" className="mt-4 space-y-4">
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-          <Card title="Inquilino">
-            <p className="font-medium">{contract.lessee.legalName}</p>
-            {contract.lessee.contactName ? (
-              <p className="text-sm text-muted-foreground">
-                {contract.lessee.contactName}
-              </p>
-            ) : null}
-            {contract.lessee.rfc ? (
-              <p className="mt-2 font-mono text-xs text-muted-foreground">
-                RFC: {contract.lessee.rfc}
-              </p>
-            ) : null}
-            <div className="mt-3 space-y-1 text-xs text-muted-foreground">
-              {contract.lessee.email ? (
-                <p className="inline-flex items-center gap-1.5">
-                  <Mail className="size-3" />
-                  <span>{contract.lessee.email}</span>
-                </p>
-              ) : null}
-              {contract.lessee.phone ? (
-                <p className="inline-flex items-center gap-1.5">
-                  <Phone className="size-3" />
-                  <span>{contract.lessee.phone}</span>
-                </p>
-              ) : null}
-              {contract.lessee.whatsapp ? (
-                <p className="inline-flex items-center gap-1.5">
-                  <MessageCircle className="size-3" />
-                  <span>{contract.lessee.whatsapp}</span>
-                </p>
-              ) : null}
-            </div>
-          </Card>
-
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           <Card title="Unidad">
             <p className="font-medium">{contract.unit.property.name}</p>
             <p className="text-sm text-muted-foreground">
@@ -163,69 +123,6 @@ export function ContractDetailTabs({
 
       </TabsContent>
 
-      <TabsContent value="rents" className="mt-4 space-y-4">
-        <RentCalendar rents={contract.rents} />
-        {contract.rents.length > 0 ? (
-          <div className="overflow-hidden rounded-lg border bg-card">
-            <Table>
-              <TableHeader>
-                <TableRow className="hover:bg-transparent">
-                  <TableHead className="text-center text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                    Periodo
-                  </TableHead>
-                  <TableHead className="text-center text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                    Vence
-                  </TableHead>
-                  <TableHead className="text-right text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                    Cargo
-                  </TableHead>
-                  <TableHead className="text-right text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                    Pagado
-                  </TableHead>
-                  <TableHead className="text-center text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                    Estado
-                  </TableHead>
-                  <TableHead className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                    Pagos registrados
-                  </TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {contract.rents.map((r) => (
-                  <TableRow key={r.id}>
-                    <TableCell className="text-center font-mono text-xs">
-                      {r.period.toISOString().slice(0, 7)}
-                    </TableCell>
-                    <TableCell className="text-center text-xs tabular-nums">
-                      {capitalizeFirst(DATE.format(r.dueDate))}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {MXN.format(Number(r.amountDue))}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {MXN.format(Number(r.amountPaid))}
-                    </TableCell>
-                    <TableCell className="text-center">
-                      <RentStatusBadge status={r.status} />
-                    </TableCell>
-                    <TableCell className="text-xs">
-                      {r.payments.length === 0
-                        ? "—"
-                        : r.payments
-                            .map(
-                              (p) =>
-                                `${MXN.format(Number(p.amount))} (${capitalizeFirst(DATE.format(p.paymentDate))})`,
-                            )
-                            .join(", ")}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        ) : null}
-      </TabsContent>
-
       <TabsContent value="documents" className="mt-4">
         <ContractDocumentManager
           contractId={contract.id}
@@ -238,7 +135,7 @@ export function ContractDetailTabs({
         <div className="rounded-lg border bg-card p-6">
           {contract.guarantees.length === 0 ? (
             <p className="text-sm text-muted-foreground">
-              No se ha registrado depósito en garantía para este contrato.
+              No se ha registrado fianza para este contrato.
             </p>
           ) : (
             <ul className="space-y-3 text-sm">

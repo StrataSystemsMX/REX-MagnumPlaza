@@ -41,6 +41,11 @@ export async function getMaintenances(filters: MaintenanceFilters = {}) {
     createdAt: m.createdAt,
     property: m.property,
     unit: m.unit,
+    // Los mantenimientos generados desde el cierre de una fianza llevan el
+    // marcador `[deposit:<guaranteeId>]` en `notes`.
+    source: (m.notes?.includes("[deposit:") ? "deposit" : "manual") as
+      | "deposit"
+      | "manual",
   }));
 }
 

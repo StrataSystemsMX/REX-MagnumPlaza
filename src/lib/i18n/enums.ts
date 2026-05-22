@@ -7,6 +7,7 @@ import type {
   DocumentType,
   ExpenseType,
   GuaranteeStatus,
+  IncludedService,
   MaintenanceResponsibility,
   MaintenanceStatus,
   MaintenanceType,
@@ -264,8 +265,6 @@ export function guaranteeStatusLabel(s: GuaranteeStatus): string {
       return "Devuelto parcial";
     case "RETURNED":
       return "Devuelto";
-    case "APPLIED_TO_DEBT":
-      return "Aplicado a saldo";
     default:
       return exhaustive(s);
   }
@@ -371,7 +370,7 @@ export function budgetConceptTypeLabel(c: BudgetConceptType): string {
     case "INCOME_BILLBOARD":
       return "Ingreso por espectacular";
     case "INCOME_GUARANTEE":
-      return "Depósito en garantía";
+      return "Fianza";
     case "INCOME_OTHER":
       return "Otro ingreso";
     case "EXPENSE":
@@ -474,3 +473,25 @@ export function auditActionLabel(a: AuditAction): string {
       return exhaustive(a);
   }
 }
+
+export function includedServiceLabel(s: IncludedService): string {
+  switch (s) {
+    case "AGUA":
+      return "Agua";
+    case "LUZ":
+      return "Luz";
+    case "GAS":
+      return "Gas";
+    case "INTERNET":
+      return "Internet";
+    case "MANTENIMIENTO":
+      return "Mantenimiento";
+    case "VIGILANCIA":
+      return "Vigilancia";
+    case "ESTACIONAMIENTO":
+      return "Estacionamiento";
+    default:
+      return exhaustive(s);
+  }
+}
+

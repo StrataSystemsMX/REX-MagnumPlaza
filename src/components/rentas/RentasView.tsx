@@ -189,6 +189,10 @@ export function RentasView({ tableData }: { tableData: RentasTableData }) {
     router.push(`/collections?tab=rentas&periodo=${yyyyMM}`);
   }
 
+  function prefetchPeriod(yyyyMM: string) {
+    router.prefetch(`/collections?tab=rentas&periodo=${yyyyMM}`);
+  }
+
   async function openHistory(row: RentTableRow) {
     setHistRow(row);
     setHistory(null);
@@ -299,6 +303,7 @@ export function RentasView({ tableData }: { tableData: RentasTableData }) {
                     size="icon-sm"
                     className="bg-background"
                     onClick={() => navigate(prevMonth(tableData.period))}
+                    onMouseEnter={() => prefetchPeriod(prevMonth(tableData.period))}
                     aria-label="Mes anterior"
                   >
                     <ChevronLeft className="size-4" />
@@ -308,6 +313,7 @@ export function RentasView({ tableData }: { tableData: RentasTableData }) {
                     size="icon-sm"
                     className="bg-background"
                     onClick={() => navigate(nextMonth(tableData.period))}
+                    onMouseEnter={() => prefetchPeriod(nextMonth(tableData.period))}
                     aria-label="Mes siguiente"
                   >
                     <ChevronRight className="size-4" />

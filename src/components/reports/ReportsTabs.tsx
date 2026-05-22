@@ -287,12 +287,7 @@ function OccupancyTab({ data }: { data: ReportsBundle["occupancy"] }) {
                 {data.rows.map((row) => (
                   <TableRow key={row.propertyId}>
                     <TableCell>
-                      <Link
-                        href={`/properties/${row.propertyId}`}
-                        className="font-medium hover:underline"
-                      >
-                        {row.propertyName}
-                      </Link>
+                      <span className="font-medium">{row.propertyName}</span>
                     </TableCell>
                     <TableCell className="text-xs text-muted-foreground">
                       {propertyTypeLabel(row.type as PropertyType)}
@@ -351,12 +346,7 @@ function OccupancyTab({ data }: { data: ReportsBundle["occupancy"] }) {
                 {data.vacantUnits.map((u) => (
                   <TableRow key={u.unitId}>
                     <TableCell>
-                      <Link
-                        href={`/properties/${u.propertyId}`}
-                        className="font-medium hover:underline"
-                      >
-                        {u.propertyName}
-                      </Link>
+                      <span className="font-medium">{u.propertyName}</span>
                     </TableCell>
                     <TableCell>
                       {u.unitCode}
@@ -421,12 +411,7 @@ function IncomeByPropertyTab({
                 {data.rows.map((row) => (
                   <TableRow key={row.propertyId}>
                     <TableCell className="sticky left-0 bg-background">
-                      <Link
-                        href={`/properties/${row.propertyId}`}
-                        className="font-medium hover:underline"
-                      >
-                        {row.propertyName}
-                      </Link>
+                      <span className="font-medium">{row.propertyName}</span>
                       <p className="text-xs text-muted-foreground">
                         {propertyTypeLabel(row.type as PropertyType)}
                       </p>
@@ -678,10 +663,7 @@ function ExpiringTable({
                 </Link>
               </TableCell>
               <TableCell className="text-xs text-muted-foreground">
-                <Link href={`/properties/${c.propertyId}`} className="hover:underline">
-                  {c.propertyName}
-                </Link>{" "}
-                · {c.unitCode}
+                {c.propertyName} · {c.unitCode}
               </TableCell>
               <TableCell className="text-center">
                 {capitalizeFirst(DATE.format(c.endDate))}

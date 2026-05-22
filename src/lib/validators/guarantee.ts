@@ -40,9 +40,3 @@ export const returnGuaranteeSchema = z.object({
   notes: z.string().max(500).optional().nullable(),
 });
 export type ReturnGuaranteeInput = z.infer<typeof returnGuaranteeSchema>;
-
-export const applyGuaranteeToDebtSchema = z.object({
-  guaranteeId: z.string().min(1),
-  notes: z.string().max(500).optional().nullable(),
-});
-export type ApplyGuaranteeToDebtInput = z.infer<typeof applyGuaranteeToDebtSchema>;

@@ -70,10 +70,14 @@ export async function actionUpdateUnit(
   const { tenantId, dbUser } = await requireAuth();
   await requirePermission(dbUser.id, "unit.update");
 
-  const data = updateUnitSchema.parse(input);
-  if (data.propertyId) {
-    await ensurePropertyInTenant(data.propertyId, tenantId);
+  const parsed = updateUnitSchema.parse(input);
+  if (parsed.propertyId) {
+    await ensurePropertyInTenant(parsed.propertyId, tenantId);
   }
+  // updateMany no acepta FK scalars (propertyId); mover una Unit entre
+  // inmuebles no es soportado por esta acción. Lo descartamos del payload.
+  const { propertyId: _ignored, ...data } = parsed;
+  void _ignored;
 
   const result = await prisma.unit.updateMany({
     where: { id, tenantId },

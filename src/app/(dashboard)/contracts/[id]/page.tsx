@@ -15,6 +15,7 @@ import {
   getContractAuditLog,
   getContractById,
 } from "@/lib/services/contracts-queries";
+import { timed } from "@/lib/perf/timed";
 import { capitalizeFirst } from "@/lib/utils";
 
 const MXN = new Intl.NumberFormat("es-MX", {
@@ -40,12 +41,18 @@ export default async function ContractDetailPage({
   params: Promise<Params>;
 }) {
   const { id } = await params;
+  const pageStart = performance.now();
   const { dbUser } = await requireAuth();
   const [contract, auditLog, canEditDocuments] = await Promise.all([
-    getContractById(id),
-    getContractAuditLog(id),
-    hasPermission(dbUser.id, "contract.update"),
+    timed("contract:getContractById", () => getContractById(id)),
+    timed("contract:getContractAuditLog", () => getContractAuditLog(id)),
+    timed("contract:hasPermission", () => hasPermission(dbUser.id, "contract.update")),
   ]);
+  if (process.env["NODE_ENV"] !== "production" || process.env["PERF_LOG"] === "1") {
+    console.log(
+      `[PERF] /contracts/[id] TOTAL: ${Math.round(performance.now() - pageStart)}ms`,
+    );
+  }
 
   if (!contract) {
     notFound();
@@ -74,15 +81,7 @@ export default async function ContractDetailPage({
               <Badge variant="secondary">{contractTypeLabel(contract.type)}</Badge>
             </div>
             <p className="mt-1 text-xs text-muted-foreground">
-              Contrato{" "}
-              <span className="font-mono">{contract.id.slice(-8)}</span>
-              {" · "}
-              <Link
-                href={`/lessees/${contract.lessee.id}`}
-                className="hover:underline"
-              >
-                Ver inquilino
-              </Link>
+              Contrato <span className="font-mono">{contract.id.slice(-8)}</span>
             </p>
 
             <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-sm text-muted-foreground">

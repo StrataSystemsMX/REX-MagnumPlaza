@@ -77,12 +77,7 @@ export interface UnitCardData {
   }>;
 }
 
-interface UnitCardProps {
-  unit: UnitCardData;
-  propertyId: string;
-}
-
-export function UnitCard({ unit, propertyId }: UnitCardProps) {
+function useUnitDialogControls(unit: UnitCardData) {
   const router = useRouter();
   const [detailOpen, setDetailOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
@@ -90,25 +85,8 @@ export function UnitCard({ unit, propertyId }: UnitCardProps) {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [pending, startTransition] = useTransition();
 
-  const contract = unit.contracts[0] ?? null;
-  const lessee = contract?.lessee ?? null;
-  const monthly = contract
-    ? Number(contract.monthlyAmount)
-    : unit.estimatedRent !== null
-      ? Number(unit.estimatedRent)
-      : null;
-
-  const showUnitName = unit.name && unit.name !== lessee?.legalName;
-
   function openDetail() {
     setDetailOpen(true);
-  }
-
-  function handleCardKey(e: React.KeyboardEvent<HTMLDivElement>) {
-    if (e.key === "Enter" || e.key === " ") {
-      e.preventDefault();
-      openDetail();
-    }
   }
 
   function confirmDelete() {
@@ -126,13 +104,13 @@ export function UnitCard({ unit, propertyId }: UnitCardProps) {
     });
   }
 
-  function handlePhotosOpenChange(open: boolean) {
-    setPhotosOpen(open);
+  function handleEditOpenChange(open: boolean) {
+    setEditOpen(open);
     if (!open) setDetailOpen(true);
   }
 
-  function handleEditOpenChange(open: boolean) {
-    setEditOpen(open);
+  function handlePhotosOpenChange(open: boolean) {
+    setPhotosOpen(open);
     if (!open) setDetailOpen(true);
   }
 
@@ -141,10 +119,173 @@ export function UnitCard({ unit, propertyId }: UnitCardProps) {
     if (!open) setDetailOpen(true);
   }
 
+  return {
+    router,
+    detailOpen,
+    setDetailOpen,
+    editOpen,
+    setEditOpen,
+    handleEditOpenChange,
+    photosOpen,
+    setPhotosOpen,
+    handlePhotosOpenChange,
+    deleteOpen,
+    setDeleteOpen,
+    handleDeleteOpenChange,
+    pending,
+    openDetail,
+    confirmDelete,
+  };
+}
+
+type UnitDialogControls = ReturnType<typeof useUnitDialogControls>;
+
+function UnitDialogs({
+  unit,
+  propertyId,
+  controls,
+}: {
+  unit: UnitCardData;
+  propertyId: string;
+  controls: UnitDialogControls;
+}) {
+  return (
+    <>
+      <UnitDetailDialog
+        open={controls.detailOpen}
+        onOpenChange={controls.setDetailOpen}
+        unit={unit}
+        onEditClick={() => controls.setEditOpen(true)}
+        onPhotosClick={() => controls.setPhotosOpen(true)}
+      />
+
+      <Dialog open={controls.editOpen} onOpenChange={controls.handleEditOpenChange}>
+        <DialogContent className="max-w-xl">
+          <DialogHeader>
+            <DialogTitle>Editar local {unit.code}</DialogTitle>
+            <DialogDescription>
+              Modifica la información del local.
+            </DialogDescription>
+          </DialogHeader>
+          <UnitForm
+            initial={{
+              id: unit.id,
+              propertyId,
+              code: unit.code,
+              name: unit.name,
+              area:
+                unit.area !== null && unit.area !== undefined
+                  ? Number(unit.area)
+                  : null,
+              estimatedRent:
+                unit.estimatedRent !== null && unit.estimatedRent !== undefined
+                  ? Number(unit.estimatedRent)
+                  : null,
+              status: unit.status,
+              notes: unit.notes ?? null,
+            }}
+            onSuccess={() => {
+              controls.setEditOpen(false);
+              controls.setDetailOpen(true);
+              controls.router.refresh();
+            }}
+            submitLabel="Guardar cambios"
+            secondaryAction={
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  controls.setEditOpen(false);
+                  controls.setDeleteOpen(true);
+                }}
+                className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+              >
+                <Trash2 className="size-4" />
+                Eliminar local
+              </Button>
+            }
+          />
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={controls.photosOpen}
+        onOpenChange={controls.handlePhotosOpenChange}
+      >
+        <DialogContent className="max-w-5xl">
+          <DialogHeader>
+            <DialogTitle>
+              Fotos del local {unit.code}
+              {unit.name ? ` · ${unit.name}` : null}
+            </DialogTitle>
+            <DialogDescription>
+              Sube imágenes para este local. La más reciente aparecerá como portada.
+            </DialogDescription>
+          </DialogHeader>
+          <UnitPhotoGallery unitId={unit.id} photos={unit.photos ?? []} />
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog
+        open={controls.deleteOpen}
+        onOpenChange={controls.handleDeleteOpenChange}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Eliminar local {unit.code}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              El local se marcará como inactivo. Los contratos y pagos históricos se
+              conservan.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={controls.pending}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                controls.confirmDelete();
+              }}
+              disabled={controls.pending}
+            >
+              {controls.pending ? "Eliminando..." : "Eliminar"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
+  );
+}
+
+interface UnitCardProps {
+  unit: UnitCardData;
+  propertyId: string;
+}
+
+export function UnitCard({ unit, propertyId }: UnitCardProps) {
+  const controls = useUnitDialogControls(unit);
+
+  const contract = unit.contracts[0] ?? null;
+  const lessee = contract?.lessee ?? null;
+  const monthly = contract
+    ? Number(contract.monthlyAmount)
+    : unit.estimatedRent !== null
+      ? Number(unit.estimatedRent)
+      : null;
+
+  const showUnitName = unit.name && unit.name !== lessee?.legalName;
+
+  function handleCardKey(e: React.KeyboardEvent<HTMLDivElement>) {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      controls.openDetail();
+    }
+  }
+
   return (
     <>
       <Card
-        onClick={openDetail}
+        onClick={controls.openDetail}
         onKeyDown={handleCardKey}
         role="button"
         tabIndex={0}
@@ -233,88 +374,94 @@ export function UnitCard({ unit, propertyId }: UnitCardProps) {
         </CardContent>
       </Card>
 
-      <UnitDetailDialog
-        open={detailOpen}
-        onOpenChange={setDetailOpen}
-        unit={unit}
-        onEditClick={() => setEditOpen(true)}
-        onPhotosClick={() => setPhotosOpen(true)}
-        onDeleteClick={() => setDeleteOpen(true)}
-      />
+      <UnitDialogs unit={unit} propertyId={propertyId} controls={controls} />
+    </>
+  );
+}
 
-      <Dialog open={editOpen} onOpenChange={handleEditOpenChange}>
-        <DialogContent className="max-w-xl">
-          <DialogHeader>
-            <DialogTitle>Editar local {unit.code}</DialogTitle>
-            <DialogDescription>
-              Modifica la información del local.
-            </DialogDescription>
-          </DialogHeader>
-          <UnitForm
-            initial={{
-              id: unit.id,
-              propertyId,
-              code: unit.code,
-              name: unit.name,
-              area:
-                unit.area !== null && unit.area !== undefined
-                  ? Number(unit.area)
-                  : null,
-              estimatedRent:
-                unit.estimatedRent !== null && unit.estimatedRent !== undefined
-                  ? Number(unit.estimatedRent)
-                  : null,
-              status: unit.status,
-              notes: unit.notes ?? null,
-            }}
-            onSuccess={() => {
-              setEditOpen(false);
-              setDetailOpen(true);
-              router.refresh();
-            }}
-            submitLabel="Guardar cambios"
-          />
-        </DialogContent>
-      </Dialog>
+export const UNIT_GRID_COLS =
+  "minmax(0, 0.7fr) minmax(0, 0.9fr) minmax(0, 2fr) minmax(0, 1fr)";
 
-      <Dialog open={photosOpen} onOpenChange={handlePhotosOpenChange}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>
-              Fotos del local {unit.code}
-              {unit.name ? ` · ${unit.name}` : null}
-            </DialogTitle>
-            <DialogDescription>
-              Sube imágenes para este local. La más reciente aparecerá como portada.
-            </DialogDescription>
-          </DialogHeader>
-          <UnitPhotoGallery unitId={unit.id} photos={unit.photos ?? []} />
-        </DialogContent>
-      </Dialog>
+interface UnitRowProps {
+  unit: UnitCardData;
+  propertyId: string;
+}
 
-      <AlertDialog open={deleteOpen} onOpenChange={handleDeleteOpenChange}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>¿Eliminar local {unit.code}?</AlertDialogTitle>
-            <AlertDialogDescription>
-              El local se marcará como inactivo. Los contratos y pagos históricos se
-              conservan.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={pending}>Cancelar</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={(e) => {
-                e.preventDefault();
-                confirmDelete();
-              }}
-              disabled={pending}
+export function UnitRow({ unit, propertyId }: UnitRowProps) {
+  const controls = useUnitDialogControls(unit);
+
+  const contract = unit.contracts[0] ?? null;
+  const lessee = contract?.lessee ?? null;
+  const monthly = contract
+    ? Number(contract.monthlyAmount)
+    : unit.estimatedRent !== null
+      ? Number(unit.estimatedRent)
+      : null;
+
+  function handleRowKey(e: React.KeyboardEvent<HTMLDivElement>) {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      controls.openDetail();
+    }
+  }
+
+  return (
+    <>
+      <div
+        role="row"
+        onClick={controls.openDetail}
+        onKeyDown={handleRowKey}
+        tabIndex={0}
+        aria-label={`Ver detalle de ${unit.code}`}
+        className="grid cursor-pointer items-center border-b text-sm transition-colors last:border-b-0 hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset"
+        style={{ gridTemplateColumns: UNIT_GRID_COLS }}
+      >
+        <div
+          role="cell"
+          className="truncate px-3 py-2.5 font-mono text-xs font-semibold"
+        >
+          {unit.code}
+        </div>
+        <div role="cell" className="px-3 py-2.5">
+          <Badge variant={unitStatusVariant(unit.status)}>
+            {unitStatusLabel(unit.status)}
+          </Badge>
+        </div>
+        <div role="cell" className="truncate px-3 py-2.5">
+          {lessee ? (
+            <Link
+              href={`/lessees/${lessee.id}`}
+              onClick={(e) => e.stopPropagation()}
+              className="hover:underline"
             >
-              {pending ? "Eliminando..." : "Eliminar"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+              {lessee.legalName}
+            </Link>
+          ) : (
+            <span className="text-muted-foreground">Disponible</span>
+          )}
+          {unit.name && unit.name !== lessee?.legalName ? (
+            <p className="truncate text-xs text-muted-foreground">{unit.name}</p>
+          ) : null}
+        </div>
+        <div
+          role="cell"
+          className="px-3 py-2.5 text-right font-mono tabular-nums"
+        >
+          {monthly !== null ? (
+            contract ? (
+              <span className="font-semibold">{MXN.format(monthly)}</span>
+            ) : (
+              <span className="text-muted-foreground">
+                ~{MXN.format(monthly)}
+              </span>
+            )
+          ) : (
+            <span className="text-muted-foreground">—</span>
+          )}
+        </div>
+      </div>
+
+      <UnitDialogs unit={unit} propertyId={propertyId} controls={controls} />
     </>
   );
 }
@@ -325,14 +472,12 @@ function UnitDetailDialog({
   unit,
   onEditClick,
   onPhotosClick,
-  onDeleteClick,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   unit: UnitCardData;
   onEditClick: () => void;
   onPhotosClick: () => void;
-  onDeleteClick: () => void;
 }) {
   const contract = unit.contracts[0] ?? null;
   const lessee = contract?.lessee ?? null;
@@ -354,11 +499,6 @@ function UnitDetailDialog({
   function handleEdit() {
     onOpenChange(false);
     onEditClick();
-  }
-
-  function handleDelete() {
-    onOpenChange(false);
-    onDeleteClick();
   }
 
   return (
@@ -505,15 +645,6 @@ function UnitDetailDialog({
                 Ver inquilino
               </Button>
             ) : null}
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleDelete}
-              className="ml-auto text-destructive hover:bg-destructive/10 hover:text-destructive"
-            >
-              <Trash2 className="size-4" />
-              Eliminar
-            </Button>
           </div>
         </div>
       </DialogContent>

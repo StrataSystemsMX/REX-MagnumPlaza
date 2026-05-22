@@ -6,10 +6,8 @@ import { requireAuth } from "@/lib/auth/get-session";
 import { requirePermission } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/prisma/client";
 import {
-  applyGuaranteeToDebtSchema,
   createGuaranteeSchema,
   returnGuaranteeSchema,
-  type ApplyGuaranteeToDebtInput,
   type CreateGuaranteeInput,
   type ReturnGuaranteeInput,
 } from "@/lib/validators/guarantee";
@@ -72,26 +70,71 @@ export async function actionReturnGuarantee(input: ReturnGuaranteeInput) {
   const data = returnGuaranteeSchema.parse(input);
 
   const guarantee = await prisma.guarantee.findFirstOrThrow({
-    where: { id: data.guaranteeId, tenantId, status: { in: ["HELD", "PARTIALLY_RETURNED"] } },
+    where: {
+      id: data.guaranteeId,
+      tenantId,
+      status: { in: ["HELD", "PARTIALLY_RETURNED", "RETURNED"] },
+    },
     select: { id: true, amount: true, contractId: true },
   });
 
+  const depositAmount = guarantee.amount.toNumber();
+  if (data.returnedAmount > depositAmount) {
+    throw new Error(
+      `El monto devuelto no puede exceder el depósito original ($${depositAmount.toFixed(2)}).`,
+    );
+  }
+
   const totalDeductions = data.deductions.reduce((acc, d) => acc + d.amount, 0);
   const newStatus =
-    data.returnedAmount >= guarantee.amount.toNumber() - totalDeductions
+    data.returnedAmount >= depositAmount - totalDeductions
       ? "RETURNED"
       : "PARTIALLY_RETURNED";
 
-  const updated = await prisma.guarantee.update({
-    where: { id: data.guaranteeId },
+  await prisma.guarantee.updateMany({
+    where: { id: data.guaranteeId, tenantId },
     data: {
       status: newStatus,
       returnedDate: data.returnedDate,
       returnedAmount: new Prisma.Decimal(data.returnedAmount),
-      deductions: data.deductions.length > 0 ? (data.deductions as Prisma.InputJsonValue) : Prisma.JsonNull,
+      deductions:
+        data.deductions.length > 0
+          ? (data.deductions as Prisma.InputJsonValue)
+          : Prisma.JsonNull,
       notes: data.notes ?? null,
     },
   });
+
+  // Sincroniza las deducciones por daños como mantenimientos correctivos
+  // (responsabilidad del inquilino, marcados completados). Los identificamos
+  // con un marcador en `notes` para regenerarlos limpiamente si la devolución
+  // se edita más adelante.
+  const deductionMarker = `[deposit:${guarantee.id}]`;
+  await prisma.maintenance.deleteMany({
+    where: { tenantId, notes: { contains: deductionMarker } },
+  });
+
+  if (data.deductions.length > 0) {
+    const contract = await prisma.contract.findFirstOrThrow({
+      where: { id: guarantee.contractId, tenantId },
+      select: { unit: { select: { id: true, propertyId: true } } },
+    });
+
+    await prisma.maintenance.createMany({
+      data: data.deductions.map((d) => ({
+        tenantId,
+        propertyId: contract.unit.propertyId,
+        unitId: contract.unit.id,
+        title: d.concept,
+        type: "CORRECTIVE" as const,
+        responsibility: "LESSEE" as const,
+        status: "COMPLETED" as const,
+        completedDate: data.returnedDate,
+        cost: new Prisma.Decimal(d.amount),
+        notes: `Generado desde devolución de fianza ${deductionMarker}`,
+      })),
+    });
+  }
 
   await logAudit(tenantId, dbUser.id, "UPDATE", guarantee.id, {
     action: "RETURN",
@@ -101,35 +144,6 @@ export async function actionReturnGuarantee(input: ReturnGuaranteeInput) {
   });
 
   revalidatePath("/fianzas");
+  revalidatePath("/mantenimientos");
   revalidatePath(`/contracts/${guarantee.contractId}`);
-  return updated;
-}
-
-export async function actionApplyGuaranteeToDebt(input: ApplyGuaranteeToDebtInput) {
-  const { tenantId, dbUser } = await requireAuth();
-  await requirePermission(dbUser.id, "expense.update");
-
-  const data = applyGuaranteeToDebtSchema.parse(input);
-
-  const guarantee = await prisma.guarantee.findFirstOrThrow({
-    where: { id: data.guaranteeId, tenantId, status: { in: ["HELD", "PARTIALLY_RETURNED"] } },
-    select: { id: true, contractId: true },
-  });
-
-  const updated = await prisma.guarantee.update({
-    where: { id: data.guaranteeId },
-    data: {
-      status: "APPLIED_TO_DEBT",
-      notes: data.notes ?? null,
-    },
-  });
-
-  await logAudit(tenantId, dbUser.id, "UPDATE", guarantee.id, {
-    action: "APPLY_TO_DEBT",
-    notes: data.notes,
-  });
-
-  revalidatePath("/fianzas");
-  revalidatePath(`/contracts/${guarantee.contractId}`);
-  return updated;
 }

@@ -8,6 +8,7 @@ import { getActiveLegalEntityId } from "@/lib/auth/active-legal-entity";
 import { requireAuth } from "@/lib/auth/get-session";
 import { getUserRoleCodes } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/prisma/client";
+import { timed } from "@/lib/perf/timed";
 
 // ─── Formatters ──────────────────────────────────────────────────────────────
 
@@ -105,6 +106,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
   const paymentLeFilter = legalEntityParam ? { rent: { legalEntityId: legalEntityParam } } : {};
   const propLeFilter    = legalEntityParam ? { managerEntityId: legalEntityParam } : {};
 
+  const pageStart = performance.now();
   const [
     ventas,
     egresos,
@@ -117,25 +119,25 @@ export default async function DashboardPage({ searchParams }: PageProps) {
     cobranzaMonthRents,
   ] = await Promise.all([
     // KPI cards — respetan el filtro de LE
-    prisma.payment.aggregate({
+    timed("dashboard:ventas.aggregate", () => prisma.payment.aggregate({
       where: { tenantId: dbUser.tenantId, paymentDate: { gte: periodStart, lt: periodEnd }, ...paymentLeFilter },
       _sum: { amount: true },
-    }),
-    prisma.expense.aggregate({
+    })),
+    timed("dashboard:egresos.aggregate", () => prisma.expense.aggregate({
       where: { tenantId: dbUser.tenantId, expenseDate: { gte: periodStart, lt: periodEnd }, ...leFilter },
       _sum: { amount: true },
-    }),
-    prisma.rent.aggregate({
+    })),
+    timed("dashboard:cxc.aggregate", () => prisma.rent.aggregate({
       where: {
         tenantId: dbUser.tenantId,
         status: { in: ["DUE", "PARTIAL", "OVERDUE_1M", "OVERDUE_2M", "OVERDUE_3M"] },
         ...leFilter,
       },
       _sum: { amountDue: true, amountPaid: true },
-    }),
+    })),
 
     // Semáforo de locales — filtrado por managerEntityId
-    prisma.property.findMany({
+    timed("dashboard:propertiesWithUnits", () => prisma.property.findMany({
       where: { tenantId: dbUser.tenantId, isActive: true, ...propLeFilter },
       select: {
         id: true,
@@ -164,10 +166,10 @@ export default async function DashboardPage({ searchParams }: PageProps) {
         },
       },
       orderBy: { name: "asc" },
-    }),
+    })),
 
     // Adeudos — para el top overdue
-    prisma.rent.findMany({
+    timed("dashboard:overdueRents", () => prisma.rent.findMany({
       where: {
         tenantId: dbUser.tenantId,
         status: { in: ["DUE", "PARTIAL", "OVERDUE_1M", "OVERDUE_2M", "OVERDUE_3M"] },
@@ -179,10 +181,10 @@ export default async function DashboardPage({ searchParams }: PageProps) {
         status: true,
         contract: { select: { lessee: { select: { id: true, legalName: true } } } },
       },
-    }),
+    })),
 
     // Detalle de pagos para resumen por LE y ranking de plazas (sin filtro de LE)
-    prisma.payment.findMany({
+    timed("dashboard:paymentsDetail", () => prisma.payment.findMany({
       where: { tenantId: dbUser.tenantId, paymentDate: { gte: periodStart, lt: periodEnd } },
       select: {
         amount: true,
@@ -193,35 +195,40 @@ export default async function DashboardPage({ searchParams }: PageProps) {
           },
         },
       },
-    }),
+    })),
 
     // Detalle de egresos para resumen por LE y egresos por tipo (sin filtro de LE)
-    prisma.expense.findMany({
+    timed("dashboard:expensesDetail", () => prisma.expense.findMany({
       where: { tenantId: dbUser.tenantId, expenseDate: { gte: periodStart, lt: periodEnd } },
       select: {
         amount: true,
         legalEntityId: true,
         category: { select: { type: true } },
       },
-    }),
+    })),
 
     // Razones sociales activas
-    prisma.legalEntity.findMany({
+    timed("dashboard:legalEntities", () => prisma.legalEntity.findMany({
       where: { tenantId: dbUser.tenantId, isActive: true },
       select: { id: true, code: true },
       orderBy: { code: "asc" },
-    }),
+    })),
 
     // Cobranza del mes en curso (independiente del periodo del dashboard)
-    prisma.rent.findMany({
+    timed("dashboard:cobranzaMonthRents", () => prisma.rent.findMany({
       where: {
         tenantId: dbUser.tenantId,
         period: currentMonthStart,
         ...leFilter,
       },
       select: { status: true, amountDue: true, amountPaid: true },
-    }),
+    })),
   ]);
+  if (process.env["NODE_ENV"] !== "production" || process.env["PERF_LOG"] === "1") {
+    console.log(
+      `[PERF] / (dashboard) TOTAL: ${Math.round(performance.now() - pageStart)}ms`,
+    );
+  }
 
   // ── Cobranza mes en curso ──────────────────────────────────────────────────
   const cobranzaExpected  = cobranzaMonthRents.reduce((s, r) => s + Number(r.amountDue), 0);
@@ -569,9 +576,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
               {rankingPlazas.map((p) => (
                 <div key={p.id}>
                   <div className="mb-1 flex items-center justify-between text-sm">
-                    <Link href={`/properties/${p.id}`} className="truncate font-medium hover:underline">
-                      {p.name}
-                    </Link>
+                    <span className="truncate font-medium">{p.name}</span>
                     <span className="ml-2 shrink-0 tabular-nums text-xs text-muted-foreground">
                       {MXN.format(p.expectedMonthly)}
                     </span>

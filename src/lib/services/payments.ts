@@ -5,10 +5,7 @@ import { Prisma } from "@/generated/prisma/client";
 import { requireAuth } from "@/lib/auth/get-session";
 import { getUserRoleCodes, requirePermission } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/prisma/client";
-import {
-  getCondonableRentsForContract,
-  getOutstandingRentsForLessee,
-} from "@/lib/services/payments-queries";
+import { getOutstandingRentsForLessee } from "@/lib/services/payments-queries";
 import { sendPaymentConfirmation } from "@/lib/services/notifications";
 import { computeRentStatus } from "@/lib/services/rent-status";
 import {
@@ -108,10 +105,33 @@ async function recalcRentInTx(
  * solo crea el NotificationLog en PENDING para que el operador lo mande
  * manualmente. Errores se loguean pero NO abortan el registro del pago
  * — la cobranza es lo crítico, la notificación es secundaria.
+ *
+ * Escribe AuditLog con paymentId aunque el envío quede PENDING — así el
+ * botón "Enviar" de la bitácora puede recuperar el paymentId después.
  */
-async function dispatchRentPaidEvent(tenantId: string, paymentId: string): Promise<void> {
+async function dispatchRentPaidEvent(
+  tenantId: string,
+  paymentId: string,
+  userId: string,
+): Promise<void> {
   try {
-    await sendPaymentConfirmation(tenantId, paymentId);
+    const result = await sendPaymentConfirmation(tenantId, paymentId);
+    await prisma.auditLog.create({
+      data: {
+        tenantId,
+        userId,
+        action: "CREATE",
+        entityType: "NotificationLog",
+        entityId: result.notificationLogId,
+        changes: {
+          manual: false,
+          paymentId,
+          status: result.status,
+          externalId: result.externalId,
+          failureReason: result.failureReason,
+        },
+      },
+    });
   } catch (e) {
     console.error(
       `[payments] sendPaymentConfirmation failed (payment ${paymentId}):`,
@@ -297,11 +317,11 @@ export async function actionRegisterPayment(
 
   // Notificar por cada renta que quedó PAID.
   if (result.primaryStatus === "PAID") {
-    await dispatchRentPaidEvent(tenantId, result.primary.id);
+    await dispatchRentPaidEvent(tenantId, result.primary.id, dbUser.id);
   }
   for (const c of result.cascade) {
     if (c.status === "PAID") {
-      await dispatchRentPaidEvent(tenantId, c.paymentId);
+      await dispatchRentPaidEvent(tenantId, c.paymentId, dbUser.id);
     }
   }
 
@@ -390,7 +410,7 @@ export async function actionRegisterBulkPayment(input: BulkPaymentInput): Promis
       rentStatusAfter: s.status,
     });
     if (s.status === "PAID") {
-      await dispatchRentPaidEvent(tenantId, p.id);
+      await dispatchRentPaidEvent(tenantId, p.id, dbUser.id);
     }
   }
 
@@ -434,33 +454,6 @@ export async function actionDeletePayment(id: string): Promise<void> {
 /** Server Action wrapper: lista los Rents pendientes de un Lessee. */
 export async function actionGetOutstandingRentsForLessee(lesseeId: string) {
   return getOutstandingRentsForLessee(lesseeId);
-}
-
-/**
- * Para el dialog "Condonar": dado un rentId, devuelve los rents con saldo
- * pendiente del mismo contrato. Útil para condonar varios meses a la vez.
- */
-export async function actionGetCondonableRentsByRent(rentId: string): Promise<
-  Array<{
-    id: string;
-    period: Date;
-    dueDate: Date;
-    amountDue: string;
-    amountPaid: string;
-    amountWaived: string;
-    balance: string;
-    status: RentStatus;
-  }>
-> {
-  const { tenantId } = await requireAuth();
-  const rent = await prisma.rent.findFirst({
-    where: { id: rentId, tenantId },
-    select: { contractId: true },
-  });
-  if (!rent) {
-    throw new Error("Renta no encontrada o fuera de tu tenant.");
-  }
-  return getCondonableRentsForContract(rent.contractId);
 }
 
 /**

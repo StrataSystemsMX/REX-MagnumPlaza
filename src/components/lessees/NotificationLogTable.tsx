@@ -1,6 +1,6 @@
 "use client";
 
-import { RotateCw, ExternalLink, Loader2 } from "lucide-react";
+import { RotateCw, ExternalLink, Loader2, Send } from "lucide-react";
 import { useTransition } from "react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
@@ -70,19 +70,23 @@ interface NotificationLogTableProps {
 export function NotificationLogTable({ logs }: NotificationLogTableProps) {
   const [pending, startTransition] = useTransition();
 
-  function retry(id: string) {
+  function send(id: string, isRetry: boolean) {
     startTransition(async () => {
       try {
         const r = await actionRetryNotification(id);
         if (r.status === "SENT") {
-          toast.success("Reenviado correctamente.");
+          toast.success(isRetry ? "Reenviado correctamente." : "Enviado correctamente.");
         } else if (r.status === "FAILED") {
-          toast.error(`Reintento falló: ${r.failureReason ?? "error desconocido"}`);
+          toast.error(
+            `${isRetry ? "Reintento" : "Envío"} falló: ${r.failureReason ?? "error desconocido"}`,
+          );
         } else {
-          toast.warning("Reintento registrado en PENDING.");
+          toast.warning("Quedó en PENDING.");
         }
       } catch (e) {
-        toast.error(e instanceof Error ? e.message : "Error al reintentar.");
+        toast.error(
+          e instanceof Error ? e.message : isRetry ? "Error al reintentar." : "Error al enviar.",
+        );
       }
     });
   }
@@ -153,12 +157,26 @@ export function NotificationLogTable({ logs }: NotificationLogTableProps) {
                         <ExternalLink className="size-4" />
                       </Button>
                     ) : null}
-                    {l.status === "FAILED" ? (
+                    {l.status === "PENDING" ? (
+                      <Button
+                        size="sm"
+                        variant="default"
+                        disabled={pending}
+                        onClick={() => send(l.id, false)}
+                      >
+                        {pending ? (
+                          <Loader2 className="size-4 animate-spin" />
+                        ) : (
+                          <Send className="size-4" />
+                        )}
+                        Enviar
+                      </Button>
+                    ) : l.status === "FAILED" ? (
                       <Button
                         size="sm"
                         variant="secondary"
                         disabled={pending}
-                        onClick={() => retry(l.id)}
+                        onClick={() => send(l.id, true)}
                       >
                         {pending ? (
                           <Loader2 className="size-4 animate-spin" />

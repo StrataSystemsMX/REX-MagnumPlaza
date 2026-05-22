@@ -1,18 +1,16 @@
 "use client";
 
 import {
+  Camera,
   ChevronDown,
   ChevronRight,
   ChevronUp,
-  ExternalLink,
-  Images,
   ImageOff,
   LayoutGrid,
-  MoreHorizontal,
+  List,
   Pencil,
   Plus,
   Receipt,
-  Table2,
   Trash2,
 } from "lucide-react";
 import Image from "next/image";
@@ -40,23 +38,16 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
 import { PropertyForm } from "@/components/forms/PropertyForm";
-import { UnitCard } from "@/components/properties/UnitCard";
+import { PropertyPhotoGallery } from "@/components/properties/PropertyPhotoGallery";
+import {
+  UNIT_GRID_COLS,
+  UnitCard,
+  UnitRow,
+} from "@/components/properties/UnitCard";
+import { usePropertiesViewMode } from "@/hooks/use-properties-view-mode";
+import type { PropertiesViewMode } from "@/lib/properties-view-mode";
 import { actionDeleteProperty } from "@/lib/services/properties";
 import type {
   LegalEntityOption,
@@ -66,14 +57,17 @@ import type {
 interface PlazasTableProps {
   plazas: ReadonlyArray<PropertyListItem>;
   legalEntities: ReadonlyArray<LegalEntityOption>;
+  initialView: PropertiesViewMode;
 }
 
-export function PlazasTable({ plazas, legalEntities }: PlazasTableProps) {
+export function PlazasTable({ plazas, legalEntities, initialView }: PlazasTableProps) {
   const router = useRouter();
   const [createOpen, setCreateOpen] = useState(false);
+  const [detailTarget, setDetailTarget] = useState<PropertyListItem | null>(null);
   const [editTarget, setEditTarget] = useState<PropertyListItem | null>(null);
+  const [photosTarget, setPhotosTarget] = useState<PropertyListItem | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<PropertyListItem | null>(null);
-  const [view, setView] = useState<"cards" | "table">("cards");
+  const [view, setView] = usePropertiesViewMode(initialView);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [pending, startTransition] = useTransition();
 
@@ -123,7 +117,7 @@ export function PlazasTable({ plazas, legalEntities }: PlazasTableProps) {
               aria-label="Vista de tabla"
               aria-pressed={view === "table"}
             >
-              <Table2 className="size-4" />
+              <List className="size-4" />
             </Button>
           </div>
         </div>
@@ -165,8 +159,7 @@ export function PlazasTable({ plazas, legalEntities }: PlazasTableProps) {
               plaza={p}
               isExpanded={expanded.has(p.id)}
               onToggle={() => toggleExpanded(p.id)}
-              onEdit={() => setEditTarget(p)}
-              onDelete={() => setDeleteTarget(p)}
+              onDetail={() => setDetailTarget(p)}
             />
           ))}
         </div>
@@ -175,45 +168,107 @@ export function PlazasTable({ plazas, legalEntities }: PlazasTableProps) {
           plazas={plazas}
           expanded={expanded}
           onToggle={toggleExpanded}
-          onEdit={(p) => setEditTarget(p)}
-          onDelete={(p) => setDeleteTarget(p)}
+          onDetail={(p) => setDetailTarget(p)}
         />
       )}
 
+      <PlazaDetailDialog
+        plaza={detailTarget}
+        onOpenChange={(open) => !open && setDetailTarget(null)}
+        onEditClick={() => {
+          const target = detailTarget;
+          setDetailTarget(null);
+          setEditTarget(target);
+        }}
+        onPhotosClick={() => {
+          const target = detailTarget;
+          setDetailTarget(null);
+          setPhotosTarget(target);
+        }}
+      />
+
       <Dialog
         open={editTarget !== null}
-        onOpenChange={(open) => !open && setEditTarget(null)}
+        onOpenChange={(open) => {
+          if (!open) {
+            const target = editTarget;
+            setEditTarget(null);
+            setDetailTarget(target);
+          }
+        }}
       >
         <DialogContent className="max-w-2xl">
+          {editTarget ? (
+            <>
+              <DialogHeader>
+                <DialogTitle>Editar plaza</DialogTitle>
+                <DialogDescription>
+                  Modifica la información de {editTarget.name}.
+                </DialogDescription>
+              </DialogHeader>
+              <PropertyForm
+                legalEntities={legalEntities}
+                lockedType="PLAZA_COMERCIAL"
+                initial={{
+                  id: editTarget.id,
+                  name: editTarget.name,
+                  type: editTarget.type,
+                  status: editTarget.status,
+                  address: editTarget.address,
+                  ownerEntityId: editTarget.ownerEntity.id,
+                  managerEntityId: editTarget.managerEntity.id,
+                  cadastralKey: editTarget.cadastralKey,
+                  latitude: editTarget.latitude,
+                  longitude: editTarget.longitude,
+                  totalArea: editTarget.totalArea,
+                  notes: editTarget.notes,
+                }}
+                onSuccess={() => {
+                  const target = editTarget;
+                  setEditTarget(null);
+                  setDetailTarget(target);
+                  router.refresh();
+                }}
+                submitLabel="Guardar cambios"
+                secondaryAction={
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      const target = editTarget;
+                      setEditTarget(null);
+                      setDeleteTarget(target);
+                    }}
+                    className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                  >
+                    <Trash2 className="size-4" />
+                    Eliminar plaza
+                  </Button>
+                }
+              />
+            </>
+          ) : null}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={photosTarget !== null}
+        onOpenChange={(open) => !open && setPhotosTarget(null)}
+      >
+        <DialogContent className="max-w-5xl">
           <DialogHeader>
-            <DialogTitle>Editar plaza</DialogTitle>
+            <DialogTitle>Fotos de {photosTarget?.name}</DialogTitle>
             <DialogDescription>
-              Modifica la información de {editTarget?.name}.
+              Sube imágenes para la plaza. La más reciente aparecerá como portada.
             </DialogDescription>
           </DialogHeader>
-          {editTarget ? (
-            <PropertyForm
-              legalEntities={legalEntities}
-              lockedType="PLAZA_COMERCIAL"
-              initial={{
-                id: editTarget.id,
-                name: editTarget.name,
-                type: editTarget.type,
-                status: editTarget.status,
-                address: editTarget.address,
-                ownerEntityId: editTarget.ownerEntity.id,
-                managerEntityId: editTarget.managerEntity.id,
-                cadastralKey: editTarget.cadastralKey,
-                latitude: editTarget.latitude,
-                longitude: editTarget.longitude,
-                totalArea: editTarget.totalArea,
-                notes: editTarget.notes,
-              }}
-              onSuccess={() => {
-                setEditTarget(null);
-                router.refresh();
-              }}
-              submitLabel="Guardar cambios"
+          {photosTarget ? (
+            <PropertyPhotoGallery
+              propertyId={photosTarget.id}
+              photos={photosTarget.photos ?? []}
+              canEdit
+              isPlaza
             />
           ) : null}
         </DialogContent>
@@ -249,67 +304,16 @@ export function PlazasTable({ plazas, legalEntities }: PlazasTableProps) {
   );
 }
 
-function PlazaActionsMenu({
-  plaza,
-  onEdit,
-  onDelete,
-  size = "icon-sm",
-}: {
-  plaza: PropertyListItem;
-  onEdit: () => void;
-  onDelete: () => void;
-  size?: "icon" | "icon-sm";
-}) {
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger render={<Button variant="ghost" size={size} />}>
-        <MoreHorizontal className="size-4" />
-        <span className="sr-only">Acciones</span>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
-        <DropdownMenuItem render={<Link href={`/properties/${plaza.id}`} />}>
-          <ExternalLink className="size-4" />
-          Ver detalle
-        </DropdownMenuItem>
-        <DropdownMenuItem
-          render={<Link href={`/properties/${plaza.id}?tab=photos`} />}
-        >
-          <Images className="size-4" />
-          Fotos
-        </DropdownMenuItem>
-        <DropdownMenuItem render={<Link href="/prediales" />}>
-          <Receipt className="size-4" />
-          Ver predial
-        </DropdownMenuItem>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={onEdit}>
-          <Pencil className="size-4" />
-          Editar
-        </DropdownMenuItem>
-        <DropdownMenuItem
-          className="text-destructive focus:text-destructive"
-          onClick={onDelete}
-        >
-          <Trash2 className="size-4" />
-          Eliminar
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
-}
-
 function PlazaCard({
   plaza,
   isExpanded,
   onToggle,
-  onEdit,
-  onDelete,
+  onDetail,
 }: {
   plaza: PropertyListItem;
   isExpanded: boolean;
   onToggle: () => void;
-  onEdit: () => void;
-  onDelete: () => void;
+  onDetail: () => void;
 }) {
   const { coverPhotoUrl, name, address, ownerEntity, managerEntity, unitCounts } =
     plaza;
@@ -326,11 +330,15 @@ function PlazaCard({
       }`}
     >
       <div className={isExpanded ? "flex flex-col gap-0 sm:flex-row" : ""}>
-        <Link
-          href={`/properties/${plaza.id}`}
-          className={`block ${isExpanded ? "sm:w-1/3 sm:max-w-sm" : ""}`}
+        <button
+          type="button"
+          onClick={onDetail}
+          aria-label={`Ver detalle de ${name}`}
+          className={`block w-full text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${
+            isExpanded ? "sm:w-1/3 sm:max-w-sm" : ""
+          }`}
         >
-          <div className="relative aspect-video w-full overflow-hidden bg-muted">
+          <div className="relative aspect-[4/3] w-full overflow-hidden bg-muted">
             {coverPhotoUrl ? (
               <>
                 <Image
@@ -358,8 +366,8 @@ function PlazaCard({
               </div>
             )}
           </div>
-        </Link>
-        <CardContent className="flex flex-1 flex-col gap-3 p-4">
+        </button>
+        <CardContent className="flex flex-1 flex-col gap-2 p-3">
           <div className="flex items-start justify-between gap-2">
             <div className="flex min-w-0 flex-1 items-center gap-2">
               <Button
@@ -382,21 +390,21 @@ function PlazaCard({
                 </span>
               </Button>
               <div className="min-w-0 flex-1">
-                <Link
-                  href={`/properties/${plaza.id}`}
-                  className="block truncate font-semibold hover:underline"
+                <button
+                  type="button"
+                  onClick={onDetail}
+                  className="block w-full truncate text-left text-sm font-semibold hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                 >
                   {name}
-                </Link>
+                </button>
                 {address ? (
-                  <p className="line-clamp-1 text-xs text-muted-foreground">{address}</p>
+                  <p className="line-clamp-1 text-[11px] text-muted-foreground">{address}</p>
                 ) : null}
               </div>
             </div>
-            <PlazaActionsMenu plaza={plaza} onEdit={onEdit} onDelete={onDelete} />
           </div>
 
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
             <span>
               Dueña <span className="font-medium text-foreground">{ownerEntity.code}</span>
             </span>
@@ -407,7 +415,7 @@ function PlazaCard({
             </span>
           </div>
 
-          <div className="mt-auto space-y-1.5 border-t pt-3">
+          <div className="mt-auto space-y-1.5 border-t pt-2">
             <div className="flex items-baseline justify-between text-sm">
               <span className="font-medium tabular-nums">
                 {unitCounts.rented}
@@ -473,136 +481,344 @@ function PlazaCard({
   );
 }
 
+const PLAZA_GRID_COLS =
+  "40px minmax(0, 2fr) minmax(0, 0.9fr) minmax(0, 0.9fr) minmax(0, 0.8fr) minmax(0, 0.7fr)";
+
 function PlazasTableView({
   plazas,
   expanded,
   onToggle,
-  onEdit,
-  onDelete,
+  onDetail,
 }: {
   plazas: ReadonlyArray<PropertyListItem>;
   expanded: ReadonlySet<string>;
   onToggle: (id: string) => void;
-  onEdit: (p: PropertyListItem) => void;
-  onDelete: (p: PropertyListItem) => void;
+  onDetail: (p: PropertyListItem) => void;
 }) {
   return (
-    <div className="overflow-x-auto rounded-md border bg-card">
-      <Table className="min-w-[680px]">
-        <TableHeader>
-          <TableRow>
-            <TableHead className="w-8" />
-            <TableHead>Nombre</TableHead>
-            <TableHead>Dueña</TableHead>
-            <TableHead>Administra</TableHead>
-            <TableHead>Locales</TableHead>
-            <TableHead>Ocupación</TableHead>
-            <TableHead>
-              <span className="sr-only">Acciones</span>
-            </TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {plazas.map((p) => {
-            const occ =
-              p.unitCounts.total > 0
-                ? Math.round((p.unitCounts.rented / p.unitCounts.total) * 100)
-                : 0;
-            const isExpanded = expanded.has(p.id);
-            const activeUnits = p.units.filter((u) => u.isActive);
-            return (
-              <Fragment key={p.id}>
-                <TableRow data-state={isExpanded ? "expanded" : undefined}>
-                  <TableCell className="w-8 p-0 pl-2 align-middle">
-                    <Button
-                      variant={isExpanded ? "secondary" : "outline"}
-                      size="icon-sm"
-                      onClick={() => onToggle(p.id)}
-                      aria-label={isExpanded ? "Colapsar locales" : "Ver locales"}
-                      aria-expanded={isExpanded}
-                      className={
-                        isExpanded ? "" : "border-primary/50 text-primary hover:bg-primary/10"
-                      }
-                    >
-                      {isExpanded ? (
-                        <ChevronDown className="size-5" />
-                      ) : (
-                        <ChevronRight className="size-5" />
-                      )}
-                    </Button>
-                  </TableCell>
-                  <TableCell>
-                    <Link
-                      href={`/properties/${p.id}`}
-                      className="font-medium hover:underline"
-                    >
-                      {p.name}
-                    </Link>
-                    {p.address ? (
-                      <p className="text-xs text-muted-foreground">{p.address}</p>
-                    ) : null}
-                  </TableCell>
-                  <TableCell className="text-sm">{p.ownerEntity.code}</TableCell>
-                  <TableCell className="text-sm">{p.managerEntity.code}</TableCell>
-                  <TableCell className="tabular-nums text-sm">
-                    <span className="font-medium">{p.unitCounts.rented}</span>
-                    <span className="text-muted-foreground"> / {p.unitCounts.total}</span>
-                  </TableCell>
-                  <TableCell className="tabular-nums text-sm">{occ}%</TableCell>
-                  <TableCell className="text-right">
-                    <PlazaActionsMenu
-                      plaza={p}
-                      onEdit={() => onEdit(p)}
-                      onDelete={() => onDelete(p)}
-                      size="icon"
-                    />
-                  </TableCell>
-                </TableRow>
-                {isExpanded ? (
-                  <TableRow className="bg-muted/30 hover:bg-muted/30">
-                    <TableCell />
-                    <TableCell colSpan={6} className="p-0">
-                      <div className="border-t border-b-2 border-b-primary/30">
-                        <div className="bg-muted/30 px-4 py-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                          Locales de {p.name}
-                        </div>
-                        <div className="p-4">
-                          {activeUnits.length === 0 ? (
-                            <p className="text-sm text-muted-foreground">
-                              Esta plaza aún no tiene locales activos.
-                            </p>
-                          ) : (
-                            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                              {activeUnits.map((u) => (
-                                <UnitCard key={u.id} unit={u} propertyId={p.id} />
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                        <div className="flex items-center justify-between gap-2 border-t bg-muted/50 px-4 py-2.5">
-                          <span className="text-xs text-muted-foreground">
-                            Fin de los locales de{" "}
-                            <span className="font-medium text-foreground">{p.name}</span>
-                          </span>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => onToggle(p.id)}
-                            className="gap-1"
+    <div className="overflow-hidden rounded-lg border bg-card shadow-sm">
+      <div role="table" aria-label="Plazas">
+        <div
+          role="row"
+          className="grid items-center border-b bg-muted/30 text-xs font-medium uppercase text-muted-foreground"
+          style={{ gridTemplateColumns: PLAZA_GRID_COLS }}
+        >
+          <div role="columnheader" aria-label="Expandir" />
+          <div role="columnheader" className="px-3 py-2.5">
+            Nombre
+          </div>
+          <div role="columnheader" className="px-3 py-2.5">
+            Dueña
+          </div>
+          <div role="columnheader" className="px-3 py-2.5">
+            Administra
+          </div>
+          <div role="columnheader" className="px-3 py-2.5">
+            Locales
+          </div>
+          <div role="columnheader" className="px-3 py-2.5 text-right">
+            Ocupación
+          </div>
+        </div>
+        {plazas.map((p) => {
+          const occ =
+            p.unitCounts.total > 0
+              ? Math.round((p.unitCounts.rented / p.unitCounts.total) * 100)
+              : 0;
+          const isExpanded = expanded.has(p.id);
+          const activeUnits = p.units.filter((u) => u.isActive);
+          return (
+            <Fragment key={p.id}>
+              <div
+                role="button"
+                tabIndex={0}
+                onClick={() => onDetail(p)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    onDetail(p);
+                  }
+                }}
+                aria-label={`Ver detalle de ${p.name}`}
+                className="grid cursor-pointer items-center border-b text-sm transition-colors last:border-b-0 hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset"
+                style={{ gridTemplateColumns: PLAZA_GRID_COLS }}
+                data-state={isExpanded ? "expanded" : undefined}
+              >
+                <div role="cell" className="flex justify-center">
+                  <Button
+                    variant={isExpanded ? "secondary" : "outline"}
+                    size="icon-sm"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onToggle(p.id);
+                    }}
+                    aria-label={isExpanded ? "Colapsar locales" : "Ver locales"}
+                    aria-expanded={isExpanded}
+                    className={
+                      isExpanded
+                        ? ""
+                        : "border-primary/50 text-primary hover:bg-primary/10"
+                    }
+                  >
+                    {isExpanded ? (
+                      <ChevronDown className="size-4" />
+                    ) : (
+                      <ChevronRight className="size-4" />
+                    )}
+                  </Button>
+                </div>
+                <div role="cell" className="min-w-0 px-3 py-2.5">
+                  <p className="truncate font-medium">{p.name}</p>
+                  {p.address ? (
+                    <p className="truncate text-xs text-muted-foreground">
+                      {p.address}
+                    </p>
+                  ) : null}
+                </div>
+                <div role="cell" className="truncate px-3 py-2.5">
+                  {p.ownerEntity.code}
+                </div>
+                <div role="cell" className="truncate px-3 py-2.5">
+                  {p.managerEntity.code}
+                </div>
+                <div
+                  role="cell"
+                  className="px-3 py-2.5 font-mono tabular-nums"
+                >
+                  <span className="font-semibold">{p.unitCounts.rented}</span>
+                  <span className="text-muted-foreground">
+                    {" "}
+                    / {p.unitCounts.total}
+                  </span>
+                </div>
+                <div
+                  role="cell"
+                  className="px-3 py-2.5 text-right font-mono tabular-nums"
+                >
+                  {occ}%
+                </div>
+              </div>
+              {isExpanded ? (
+                <div className="border-b bg-muted/30 px-4 py-3 last:border-b-0">
+                  <div className="mb-2 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                    Locales de {p.name}
+                  </div>
+                  {activeUnits.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">
+                      Esta plaza aún no tiene locales activos.
+                    </p>
+                  ) : (
+                    <div className="overflow-hidden rounded-md border bg-card">
+                      <div role="table" aria-label={`Locales de ${p.name}`}>
+                        <div
+                          role="row"
+                          className="grid items-center border-b bg-muted/40 text-xs font-medium uppercase text-muted-foreground"
+                          style={{ gridTemplateColumns: UNIT_GRID_COLS }}
+                        >
+                          <div role="columnheader" className="px-3 py-2">
+                            Código
+                          </div>
+                          <div role="columnheader" className="px-3 py-2">
+                            Estado
+                          </div>
+                          <div role="columnheader" className="px-3 py-2">
+                            Inquilino
+                          </div>
+                          <div
+                            role="columnheader"
+                            className="px-3 py-2 text-right"
                           >
-                            <ChevronUp className="size-4" />
-                            Cerrar
-                          </Button>
+                            Renta
+                          </div>
                         </div>
+                        {activeUnits.map((u) => (
+                          <UnitRow key={u.id} unit={u} propertyId={p.id} />
+                        ))}
                       </div>
-                    </TableCell>
-                  </TableRow>
-                ) : null}
-              </Fragment>
-            );
-          })}
-        </TableBody>
-      </Table>
+                    </div>
+                  )}
+                </div>
+              ) : null}
+            </Fragment>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function PlazaDetailDialog({
+  plaza,
+  onOpenChange,
+  onEditClick,
+  onPhotosClick,
+}: {
+  plaza: PropertyListItem | null;
+  onOpenChange: (open: boolean) => void;
+  onEditClick: () => void;
+  onPhotosClick: () => void;
+}) {
+  const occupancyPct =
+    plaza && plaza.unitCounts.total > 0
+      ? Math.round((plaza.unitCounts.rented / plaza.unitCounts.total) * 100)
+      : 0;
+  const totalArea =
+    plaza && plaza.totalArea !== null && plaza.totalArea !== undefined
+      ? Number(plaza.totalArea)
+      : null;
+
+  function handlePhotos() {
+    onOpenChange(false);
+    onPhotosClick();
+  }
+
+  function handleEdit() {
+    onOpenChange(false);
+    onEditClick();
+  }
+
+  return (
+    <Dialog open={plaza !== null} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-2xl overflow-hidden p-0">
+        {plaza ? (
+        <>
+        <div className="relative aspect-[16/9] w-full overflow-hidden bg-muted">
+          {plaza.coverPhotoUrl ? (
+            <>
+              <Image
+                src={plaza.coverPhotoUrl}
+                alt=""
+                aria-hidden
+                fill
+                sizes="(max-width: 768px) 100vw, 640px"
+                className="scale-110 object-cover blur-xl"
+              />
+              <div className="absolute inset-0 bg-background/40" />
+              <Image
+                src={plaza.coverPhotoUrl}
+                alt={plaza.name}
+                fill
+                sizes="(max-width: 768px) 100vw, 640px"
+                className="object-contain"
+              />
+            </>
+          ) : (
+            <div className="flex h-full flex-col items-center justify-center gap-2 text-muted-foreground/60">
+              <ImageOff className="size-12" />
+              <span className="text-xs uppercase tracking-wider">Sin foto</span>
+            </div>
+          )}
+          <Badge variant="secondary" className="absolute left-3 top-3 shadow-sm">
+            Plaza Comercial
+          </Badge>
+          <span className="absolute bottom-3 left-3 max-w-[70%] truncate rounded-md bg-black/70 px-2.5 py-1 text-sm font-semibold text-white shadow-sm backdrop-blur-sm">
+            {plaza.name}
+          </span>
+          <Button
+            type="button"
+            size="icon-sm"
+            variant="secondary"
+            onClick={handlePhotos}
+            aria-label="Editar fotos de la plaza"
+            className="absolute bottom-3 right-3 size-9 rounded-full shadow-md"
+          >
+            <Camera className="size-4" />
+          </Button>
+        </div>
+
+        <div className="max-h-[60vh] space-y-5 overflow-y-auto p-6">
+          <DialogHeader className="space-y-1">
+            <DialogTitle className="text-xl">{plaza.name}</DialogTitle>
+            <DialogDescription>
+              Información detallada de la plaza.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
+            <PlazaDetailField label="Dueña" value={plaza.ownerEntity.code} />
+            <PlazaDetailField label="Administra" value={plaza.managerEntity.code} />
+            <PlazaDetailField
+              label="Locales"
+              value={`${plaza.unitCounts.rented} / ${plaza.unitCounts.total}`}
+            />
+            <PlazaDetailField label="Ocupación" value={`${occupancyPct}%`} emphasis />
+            {totalArea !== null ? (
+              <PlazaDetailField label="Área total" value={`${totalArea} m²`} />
+            ) : null}
+            {plaza.cadastralKey ? (
+              <PlazaDetailField label="Clave catastral" value={plaza.cadastralKey} mono />
+            ) : null}
+          </div>
+
+          {plaza.address ? (
+            <div>
+              <p className="mb-1.5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                Dirección
+              </p>
+              <p className="text-sm text-foreground/90">{plaza.address}</p>
+            </div>
+          ) : null}
+
+          {plaza.notes ? (
+            <div>
+              <p className="mb-1.5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                Notas
+              </p>
+              <p className="whitespace-pre-wrap text-sm text-foreground/90">
+                {plaza.notes}
+              </p>
+            </div>
+          ) : null}
+
+          <div className="flex flex-wrap items-center gap-2 border-t pt-4">
+            <Button onClick={handleEdit} size="sm">
+              <Pencil className="size-4" />
+              Editar
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              render={<Link href="/prediales" />}
+            >
+              <Receipt className="size-4" />
+              Ver predial
+            </Button>
+          </div>
+        </div>
+        </>
+        ) : null}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function PlazaDetailField({
+  label,
+  value,
+  mono,
+  emphasis,
+}: {
+  label: string;
+  value: string;
+  mono?: boolean;
+  emphasis?: boolean;
+}) {
+  return (
+    <div className="space-y-0.5">
+      <p className="text-[11px] uppercase tracking-wider text-muted-foreground">
+        {label}
+      </p>
+      <p
+        className={[
+          mono ? "font-mono" : "",
+          emphasis ? "font-bold text-foreground" : "font-medium",
+          "text-sm",
+        ]
+          .filter(Boolean)
+          .join(" ")}
+      >
+        {value}
+      </p>
     </div>
   );
 }

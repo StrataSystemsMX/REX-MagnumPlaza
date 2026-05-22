@@ -47,3 +47,19 @@ export const updateMaintenanceStatusSchema = z.object({
   notes: z.string().max(500).optional().nullable(),
 });
 export type UpdateMaintenanceStatusInput = z.infer<typeof updateMaintenanceStatusSchema>;
+
+export const updateMaintenanceSchema = z.object({
+  maintenanceId: z.string().min(1),
+  propertyId: z.string().min(1, "Selecciona una propiedad."),
+  unitId: z.string().min(1).optional().nullable(),
+  title: z.string().trim().min(1, "Describe el mantenimiento.").max(200),
+  description: z.string().max(1000).optional().nullable(),
+  type: z.nativeEnum(MaintenanceType),
+  responsibility: z.nativeEnum(MaintenanceResponsibility),
+  status: z.nativeEnum(MaintenanceStatus),
+  scheduledDate: dateLike,
+  vendor: z.string().trim().max(120).optional().nullable(),
+  cost: optionalAmount,
+  notes: z.string().max(500).optional().nullable(),
+});
+export type UpdateMaintenanceInput = z.infer<typeof updateMaintenanceSchema>;

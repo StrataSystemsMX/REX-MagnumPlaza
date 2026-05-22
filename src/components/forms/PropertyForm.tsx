@@ -73,6 +73,8 @@ interface PropertyFormProps {
   lockedType?: PropertyType;
   /** Tipos a ocultar del select. Útil para `/inmuebles` que excluye PLAZA_COMERCIAL. */
   excludedTypes?: ReadonlyArray<PropertyType>;
+  /** Acción extra (p.ej. Eliminar) renderizada a la izquierda del botón submit. */
+  secondaryAction?: React.ReactNode;
 }
 
 export function PropertyForm({
@@ -82,6 +84,7 @@ export function PropertyForm({
   submitLabel = "Guardar",
   lockedType,
   excludedTypes,
+  secondaryAction,
 }: PropertyFormProps) {
   const isEdit = Boolean(initial?.id);
   const [pending, startTransition] = useTransition();
@@ -321,7 +324,8 @@ export function PropertyForm({
           />
         </div>
 
-        <div className="flex justify-end gap-2 pt-2">
+        <div className="flex items-center justify-between gap-2 pt-2">
+          <div>{secondaryAction}</div>
           <Button type="submit" disabled={pending}>
             {pending ? "Guardando..." : submitLabel}
           </Button>

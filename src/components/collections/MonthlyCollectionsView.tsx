@@ -523,9 +523,10 @@ function renderAction(
     ) : null;
   }
   if (row.overdueLevel === 2 || row.overdueLevel === 3) {
+    const escalon = row.overdueLevel === 3 ? "3m" : "2m";
     return (
       <Link
-        href={`/collections/overdue`}
+        href={`/collections?tab=por-cobrar&escalon=${escalon}`}
         className="text-sm font-medium text-red-700 hover:underline dark:text-red-300"
       >
         Carta formal
@@ -535,7 +536,7 @@ function renderAction(
   if (row.status === "SIN_PAGO") {
     return (
       <Link
-        href={`/collections/overdue`}
+        href={`/collections?tab=por-cobrar&escalon=1m`}
         className="text-sm font-medium text-red-700 hover:underline dark:text-red-300"
       >
         Avisar

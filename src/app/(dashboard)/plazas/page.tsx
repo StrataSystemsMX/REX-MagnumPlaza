@@ -1,9 +1,14 @@
 import { Building, Building2, FileCheck, HomeIcon, PercentIcon, Store } from "lucide-react";
+import { cookies } from "next/headers";
 import { Suspense } from "react";
 import { InmueblesTable } from "@/components/properties/InmueblesTable";
 import { PlazasTable } from "@/components/properties/PlazasTable";
 import { PropertiesTabs } from "@/components/properties/PropertiesTabs";
 import { MetricCard } from "@/components/shared/metric-card";
+import {
+  parsePropertiesViewMode,
+  PROPERTIES_VIEW_COOKIE,
+} from "@/lib/properties-view-mode";
 import {
   getLegalEntities,
   getProperties,
@@ -16,6 +21,11 @@ export default async function PropiedadesPage({
 }) {
   const { tab } = await searchParams;
   const activeTab = tab === "inmuebles" ? "inmuebles" : "plazas";
+
+  const cookieStore = await cookies();
+  const initialView = parsePropertiesViewMode(
+    cookieStore.get(PROPERTIES_VIEW_COOKIE)?.value,
+  );
 
   const [plazas, inmuebles, legalEntities] = await Promise.all([
     getProperties({ typeIn: ["PLAZA_COMERCIAL"] }),
@@ -62,7 +72,11 @@ export default async function PropiedadesPage({
               color={occupancyPct >= 80 ? "success" : occupancyPct >= 50 ? "warning" : "danger"}
             />
           </div>
-          <PlazasTable plazas={plazas} legalEntities={legalEntities} />
+          <PlazasTable
+            plazas={plazas}
+            legalEntities={legalEntities}
+            initialView={initialView}
+          />
         </div>
       ) : (
         <div className="space-y-6">
@@ -88,7 +102,11 @@ export default async function PropiedadesPage({
               color={inmueblesSinContrato > 0 ? "warning" : "success"}
             />
           </div>
-          <InmueblesTable inmuebles={inmuebles} legalEntities={legalEntities} />
+          <InmueblesTable
+            inmuebles={inmuebles}
+            legalEntities={legalEntities}
+            initialView={initialView}
+          />
         </div>
       )}
     </div>

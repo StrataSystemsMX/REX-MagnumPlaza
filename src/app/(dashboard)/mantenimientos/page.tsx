@@ -61,7 +61,11 @@ export default async function MantenimientosPage() {
         />
       </div>
 
-      <MaintenancesTable maintenances={maintenances} canManage={canManage} />
+      <MaintenancesTable
+        maintenances={maintenances}
+        properties={properties}
+        canManage={canManage}
+      />
     </div>
   );
 }

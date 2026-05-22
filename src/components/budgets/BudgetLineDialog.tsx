@@ -37,7 +37,7 @@ import type { BudgetConceptType } from "@/generated/prisma/enums";
 const CONCEPT_LABELS: Record<BudgetConceptType, string> = {
   INCOME_RENT: "Ingreso — Renta",
   INCOME_BILLBOARD: "Ingreso — Espectacular",
-  INCOME_GUARANTEE: "Ingreso — Garantía",
+  INCOME_GUARANTEE: "Ingreso — Fianza",
   INCOME_OTHER: "Ingreso — Otro",
   EXPENSE: "Egreso operativo",
   TAX_STRATEGY: "Estrategia fiscal",
