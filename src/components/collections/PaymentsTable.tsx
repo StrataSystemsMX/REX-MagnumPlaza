@@ -6,12 +6,20 @@ import {
   getFilteredRowModel,
   getSortedRowModel,
   type ColumnDef,
+  type Row,
   useReactTable,
 } from "@tanstack/react-table";
-import { Download, Trash2 } from "lucide-react";
+import {
+  Building2,
+  ChevronDown,
+  ChevronRight,
+  Download,
+  Store,
+  Trash2,
+} from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMemo, useState, useTransition } from "react";
+import { Fragment, useMemo, useState, useTransition } from "react";
 import { toast } from "sonner";
 import {
   AlertDialog,
@@ -45,7 +53,7 @@ import { paymentMethodLabel } from "@/lib/i18n/enums";
 import { actionDeletePayment } from "@/lib/services/payments";
 import type { PaymentListItem } from "@/lib/services/payments-queries";
 import type { PaymentMethod } from "@/generated/prisma/enums";
-import { capitalizeFirst } from "@/lib/utils";
+import { capitalizeFirst, cn } from "@/lib/utils";
 
 const MXN = new Intl.NumberFormat("es-MX", {
   style: "currency",
@@ -94,6 +102,16 @@ export function PaymentsTable({ payments, canDelete }: PaymentsTableProps) {
   const [to, setTo] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<PaymentListItem | null>(null);
   const [pending, startTransition] = useTransition();
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+
+  function toggleGroup(unitId: string) {
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      if (next.has(unitId)) next.delete(unitId);
+      else next.add(unitId);
+      return next;
+    });
+  }
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -161,43 +179,38 @@ export function PaymentsTable({ payments, canDelete }: PaymentsTableProps) {
   const columns = useMemo<ColumnDef<PaymentListItem>[]>(
     () => [
       {
-        accessorKey: "paymentDate",
-        header: () => <div className="text-center">Fecha</div>,
+        id: "lessee",
+        header: "Inquilino",
         cell: ({ row }) => (
-          <div className="text-center text-xs tabular-nums">
+          <div className="min-w-0">
+            <Link
+              href={`/lessees/${row.original.rent.contract.lessee.id}`}
+              className="truncate font-medium hover:underline"
+            >
+              {row.original.rent.contract.lessee.legalName}
+            </Link>
+            {row.original.rent.contract.lessee.contactName ? (
+              <p className="truncate text-[10px] text-muted-foreground">
+                {row.original.rent.contract.lessee.contactName}
+              </p>
+            ) : null}
+          </div>
+        ),
+      },
+      {
+        accessorKey: "paymentDate",
+        header: "Fecha",
+        cell: ({ row }) => (
+          <div className="text-center text-xs tabular-nums text-muted-foreground">
             {capitalizeFirst(DATE.format(row.original.paymentDate))}
           </div>
         ),
       },
       {
-        id: "lessee",
-        header: "Inquilino",
-        cell: ({ row }) => (
-          <Link
-            href={`/lessees/${row.original.rent.contract.lessee.id}`}
-            className="text-sm font-medium hover:underline"
-          >
-            {row.original.rent.contract.lessee.legalName}
-          </Link>
-        ),
-      },
-      {
-        id: "unit",
-        header: "Unidad",
-        cell: ({ row }) => (
-          <div className="text-sm">
-            <p>{row.original.rent.contract.unit.property.name}</p>
-            <p className="text-xs text-muted-foreground">
-              {row.original.rent.contract.unit.code}
-            </p>
-          </div>
-        ),
-      },
-      {
         id: "period",
-        header: () => <div className="text-center">Periodo</div>,
+        header: "Periodo",
         cell: ({ row }) => (
-          <div className="text-center text-sm">
+          <div className="text-center text-xs tabular-nums text-muted-foreground">
             {capitalizeFirst(PERIOD.format(row.original.rent.period))}
           </div>
         ),
@@ -206,14 +219,14 @@ export function PaymentsTable({ payments, canDelete }: PaymentsTableProps) {
         accessorKey: "amount",
         header: "Monto",
         cell: ({ row }) => (
-          <span className="tabular-nums font-medium">
+          <div className="text-right font-medium tabular-nums">
             {MXN.format(Number(row.original.amount))}
-          </span>
+          </div>
         ),
       },
       {
         accessorKey: "method",
-        header: () => <div className="text-center">Método</div>,
+        header: "Método",
         cell: ({ row }) => (
           <div className="text-center">
             <Badge variant="secondary">{paymentMethodLabel(row.original.method)}</Badge>
@@ -256,6 +269,30 @@ export function PaymentsTable({ payments, canDelete }: PaymentsTableProps) {
     getFilteredRowModel: getFilteredRowModel(),
     getSortedRowModel: getSortedRowModel(),
   });
+
+  const tableRows = table.getRowModel().rows;
+  const groupedRows = useMemo(() => {
+    const map = new Map<
+      string,
+      {
+        unit: PaymentListItem["rent"]["contract"]["unit"];
+        rows: Row<PaymentListItem>[];
+      }
+    >();
+    for (const row of tableRows) {
+      const unit = row.original.rent.contract.unit;
+      const existing = map.get(unit.id);
+      if (existing) {
+        existing.rows.push(row);
+      } else {
+        map.set(unit.id, { unit, rows: [row] });
+      }
+    }
+    return Array.from(map.values()).sort((a, b) => {
+      const p = a.unit.property.name.localeCompare(b.unit.property.name);
+      return p !== 0 ? p : a.unit.code.localeCompare(b.unit.code);
+    });
+  }, [tableRows]);
 
   function confirmDelete() {
     if (!deleteTarget) return;
@@ -346,41 +383,102 @@ export function PaymentsTable({ payments, canDelete }: PaymentsTableProps) {
         </div>
       </div>
 
-      <div className="overflow-x-auto rounded-md border bg-card">
-        <Table className="min-w-[820px]">
+      <div className="overflow-hidden rounded-lg border bg-card">
+        <Table className="min-w-[720px]">
           <TableHeader>
             {table.getHeaderGroups().map((hg) => (
-              <TableRow key={hg.id}>
-                {hg.headers.map((h) => (
-                  <TableHead key={h.id}>
-                    {h.isPlaceholder
-                      ? null
-                      : flexRender(h.column.columnDef.header, h.getContext())}
-                  </TableHead>
-                ))}
+              <TableRow key={hg.id} className="hover:bg-transparent">
+                {hg.headers.map((h) => {
+                  const align = h.column.id === "lessee"
+                    ? ""
+                    : h.column.id === "actions" || h.column.id === "amount"
+                      ? "text-right"
+                      : h.column.id === "reference"
+                        ? ""
+                        : "text-center";
+                  return (
+                    <TableHead
+                      key={h.id}
+                      className={cn(
+                        "text-xs font-medium uppercase tracking-wide text-muted-foreground",
+                        align,
+                      )}
+                    >
+                      {h.isPlaceholder
+                        ? null
+                        : flexRender(
+                            h.column.columnDef.header,
+                            h.getContext(),
+                          )}
+                    </TableHead>
+                  );
+                })}
               </TableRow>
             ))}
           </TableHeader>
           <TableBody>
-            {table.getRowModel().rows.length === 0 ? (
+            {groupedRows.length === 0 ? (
               <TableRow>
                 <TableCell
                   colSpan={columns.length}
-                  className="text-center text-sm text-muted-foreground"
+                  className="py-10 text-center text-sm text-muted-foreground"
                 >
                   Sin pagos para los filtros aplicados.
                 </TableCell>
               </TableRow>
             ) : (
-              table.getRowModel().rows.map((row) => (
-                <TableRow key={row.id}>
-                  {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id}>
-                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                    </TableCell>
-                  ))}
-                </TableRow>
-              ))
+              groupedRows.map((group) => {
+                const isCollapsed = collapsed.has(group.unit.id);
+                const isPlaza =
+                  group.unit.property.type === "PLAZA_COMERCIAL";
+                const Icon = isPlaza ? Store : Building2;
+                const Chevron = isCollapsed ? ChevronRight : ChevronDown;
+                return (
+                  <Fragment key={group.unit.id}>
+                    <TableRow
+                      className="cursor-pointer bg-muted/40 hover:bg-muted/60"
+                      onClick={() => toggleGroup(group.unit.id)}
+                    >
+                      <TableCell
+                        colSpan={columns.length}
+                        className="py-2"
+                      >
+                        <div className="flex items-center gap-2">
+                          <Chevron className="size-4 text-muted-foreground" />
+                          <Icon className="size-4 text-muted-foreground" />
+                          <span className="font-medium">
+                            {group.unit.property.name}
+                          </span>
+                          <span className="text-xs text-muted-foreground">
+                            {group.unit.code}
+                            {group.unit.name ? ` — ${group.unit.name}` : ""}
+                          </span>
+                          <Badge variant="outline" className="text-[10px]">
+                            {isPlaza ? "Plaza" : "Inmueble"}
+                          </Badge>
+                          <span className="ml-auto text-xs text-muted-foreground">
+                            {group.rows.length}{" "}
+                            {group.rows.length === 1 ? "pago" : "pagos"}
+                          </span>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                    {!isCollapsed &&
+                      group.rows.map((row) => (
+                        <TableRow key={row.id}>
+                          {row.getVisibleCells().map((cell) => (
+                            <TableCell key={cell.id} className="py-3">
+                              {flexRender(
+                                cell.column.columnDef.cell,
+                                cell.getContext(),
+                              )}
+                            </TableCell>
+                          ))}
+                        </TableRow>
+                      ))}
+                  </Fragment>
+                );
+              })
             )}
           </TableBody>
         </Table>

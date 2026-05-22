@@ -91,7 +91,13 @@ export default async function ContractDetailPage({
                   {contract.unit.property.name}
                 </span>
                 <span className="text-muted-foreground">
-                  · {contract.unit.code}
+                  ·{" "}
+                  {[
+                    contract.unit.code,
+                    ...(contract.unit.childUnits ?? []).map((c) => c.code),
+                  ]
+                    .sort()
+                    .join("-")}
                   {contract.unit.name ? ` — ${contract.unit.name}` : ""}
                 </span>
               </span>
