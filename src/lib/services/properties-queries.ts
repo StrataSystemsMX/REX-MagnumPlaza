@@ -87,6 +87,9 @@ export async function getProperties(filters: PropertyFilters = {}) {
   return properties
     .map((p) => {
       const activeUnits = p.units.filter((u) => u.isActive);
+      // Las unidades agrupadas (parentUnitId != null) se colapsan visualmente bajo
+      // su padre en la UI, así que tampoco deben contar para ocupación.
+      const countableUnits = activeUnits.filter((u) => !u.parentUnitId);
       const { documents, units, ...rest } = p;
       const unitsWithPhoto = units.map((u) => {
         const { documents: unitDocs, ...unitRest } = u;
@@ -100,9 +103,9 @@ export async function getProperties(filters: PropertyFilters = {}) {
         ...rest,
         units: unitsWithPhoto,
         unitCounts: {
-          total: activeUnits.length,
-          rented: activeUnits.filter((u) => u.status === "RENTADA").length,
-          available: activeUnits.filter((u) => u.status === "DISPONIBLE").length,
+          total: countableUnits.length,
+          rented: countableUnits.filter((u) => u.status === "RENTADA").length,
+          available: countableUnits.filter((u) => u.status === "DISPONIBLE").length,
         },
         coverPhotoUrl: documents[0]?.url ?? null,
         photos: documents,

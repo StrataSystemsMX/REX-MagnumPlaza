@@ -58,6 +58,8 @@ export async function getOutstandingRents(filters: OutstandingFilters = {}) {
               legalName: true,
               contactName: true,
               whatsapp: true,
+              email: true,
+              preferredChannel: true,
             },
           },
           unit: {
