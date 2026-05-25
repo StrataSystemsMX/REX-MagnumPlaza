@@ -1,6 +1,10 @@
 import { Prisma } from "@/generated/prisma/client";
 import { generateOverdueReminder } from "@/lib/pdf/generator";
 import { prisma } from "@/lib/prisma/client";
+import {
+  getResendClient,
+  getResendFromAddress,
+} from "@/lib/services/email/resend-client";
 import { sendTemplate, WhatsAppError } from "@/lib/whatsapp/client";
 import type { ReminderLevel } from "@/lib/pdf/template-config";
 import type { NotificationLogModel } from "@/generated/prisma/models";
@@ -146,6 +150,147 @@ async function dispatchWhatsApp(ctx: SendContext): Promise<NotificationDispatchR
   }
 }
 
+interface EmailDispatchContext {
+  tenantId: string;
+  recipientId: string;
+  recipientType: "LESSEE";
+  templateCode: string;
+  to: string | null;
+  subject: string;
+  bodyText: string;
+  attachment?: {
+    filename: string;
+    content: Buffer;
+    contentType: string;
+  };
+}
+
+/**
+ * Crea NotificationLog channel=EMAIL e intenta enviar vía Resend.
+ * Sin RESEND_API_KEY → deja log en FAILED con reason explícita.
+ */
+async function dispatchEmail(
+  ctx: EmailDispatchContext,
+): Promise<NotificationDispatchResult> {
+  const log = await prisma.notificationLog.create({
+    data: {
+      tenantId: ctx.tenantId,
+      recipientType: ctx.recipientType,
+      recipientId: ctx.recipientId,
+      channel: "EMAIL",
+      templateCode: ctx.templateCode,
+      subject: ctx.subject,
+      body: ctx.bodyText,
+      status: "PENDING",
+    },
+  });
+
+  if (!ctx.to) {
+    const reason = "Falta destinatario de correo.";
+    await prisma.notificationLog.updateMany({
+      where: { id: log.id, tenantId: ctx.tenantId },
+      data: { status: "FAILED", failureReason: reason },
+    });
+    return {
+      notificationLogId: log.id,
+      status: "FAILED",
+      externalId: null,
+      failureReason: reason,
+    };
+  }
+
+  const resend = getResendClient();
+  if (!resend) {
+    const reason = "resend_api_key_missing";
+    await prisma.notificationLog.updateMany({
+      where: { id: log.id, tenantId: ctx.tenantId },
+      data: { status: "FAILED", failureReason: reason },
+    });
+    return {
+      notificationLogId: log.id,
+      status: "FAILED",
+      externalId: null,
+      failureReason: reason,
+    };
+  }
+
+  try {
+    const { data, error } = await resend.emails.send({
+      from: getResendFromAddress(),
+      to: ctx.to,
+      subject: ctx.subject,
+      text: ctx.bodyText,
+      attachments: ctx.attachment
+        ? [
+            {
+              filename: ctx.attachment.filename,
+              content: ctx.attachment.content,
+            },
+          ]
+        : undefined,
+    });
+    if (error) throw new Error(error.message ?? "Resend error");
+    await prisma.notificationLog.updateMany({
+      where: { id: log.id, tenantId: ctx.tenantId },
+      data: { status: "SENT", sentAt: new Date(), externalId: data?.id ?? null },
+    });
+    return {
+      notificationLogId: log.id,
+      status: "SENT",
+      externalId: data?.id ?? null,
+      failureReason: null,
+    };
+  } catch (e) {
+    const reason = e instanceof Error ? e.message : "Error desconocido al enviar correo.";
+    await prisma.notificationLog.updateMany({
+      where: { id: log.id, tenantId: ctx.tenantId },
+      data: { status: "FAILED", failureReason: reason },
+    });
+    return {
+      notificationLogId: log.id,
+      status: "FAILED",
+      externalId: null,
+      failureReason: reason,
+    };
+  }
+}
+
+/**
+ * Construye URL click-to-chat de WhatsApp con texto pre-llenado.
+ * El operador abre wa.me y manda él mismo el mensaje desde WhatsApp Web/app.
+ */
+export function buildWhatsAppDeepLink(phone: string, body: string): string {
+  const digits = phone.replace(/\D/g, "");
+  return `https://wa.me/${digits}?text=${encodeURIComponent(body)}`;
+}
+
+/**
+ * Registra un NotificationLog para un envío manual por wa.me — no llamamos
+ * a Meta Cloud API. El log queda en PENDING porque no podemos confirmar
+ * que el operador realmente apretó "enviar" en WhatsApp Web.
+ */
+async function recordWhatsAppManualLog(
+  tenantId: string,
+  recipientId: string,
+  templateCode: string,
+  subject: string,
+  bodyPreview: string,
+): Promise<string> {
+  const log = await prisma.notificationLog.create({
+    data: {
+      tenantId,
+      recipientType: "LESSEE",
+      recipientId,
+      channel: "WHATSAPP",
+      templateCode,
+      subject,
+      body: bodyPreview,
+      status: "PENDING",
+    },
+  });
+  return log.id;
+}
+
 // ============================================================================
 // Aviso de morosidad (1M / 2M / 3M)
 // ============================================================================
@@ -157,7 +302,23 @@ export interface SendRentReminderOptions {
    */
   forceSend?: boolean;
   uploadedById?: string | null;
+  /**
+   * Override manual: canal explícito + destino. Si se provee, se ignora
+   * lessee.whatsapp y el flujo de Meta Cloud API.
+   * - EMAIL: envía vía Resend con PDF adjunto.
+   * - WHATSAPP: NO llama Meta API — devuelve un waUrl (wa.me/...) listo
+   *   para que el cliente lo abra en un tab nuevo. El log queda PENDING.
+   */
+  manualChannel?: {
+    channel: "WHATSAPP" | "EMAIL";
+    to: string;
+  };
 }
+
+export type SendRentReminderResult = NotificationDispatchResult & {
+  /** Si manualChannel.channel = WHATSAPP, URL wa.me para abrir en el cliente. */
+  waUrl?: string;
+};
 
 /**
  * Genera el PDF correspondiente al nivel, lo persiste en R2 y manda el
@@ -172,7 +333,7 @@ export async function sendRentReminder(
   rentId: string,
   level: ReminderLevel,
   options: SendRentReminderOptions = {},
-): Promise<NotificationDispatchResult> {
+): Promise<SendRentReminderResult> {
   const tenant = await prisma.tenant.findUniqueOrThrow({
     where: { id: tenantId },
     select: { autoSendOverdueNotifications: true },
@@ -260,6 +421,45 @@ export async function sendRentReminder(
     limit.setUTCDate(limit.getUTCDate() + 7);
     parameters = [lessee.legalName, capitalizeFirst(DATE.format(limit)), balanceFormatted];
     bodyPreview = `Aviso 3 (desalojo) — saldo ${balanceFormatted}. PDF: ${pdfUrl}`;
+  }
+
+  // === Override manual: el operador eligió canal y destino explícitos. ===
+  if (options.manualChannel) {
+    const subject = `Aviso ${level} — ${rent.contract.unit.property.name}`;
+    if (options.manualChannel.channel === "EMAIL") {
+      const result = await dispatchEmail({
+        tenantId,
+        recipientId: lessee.id,
+        recipientType: "LESSEE",
+        templateCode,
+        to: options.manualChannel.to,
+        subject,
+        bodyText: bodyPreview,
+        attachment: pdf.buffer
+          ? {
+              filename: pdf.filename,
+              content: pdf.buffer,
+              contentType: pdf.mimeType,
+            }
+          : undefined,
+      });
+      return result;
+    }
+    // WHATSAPP manual → wa.me click-to-chat, sin Meta API.
+    const logId = await recordWhatsAppManualLog(
+      tenantId,
+      lessee.id,
+      templateCode,
+      subject,
+      bodyPreview,
+    );
+    return {
+      notificationLogId: logId,
+      status: "PENDING",
+      externalId: null,
+      failureReason: null,
+      waUrl: buildWhatsAppDeepLink(options.manualChannel.to, bodyPreview),
+    };
   }
 
   const result = await dispatchWhatsApp({

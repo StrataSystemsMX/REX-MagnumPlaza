@@ -43,7 +43,7 @@ import {
   RegisterPaymentDialog,
   type RegisterPaymentDialogContext,
 } from "@/components/collections/RegisterPaymentDialog";
-import { SendWhatsAppButton } from "@/components/collections/SendWhatsAppButton";
+import { SendNotificationDialog } from "@/components/collections/SendNotificationDialog";
 import { RentStatusBadge } from "@/components/shared/RentStatusBadge";
 import { Badge } from "@/components/ui/badge";
 import { OUTSTANDING_STATUSES } from "@/lib/constants/rent-statuses";
@@ -284,11 +284,15 @@ export function OutstandingRentsTable({
                   <FileDown className="size-4" />
                   PDF
                 </Button>
-                <SendWhatsAppButton
+                <SendNotificationDialog
                   rentId={row.original.id}
                   level={reminderLevel}
-                  lesseeName={row.original.contract.lessee.legalName}
-                  hasWhatsapp={Boolean(row.original.contract.lessee.whatsapp)}
+                  lessee={{
+                    legalName: row.original.contract.lessee.legalName,
+                    whatsapp: row.original.contract.lessee.whatsapp ?? null,
+                    email: row.original.contract.lessee.email ?? null,
+                    preferredChannel: row.original.contract.lessee.preferredChannel,
+                  }}
                 />
               </>
             ) : null}

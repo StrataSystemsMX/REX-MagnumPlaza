@@ -9,24 +9,47 @@ import {
   sendPaymentConfirmation,
   sendRentReminder,
   type NotificationDispatchResult,
+  type SendRentReminderResult,
 } from "@/lib/services/notifications";
 import { isWhatsAppConfigured } from "@/lib/whatsapp/client";
+import {
+  manualSendRentReminderSchema,
+  type ManualSendRentReminderInput,
+} from "@/lib/validators/notification";
 import type { ReminderLevel } from "@/lib/pdf/template-config";
 
 /**
  * Server Action para mandar manualmente un aviso desde la UI de morosidad.
  * Siempre forceSend (el operador ya confirmó). Permite incluso 3M con
  * confirmación humana explícita.
+ *
+ * Si se provee `override`, se ignora el canal/destino del lessee:
+ *  - EMAIL → envío vía Resend (con PDF adjunto).
+ *  - WHATSAPP → no llama Meta API: el resultado trae waUrl (wa.me/...)
+ *    para que el cliente lo abra en una pestaña nueva.
  */
 export async function actionSendRentReminderManual(
   rentId: string,
   level: ReminderLevel,
-): Promise<NotificationDispatchResult> {
+  override?: { channel: "WHATSAPP" | "EMAIL"; to: string },
+): Promise<SendRentReminderResult> {
   const { tenantId, dbUser } = await requireAuth();
+
+  let manualChannel: { channel: "WHATSAPP" | "EMAIL"; to: string } | undefined;
+  if (override) {
+    const parsed = manualSendRentReminderSchema.parse({
+      channel: override.channel,
+      to: override.to,
+      rentId,
+      level,
+    } satisfies ManualSendRentReminderInput);
+    manualChannel = { channel: parsed.channel, to: parsed.to };
+  }
 
   const result = await sendRentReminder(tenantId, rentId, level, {
     forceSend: true,
     uploadedById: dbUser.id,
+    manualChannel,
   });
 
   await prisma.auditLog.create({
@@ -43,6 +66,8 @@ export async function actionSendRentReminderManual(
         status: result.status,
         externalId: result.externalId,
         failureReason: result.failureReason,
+        overrideChannel: manualChannel?.channel ?? null,
+        overrideTo: manualChannel?.to ?? null,
       },
     },
   });
