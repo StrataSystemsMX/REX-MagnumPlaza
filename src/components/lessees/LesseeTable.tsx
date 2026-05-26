@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronDown, ChevronRight, Plus } from "lucide-react";
+import { Building2, ChevronDown, ChevronRight, Plus, Search, Store } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
@@ -14,10 +14,20 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { LesseeForm } from "@/components/forms/LesseeForm";
-import { TenantCard } from "@/components/lessees/TenantCard";
+import { communicationChannelLabel } from "@/lib/i18n/enums";
 import type { LesseeListItem } from "@/lib/services/lessees-queries";
 import type { PropertyType } from "@/generated/prisma/enums";
+
+const TABLE_COLUMN_COUNT = 4;
 
 interface LesseeTableProps {
   lessees: ReadonlyArray<LesseeListItem>;
@@ -26,7 +36,6 @@ interface LesseeTableProps {
 type LesseeGroup = {
   key: string;
   label: string;
-  /** "plaza" para PLAZA_COMERCIAL, "inmueble" para los demás, "none" para sin contrato activo. */
   kind: "plaza" | "inmueble" | "none";
   lessees: LesseeListItem[];
 };
@@ -59,13 +68,12 @@ export function LesseeTable({ lessees }: LesseeTableProps) {
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return lessees;
-    return lessees.filter((l) => {
-      return (
+    return lessees.filter(
+      (l) =>
         l.legalName.toLowerCase().includes(q) ||
         (l.contactName?.toLowerCase().includes(q) ?? false) ||
-        (l.rfc?.toLowerCase().includes(q) ?? false)
-      );
-    });
+        (l.rfc?.toLowerCase().includes(q) ?? false),
+    );
   }, [lessees, search]);
 
   const grouped = useMemo<LesseeGroup[]>(() => {
@@ -73,25 +81,13 @@ export function LesseeTable({ lessees }: LesseeTableProps) {
     for (const l of filtered) {
       if (l.properties.length === 0) {
         const key = "__none__";
-        if (!map.has(key)) {
-          map.set(key, {
-            key,
-            label: "Sin contrato activo",
-            kind: "none",
-            lessees: [],
-          });
-        }
+        if (!map.has(key))
+          map.set(key, { key, label: "Sin contrato activo", kind: "none", lessees: [] });
         map.get(key)!.lessees.push(l);
       } else {
         for (const p of l.properties) {
-          if (!map.has(p.id)) {
-            map.set(p.id, {
-              key: p.id,
-              label: p.name,
-              kind: kindFromType(p.type),
-              lessees: [],
-            });
-          }
+          if (!map.has(p.id))
+            map.set(p.id, { key: p.id, label: p.name, kind: kindFromType(p.type), lessees: [] });
           map.get(p.id)!.lessees.push(l);
         }
       }
@@ -105,13 +101,16 @@ export function LesseeTable({ lessees }: LesseeTableProps) {
 
   return (
     <>
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
-        <Input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Buscar por razón social, contacto o RFC..."
-          className="w-full sm:max-w-sm"
-        />
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:gap-4">
+        <div className="relative w-full sm:w-64">
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Buscar razón social, RFC..."
+            className="pl-8"
+          />
+        </div>
         <Dialog open={createOpen} onOpenChange={setCreateOpen}>
           <DialogTrigger render={<Button />}>
             <Plus className="size-4" />
@@ -135,69 +134,142 @@ export function LesseeTable({ lessees }: LesseeTableProps) {
         </Dialog>
       </div>
 
-      {grouped.length === 0 ? (
-        <div className="rounded-xl border border-dashed p-10 text-center text-sm text-muted-foreground">
-          No hay inquilinos registrados.
-        </div>
-      ) : (
-        <div className="space-y-6">
-          {grouped.map((group) => {
-            const isCollapsed = collapsed.has(group.key);
-            return (
-              <section key={group.key} className="space-y-3">
-                <GroupHeader
+      <div className="overflow-hidden rounded-lg border bg-card">
+        <Table className="min-w-[640px]">
+          <TableHeader>
+            <TableRow className="hover:bg-transparent">
+              <TableHead className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                Inquilino
+              </TableHead>
+              <TableHead className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                RFC
+              </TableHead>
+              <TableHead className="text-xs font-medium uppercase tracking-wide text-muted-foreground text-center">
+                Contratos activos
+              </TableHead>
+              <TableHead className="text-xs font-medium uppercase tracking-wide text-muted-foreground text-center">
+                Canal
+              </TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {grouped.length === 0 ? (
+              <TableRow>
+                <TableCell
+                  colSpan={TABLE_COLUMN_COUNT}
+                  className="py-10 text-center text-sm text-muted-foreground"
+                >
+                  No hay inquilinos para los filtros seleccionados.
+                </TableCell>
+              </TableRow>
+            ) : (
+              grouped.map((group) => (
+                <LesseeGroupRows
+                  key={group.key}
                   group={group}
-                  collapsed={isCollapsed}
+                  isCollapsed={collapsed.has(group.key)}
                   onToggle={() => toggleCollapsed(group.key)}
+                  onRowClick={(id) => router.push(`/lessees/${id}`)}
+                  onRowPrefetch={(id) => router.prefetch(`/lessees/${id}`)}
                 />
-                {!isCollapsed ? (
-                  <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
-                    {group.lessees.map((lessee) => (
-                      <TenantCard key={lessee.id} lessee={lessee} />
-                    ))}
-                  </div>
-                ) : null}
-              </section>
-            );
-          })}
-        </div>
-      )}
+              ))
+            )}
+          </TableBody>
+        </Table>
+      </div>
+
+      <p className="text-xs text-muted-foreground">
+        {filtered.length === lessees.length
+          ? `${lessees.length} inquilino${lessees.length === 1 ? "" : "s"}`
+          : `${filtered.length} de ${lessees.length} inquilino${lessees.length === 1 ? "" : "s"}`}
+      </p>
     </>
   );
 }
 
-function GroupHeader({
-  group,
-  collapsed,
-  onToggle,
-}: {
+interface LesseeGroupRowsProps {
   group: LesseeGroup;
-  collapsed: boolean;
+  isCollapsed: boolean;
   onToggle: () => void;
-}) {
-  const tagLabel =
+  onRowClick: (id: string) => void;
+  onRowPrefetch: (id: string) => void;
+}
+
+function LesseeGroupRows({
+  group,
+  isCollapsed,
+  onToggle,
+  onRowClick,
+  onRowPrefetch,
+}: LesseeGroupRowsProps) {
+  const Icon = group.kind === "plaza" ? Store : Building2;
+  const Chevron = isCollapsed ? ChevronRight : ChevronDown;
+  const groupLabel =
     group.kind === "plaza" ? "Plaza" : group.kind === "inmueble" ? "Inmueble" : null;
+
   return (
-    <button
-      type="button"
-      onClick={onToggle}
-      aria-expanded={!collapsed}
-      className="flex w-full items-center gap-2 rounded-md px-1 py-1 text-left transition hover:bg-muted/50"
-    >
-      {collapsed ? (
-        <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
-      ) : (
-        <ChevronDown className="size-4 shrink-0 text-muted-foreground" />
-      )}
-      {tagLabel ? (
-        <Badge variant="outline" className="text-[10px] uppercase tracking-wide">
-          {tagLabel}
-        </Badge>
-      ) : null}
-      <h3 className="text-base font-semibold tracking-tight">{group.label}</h3>
-      <span className="text-xs text-muted-foreground">
-        {group.lessees.length} inquilino{group.lessees.length === 1 ? "" : "s"}
-      </span>
-    </button>
+    <>
+      <TableRow
+        className="bg-muted/40 hover:bg-muted/60 cursor-pointer"
+        onClick={onToggle}
+      >
+        <TableCell colSpan={TABLE_COLUMN_COUNT} className="py-2">
+          <div className="flex items-center gap-2">
+            <Chevron className="size-4 text-muted-foreground" />
+            {group.kind !== "none" && <Icon className="size-4 text-muted-foreground" />}
+            <span className="font-medium">{group.label}</span>
+            {groupLabel && (
+              <Badge variant="outline" className="text-[10px]">
+                {groupLabel}
+              </Badge>
+            )}
+            <span className="ml-auto text-xs text-muted-foreground">
+              {group.lessees.length} inquilino{group.lessees.length === 1 ? "" : "s"}
+            </span>
+          </div>
+        </TableCell>
+      </TableRow>
+      {!isCollapsed &&
+        group.lessees.map((l) => (
+          <TableRow
+            key={l.id}
+            tabIndex={0}
+            role="link"
+            aria-label={`Ver inquilino ${l.legalName}`}
+            className="cursor-pointer transition-colors hover:bg-muted/40 focus-visible:bg-muted/60 focus-visible:outline-none"
+            onClick={() => onRowClick(l.id)}
+            onMouseEnter={() => onRowPrefetch(l.id)}
+            onFocus={() => onRowPrefetch(l.id)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                onRowClick(l.id);
+              }
+            }}
+          >
+            <TableCell className="py-3">
+              <div className="min-w-0">
+                <p className="truncate font-medium">{l.legalName}</p>
+                {l.contactName && (
+                  <p className="truncate text-xs text-muted-foreground">{l.contactName}</p>
+                )}
+              </div>
+            </TableCell>
+            <TableCell className="py-3">
+              <span className="font-mono text-xs text-muted-foreground">
+                {l.rfc ?? "—"}
+              </span>
+            </TableCell>
+            <TableCell className="py-3 text-center tabular-nums">
+              {l.activeContractsCount}
+            </TableCell>
+            <TableCell className="py-3 text-center">
+              <Badge variant="secondary">
+                {communicationChannelLabel(l.preferredChannel)}
+              </Badge>
+            </TableCell>
+          </TableRow>
+        ))}
+    </>
   );
 }

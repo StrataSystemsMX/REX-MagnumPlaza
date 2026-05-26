@@ -106,6 +106,7 @@ export default async function CollectionsPage({
     )
     .reduce((acc, p) => acc + Number(p.amount), 0);
 
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-3">

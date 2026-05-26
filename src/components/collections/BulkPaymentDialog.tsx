@@ -117,7 +117,7 @@ export function BulkPaymentDialog({
     setSearch(query);
     startSearch(async () => {
       try {
-        const r = await actionSearchLessees(query);
+        const r = await actionSearchLessees(query, query.trim() ? 10 : 100);
         setResults(r);
       } catch {
         // silent
@@ -231,13 +231,16 @@ export function BulkPaymentDialog({
             <Input
               value={search}
               onChange={(e) => runSearch(e.target.value)}
+              onFocus={() => { if (results.length === 0) runSearch(""); }}
+              placeholder="Filtrar por nombre o RFC..."
+              autoFocus
             />
             <div className="rounded-md border max-h-64 overflow-auto">
               {searching ? (
                 <p className="p-3 text-center text-sm text-muted-foreground">Buscando...</p>
               ) : results.length === 0 ? (
                 <p className="p-3 text-center text-sm text-muted-foreground">
-                  Empieza a escribir para buscar.
+                  {search ? "Sin coincidencias." : "Sin inquilinos activos."}
                 </p>
               ) : (
                 <ul className="divide-y">

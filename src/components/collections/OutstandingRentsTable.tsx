@@ -8,7 +8,7 @@ import {
   type ColumnDef,
   useReactTable,
 } from "@tanstack/react-table";
-import { FileDown, HandCoins, Plus } from "lucide-react";
+import { FileDown, HandCoins, Plus, Search } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useMemo, useState } from "react";
@@ -344,11 +344,15 @@ export function OutstandingRentsTable({
 
       <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
-          <Input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full sm:max-w-xs"
-          />
+          <div className="relative w-full sm:w-64">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Buscar inquilino o unidad..."
+              className="pl-8"
+            />
+          </div>
           <Select
             value={statusFilter}
             onValueChange={(v) => v && setStatusFilter(v as StatusFilter)}
@@ -396,13 +400,16 @@ export function OutstandingRentsTable({
         </div>
       </div>
 
-      <div className="overflow-x-auto rounded-md border bg-card">
+      <div className="overflow-hidden rounded-lg border bg-card">
         <Table className="min-w-[820px]">
           <TableHeader>
             {table.getHeaderGroups().map((hg) => (
-              <TableRow key={hg.id}>
+              <TableRow key={hg.id} className="hover:bg-transparent">
                 {hg.headers.map((h) => (
-                  <TableHead key={h.id}>
+                  <TableHead
+                    key={h.id}
+                    className="text-xs font-medium uppercase tracking-wide text-muted-foreground"
+                  >
                     {h.isPlaceholder
                       ? null
                       : flexRender(h.column.columnDef.header, h.getContext())}
