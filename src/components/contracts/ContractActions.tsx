@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckCircle2, RotateCcw, XCircle } from "lucide-react";
+import { CheckCircle2, Pencil, RotateCcw, XCircle } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
@@ -26,18 +26,43 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { EnumSelect } from "@/components/ui/enum-select";
+import { contractTypeLabel } from "@/lib/i18n/enums";
 import {
   actionActivateContract,
   actionRenewContract,
   actionTerminateContract,
+  actionUpdateContract,
 } from "@/lib/services/contracts";
-import type { ContractStatus } from "@/generated/prisma/enums";
+import type { ContractStatus, ContractType } from "@/generated/prisma/enums";
+
+const CONTRACT_TYPES: ReadonlyArray<ContractType> = [
+  "ARRENDAMIENTO",
+  "COMODATO",
+  "ADMINISTRACION_INTERNA",
+  "COMPRAVENTA",
+];
+
+/** Valores actuales del contrato para precargar el formulario de edición. */
+export interface ContractEditInitial {
+  type: ContractType;
+  startDate: string; // YYYY-MM-DD
+  endDate: string; // YYYY-MM-DD
+  monthlyAmount: string;
+  guaranteeAmount: string;
+  paymentDay: string;
+  lateFeePercentage: string;
+  autoRenew: boolean;
+  paidInAdvance: boolean;
+  advancePaidUntil: string; // YYYY-MM-DD o ""
+}
 
 interface ContractActionsProps {
   contractId: string;
   status: ContractStatus;
   endDate: Date;
   monthlyAmount: string; // Decimal serializado
+  editInitial: ContractEditInitial;
 }
 
 export function ContractActions({
@@ -45,15 +70,87 @@ export function ContractActions({
   status,
   endDate,
   monthlyAmount,
+  editInitial,
 }: ContractActionsProps) {
   const router = useRouter();
   const [activating, startActivate] = useTransition();
   const [terminating, startTerminate] = useTransition();
   const [renewing, startRenew] = useTransition();
+  const [editing, startEdit] = useTransition();
 
   const [activateOpen, setActivateOpen] = useState(false);
   const [terminateOpen, setTerminateOpen] = useState(false);
   const [renewOpen, setRenewOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [form, setForm] = useState<ContractEditInitial>(editInitial);
+
+  function setField<K extends keyof ContractEditInitial>(
+    key: K,
+    value: ContractEditInitial[K],
+  ) {
+    setForm((f) => ({ ...f, [key]: value }));
+  }
+
+  function openEdit() {
+    setForm(editInitial); // re-sincroniza con los valores actuales al abrir
+    setEditOpen(true);
+  }
+
+  function doEdit() {
+    if (!form.startDate || !form.endDate) {
+      toast.error("Indica las fechas de inicio y fin.");
+      return;
+    }
+    if (new Date(form.endDate).getTime() <= new Date(form.startDate).getTime()) {
+      toast.error("La fecha de fin debe ser posterior a la de inicio.");
+      return;
+    }
+    if (Number(form.monthlyAmount) <= 0) {
+      toast.error("La renta mensual debe ser mayor a 0.");
+      return;
+    }
+    if (form.paidInAdvance && !form.advancePaidUntil) {
+      toast.error("Indica hasta qué fecha está pagado por adelantado.");
+      return;
+    }
+    startEdit(async () => {
+      try {
+        const { reconcile } = await actionUpdateContract(contractId, {
+          type: form.type,
+          startDate: new Date(form.startDate),
+          endDate: new Date(form.endDate),
+          monthlyAmount: Number(form.monthlyAmount),
+          guaranteeAmount: Number(form.guaranteeAmount || 0),
+          paymentDay: Number(form.paymentDay),
+          lateFeePercentage:
+            form.lateFeePercentage === "" ? undefined : Number(form.lateFeePercentage),
+          autoRenew: form.autoRenew,
+          paidInAdvance: form.paidInAdvance,
+          advancePaidUntil:
+            form.paidInAdvance && form.advancePaidUntil
+              ? new Date(form.advancePaidUntil)
+              : undefined,
+        });
+
+        let msg = "Contrato actualizado.";
+        if (reconcile) {
+          const bits: string[] = [];
+          if (reconcile.created) bits.push(`${reconcile.created} cargo(s) nuevo(s)`);
+          if (reconcile.removed) bits.push(`${reconcile.removed} eliminado(s)`);
+          if (reconcile.resynced) bits.push(`${reconcile.resynced} actualizado(s)`);
+          if (bits.length) msg += ` Rentas: ${bits.join(", ")}.`;
+          if (reconcile.keptWithPayments) {
+            msg += ` ${reconcile.keptWithPayments} renta(s) fuera de rango con pagos se conservaron.`;
+          }
+        }
+        toast.success(msg);
+        setEditOpen(false);
+        router.refresh();
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "Error al editar el contrato.");
+      }
+    });
+  }
 
   const [terminationDate, setTerminationDate] = useState(
     new Date().toISOString().slice(0, 10),
@@ -122,9 +219,18 @@ export function ContractActions({
   const canRenew = status === "ACTIVE" || status === "PENDING_RENEWAL";
   const canTerminate =
     status === "ACTIVE" || status === "DRAFT" || status === "PENDING_RENEWAL";
+  // Solo tiene sentido editar mientras el contrato sigue vigente o en borrador.
+  const canEdit =
+    status === "DRAFT" || status === "ACTIVE" || status === "PENDING_RENEWAL";
 
   return (
     <div className="flex flex-wrap gap-2">
+      {canEdit ? (
+        <Button variant="outline" onClick={openEdit} disabled={editing}>
+          <Pencil className="size-4" />
+          Editar
+        </Button>
+      ) : null}
       {canActivate ? (
         <Button onClick={() => setActivateOpen(true)} disabled={activating}>
           <CheckCircle2 className="size-4" />
@@ -262,6 +368,134 @@ export function ContractActions({
             </Button>
             <Button onClick={doRenew} disabled={renewing}>
               {renewing ? "Renovando..." : "Crear renovación"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={editOpen} onOpenChange={setEditOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Editar contrato</DialogTitle>
+            <DialogDescription>
+              {status === "ACTIVE"
+                ? "Si cambias fechas, monto, día de cobro o el pago adelantado, las rentas se re-sincronizan automáticamente. Las rentas ya pagadas o condonadas se conservan."
+                : "El contrato está en borrador; los cambios se aplicarán al activarlo."}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+            <div className="space-y-1">
+              <Label>Tipo de contrato</Label>
+              <EnumSelect
+                values={CONTRACT_TYPES}
+                labelFor={contractTypeLabel}
+                value={form.type}
+                onValueChange={(v) => setField("type", v)}
+                placeholder="Tipo"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label>Día de cobro (1-28)</Label>
+              <Input
+                type="number"
+                min="1"
+                max="28"
+                value={form.paymentDay}
+                onChange={(e) => setField("paymentDay", e.target.value)}
+              />
+            </div>
+            <div className="space-y-1">
+              <Label>Fecha inicio</Label>
+              <Input
+                type="date"
+                value={form.startDate}
+                onChange={(e) => setField("startDate", e.target.value)}
+              />
+            </div>
+            <div className="space-y-1">
+              <Label>Fecha fin</Label>
+              <Input
+                type="date"
+                value={form.endDate}
+                onChange={(e) => setField("endDate", e.target.value)}
+              />
+            </div>
+            <div className="space-y-1">
+              <Label>Renta mensual (MXN)</Label>
+              <Input
+                type="number"
+                step="0.01"
+                min="0"
+                value={form.monthlyAmount}
+                onChange={(e) => setField("monthlyAmount", e.target.value)}
+              />
+            </div>
+            <div className="space-y-1">
+              <Label>Fianza (MXN)</Label>
+              <Input
+                type="number"
+                step="0.01"
+                min="0"
+                value={form.guaranteeAmount}
+                onChange={(e) => setField("guaranteeAmount", e.target.value)}
+              />
+            </div>
+            <div className="space-y-1">
+              <Label>Interés moratorio (%)</Label>
+              <Input
+                type="number"
+                step="0.01"
+                min="0"
+                max="100"
+                value={form.lateFeePercentage}
+                onChange={(e) => setField("lateFeePercentage", e.target.value)}
+              />
+            </div>
+            <div className="flex items-end gap-2">
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={form.autoRenew}
+                  onChange={(e) => setField("autoRenew", e.target.checked)}
+                />
+                Auto-renovar al vencer
+              </label>
+            </div>
+
+            <div className="md:col-span-2 space-y-2 rounded-md border p-3">
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={form.paidInAdvance}
+                  onChange={(e) => setField("paidInAdvance", e.target.checked)}
+                />
+                Pago adelantado
+              </label>
+              {form.paidInAdvance ? (
+                <div className="space-y-1">
+                  <Label>Pagado hasta</Label>
+                  <Input
+                    type="date"
+                    value={form.advancePaidUntil}
+                    onChange={(e) => setField("advancePaidUntil", e.target.value)}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Todos los meses hasta esta fecha (incluido el mes seleccionado) se
+                    marcarán como pagados. Los meses ya pagados o condonados no se
+                    modifican.
+                  </p>
+                </div>
+              ) : null}
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setEditOpen(false)} disabled={editing}>
+              Cancelar
+            </Button>
+            <Button onClick={doEdit} disabled={editing}>
+              {editing ? "Guardando..." : "Guardar cambios"}
             </Button>
           </DialogFooter>
         </DialogContent>

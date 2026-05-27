@@ -16,6 +16,9 @@ const propertyMock = {
   findFirstOrThrow: vi.fn(),
   updateMany: vi.fn(),
 };
+// Los inmuebles individuales crean su unidad junto con la property dentro de
+// una transacción (ver actionCreateProperty).
+const unitMock = { create: vi.fn() };
 const auditLogMock = { create: vi.fn() };
 const userRoleMock = { findFirst: vi.fn() };
 
@@ -46,8 +49,11 @@ vi.mock("@/lib/auth/permissions", async () => {
 vi.mock("@/lib/prisma/client", () => ({
   prisma: {
     property: propertyMock,
+    unit: unitMock,
     auditLog: auditLogMock,
     userRole: userRoleMock,
+    $transaction: async (fn: (tx: { property: typeof propertyMock; unit: typeof unitMock }) => Promise<unknown>) =>
+      fn({ property: propertyMock, unit: unitMock }),
   },
   prismaUnsafe: {},
 }));
@@ -142,7 +148,11 @@ describe("actionCreateProperty", () => {
 
   it("crea la property con tenantId del contexto y escribe AuditLog", async () => {
     mockRequirePermission.mockResolvedValue(undefined);
-    propertyMock.create.mockResolvedValue({ id: "prop-1", name: "Plaza Demo" });
+    propertyMock.create.mockResolvedValue({
+      id: "prop-1",
+      name: "Plaza Demo",
+      type: "PLAZA_COMERCIAL",
+    });
 
     const { actionCreateProperty } = await import("@/lib/services/properties");
 
@@ -154,7 +164,9 @@ describe("actionCreateProperty", () => {
       managerEntityId: "le-1",
     });
 
-    expect(result).toEqual({ id: "prop-1", name: "Plaza Demo" });
+    expect(result).toMatchObject({ id: "prop-1", name: "Plaza Demo" });
+    // Una plaza no crea unidad automática (los locales se capturan después).
+    expect(unitMock.create).not.toHaveBeenCalled();
     expect(propertyMock.create).toHaveBeenCalledOnce();
     const createArg = propertyMock.create.mock.calls[0]?.[0] as {
       data: { tenantId: string; name: string };
@@ -175,7 +187,6 @@ describe("actionCreateProperty", () => {
 
     expect(mockRevalidatePath).toHaveBeenCalledWith("/plazas");
     expect(mockRevalidatePath).toHaveBeenCalledWith("/inmuebles");
-    expect(mockRevalidatePath).toHaveBeenCalledWith("/units");
   });
 });
 

@@ -67,6 +67,12 @@ export interface UnitCardData {
   coverPhotoUrl: string | null;
   area?: number | string | null;
   notes?: string | null;
+  parentUnitId?: string | null;
+  childUnits?: ReadonlyArray<{
+    id: string;
+    code: string;
+    area?: number | string | null;
+  }>;
   photos?: ReadonlyArray<{ id: string; url: string; filename: string }>;
   contracts: ReadonlyArray<{
     id: string;
@@ -75,6 +81,13 @@ export interface UnitCardData {
     endDate?: string | Date;
     lessee: { id: string; legalName: string };
   }>;
+}
+
+export interface SiblingUnit {
+  id: string;
+  code: string;
+  name?: string | null;
+  parentUnitId: string | null;
 }
 
 function useUnitDialogControls(unit: UnitCardData) {
@@ -144,10 +157,12 @@ function UnitDialogs({
   unit,
   propertyId,
   controls,
+  siblings,
 }: {
   unit: UnitCardData;
   propertyId: string;
   controls: UnitDialogControls;
+  siblings?: ReadonlyArray<SiblingUnit>;
 }) {
   return (
     <>
@@ -182,8 +197,20 @@ function UnitDialogs({
                   ? Number(unit.estimatedRent)
                   : null,
               status: unit.status,
+              parentUnitId: unit.parentUnitId ?? null,
               notes: unit.notes ?? null,
             }}
+            eligibleParents={
+              (unit.childUnits?.length ?? 0) > 0
+                ? []
+                : (siblings ?? [])
+                    .filter((s) => s.id !== unit.id && s.parentUnitId === null)
+                    .map((s) => ({ id: s.id, code: s.code, name: s.name ?? null }))
+            }
+            groupedChildren={(unit.childUnits ?? []).map((c) => ({
+              id: c.id,
+              code: c.code,
+            }))}
             onSuccess={() => {
               controls.setEditOpen(false);
               controls.setDetailOpen(true);
@@ -260,9 +287,11 @@ function UnitDialogs({
 interface UnitCardProps {
   unit: UnitCardData;
   propertyId: string;
+  /** Otras unidades del mismo inmueble para popular el select "Local padre" en el form de edición. */
+  siblings?: ReadonlyArray<SiblingUnit>;
 }
 
-export function UnitCard({ unit, propertyId }: UnitCardProps) {
+export function UnitCard({ unit, propertyId, siblings }: UnitCardProps) {
   const controls = useUnitDialogControls(unit);
 
   const contract = unit.contracts[0] ?? null;
@@ -274,6 +303,13 @@ export function UnitCard({ unit, propertyId }: UnitCardProps) {
       : null;
 
   const showUnitName = unit.name && unit.name !== lessee?.legalName;
+  const childCount = unit.childUnits?.length ?? 0;
+  const displayCode =
+    childCount > 0
+      ? [unit.code, ...(unit.childUnits ?? []).map((c) => c.code)]
+          .sort()
+          .join("-")
+      : unit.code;
 
   function handleCardKey(e: React.KeyboardEvent<HTMLDivElement>) {
     if (e.key === "Enter" || e.key === " ") {
@@ -328,8 +364,13 @@ export function UnitCard({ unit, propertyId }: UnitCardProps) {
             {unitStatusLabel(unit.status)}
           </Badge>
           <span className="absolute bottom-2.5 left-2.5 rounded-md bg-black/70 px-2 py-0.5 font-mono text-xs font-semibold text-white shadow-sm backdrop-blur-sm">
-            {unit.code}
+            {displayCode}
           </span>
+          {childCount > 0 ? (
+            <span className="absolute bottom-2.5 right-2.5 rounded-md bg-emerald-600/90 px-2 py-0.5 text-[10px] font-medium text-white shadow-sm backdrop-blur-sm">
+              {childCount + 1} locales
+            </span>
+          ) : null}
         </div>
         <CardContent className="flex flex-1 flex-col gap-2 p-4">
           <div className="min-w-0">
@@ -374,7 +415,7 @@ export function UnitCard({ unit, propertyId }: UnitCardProps) {
         </CardContent>
       </Card>
 
-      <UnitDialogs unit={unit} propertyId={propertyId} controls={controls} />
+      <UnitDialogs unit={unit} propertyId={propertyId} controls={controls} siblings={siblings} />
     </>
   );
 }
@@ -385,9 +426,10 @@ export const UNIT_GRID_COLS =
 interface UnitRowProps {
   unit: UnitCardData;
   propertyId: string;
+  siblings?: ReadonlyArray<SiblingUnit>;
 }
 
-export function UnitRow({ unit, propertyId }: UnitRowProps) {
+export function UnitRow({ unit, propertyId, siblings }: UnitRowProps) {
   const controls = useUnitDialogControls(unit);
 
   const contract = unit.contracts[0] ?? null;
@@ -397,6 +439,14 @@ export function UnitRow({ unit, propertyId }: UnitRowProps) {
     : unit.estimatedRent !== null
       ? Number(unit.estimatedRent)
       : null;
+
+  const childCount = unit.childUnits?.length ?? 0;
+  const displayCode =
+    childCount > 0
+      ? [unit.code, ...(unit.childUnits ?? []).map((c) => c.code)]
+          .sort()
+          .join("-")
+      : unit.code;
 
   function handleRowKey(e: React.KeyboardEvent<HTMLDivElement>) {
     if (e.key === "Enter" || e.key === " ") {
@@ -420,7 +470,12 @@ export function UnitRow({ unit, propertyId }: UnitRowProps) {
           role="cell"
           className="truncate px-3 py-2.5 font-mono text-xs font-semibold"
         >
-          {unit.code}
+          {displayCode}
+          {childCount > 0 ? (
+            <span className="ml-1.5 rounded-full bg-emerald-100 px-1.5 py-0.5 text-[9px] font-medium text-emerald-800">
+              {childCount + 1} locales
+            </span>
+          ) : null}
         </div>
         <div role="cell" className="px-3 py-2.5">
           <Badge variant={unitStatusVariant(unit.status)}>
@@ -461,7 +516,7 @@ export function UnitRow({ unit, propertyId }: UnitRowProps) {
         </div>
       </div>
 
-      <UnitDialogs unit={unit} propertyId={propertyId} controls={controls} />
+      <UnitDialogs unit={unit} propertyId={propertyId} controls={controls} siblings={siblings} />
     </>
   );
 }

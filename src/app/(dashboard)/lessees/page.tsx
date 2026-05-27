@@ -1,6 +1,7 @@
 import { AlertTriangle, CheckCircle2, Users } from "lucide-react";
 import { MetricCard } from "@/components/shared/metric-card";
 import { PropertyFilterTabs } from "@/components/shared/PropertyFilterTabs";
+import { INMUEBLES_TAB_VALUE } from "@/components/shared/property-filter-constants";
 import { LesseeTable } from "@/components/lessees/LesseeTable";
 import { getLessees } from "@/lib/services/lessees-queries";
 
@@ -17,10 +18,14 @@ export default async function LesseesPage({
 
   // Tabs solo para plazas comerciales
   const propertyMap = new Map<string, { id: string; name: string }>();
+  let hasInmuebles = false;
   for (const l of active) {
     for (const p of l.properties) {
-      if (p.type === "PLAZA_COMERCIAL" && !propertyMap.has(p.id))
-        propertyMap.set(p.id, { id: p.id, name: p.name });
+      if (p.type === "PLAZA_COMERCIAL") {
+        if (!propertyMap.has(p.id)) propertyMap.set(p.id, { id: p.id, name: p.name });
+      } else {
+        hasInmuebles = true;
+      }
     }
   }
   const tabProperties = Array.from(propertyMap.values()).sort((a, b) =>
@@ -31,10 +36,13 @@ export default async function LesseesPage({
   const withContract = active.filter((l) => l.activeContractsCount > 0);
   const withoutContract = active.filter((l) => l.activeContractsCount === 0);
 
-  // Tabla filtrada por plaza si hay tab activo
-  const tableData = activePlazaId
-    ? active.filter((l) => l.properties.some((p) => p.id === activePlazaId))
-    : active;
+  // Tabla filtrada por plaza/inmuebles si hay tab activo
+  const tableData =
+    activePlazaId === INMUEBLES_TAB_VALUE
+      ? active.filter((l) => l.properties.some((p) => p.type !== "PLAZA_COMERCIAL"))
+      : activePlazaId
+        ? active.filter((l) => l.properties.some((p) => p.id === activePlazaId))
+        : active;
 
   return (
     <div className="space-y-6">
@@ -67,7 +75,11 @@ export default async function LesseesPage({
         />
       </div>
 
-      <PropertyFilterTabs properties={tabProperties} activePlazaId={activePlazaId} />
+      <PropertyFilterTabs
+        properties={tabProperties}
+        activePlazaId={activePlazaId}
+        showInmueblesTab={hasInmuebles}
+      />
 
       <LesseeTable lessees={tableData} />
     </div>

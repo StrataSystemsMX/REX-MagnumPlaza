@@ -32,6 +32,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { actionCreateMaintenance } from "@/lib/services/maintenances";
 import { createMaintenanceSchema, type CreateMaintenanceInput } from "@/lib/validators/maintenance";
 import type { PropertyForMaintenance } from "@/lib/services/maintenances-queries";
+import { isPlaza } from "@/lib/i18n/unit-label";
 
 const TYPE_LABELS = {
   PERIODIC: "Periódico",
@@ -196,7 +197,11 @@ export function NewMaintenanceDialog({ properties }: Props) {
               )}
             />
 
-            {selectedProperty && selectedProperty.units.length > 0 && (
+            {/* El "local específico" solo aplica a plazas con varios locales.
+                Un inmueble individual se mantiene a nivel propiedad completa. */}
+            {selectedProperty &&
+              isPlaza(selectedProperty.type) &&
+              selectedProperty.units.length > 0 && (
               <FormField
                 control={form.control}
                 name="unitId"

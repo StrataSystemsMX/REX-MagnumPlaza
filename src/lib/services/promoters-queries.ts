@@ -19,7 +19,8 @@ export async function getPromoters() {
           unit: {
             select: {
               code: true,
-              property: { select: { name: true } },
+              name: true,
+              property: { select: { name: true, type: true } },
             },
           },
         },
@@ -37,6 +38,7 @@ export async function getAvailableUnitsForPromoterLink() {
       tenantId,
       isActive: true,
       status: { in: ["DISPONIBLE", "APARTADA"] },
+      parentUnitId: null, // excluir locales agrupados bajo otro
     },
     orderBy: [{ property: { name: "asc" } }, { code: "asc" }],
     select: {

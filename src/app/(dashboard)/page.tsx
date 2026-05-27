@@ -449,6 +449,20 @@ export default async function DashboardPage({ searchParams }: PageProps) {
         />
       </div>
 
+      {/* ── Histórico anual ── */}
+      {mode === "anual" && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm font-semibold">
+              Ventas vs Egresos — histórico 2009–{currentYear}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <FinancialHistoryChart current={{ year: currentYear, ventas: ventasTotal, egresos: egresosTotal }} />
+          </CardContent>
+        </Card>
+      )}
+
       {/* ── Cobranza mes en curso ── */}
       <Card>
         <CardHeader>
@@ -671,20 +685,6 @@ export default async function DashboardPage({ searchParams }: PageProps) {
           </div>
         </CardContent>
       </Card>
-
-      {/* ── Histórico anual (al fondo — contexto de largo plazo) ── */}
-      {mode === "anual" && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm font-semibold">
-              Ventas vs Egresos — histórico 2009–{currentYear}
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <FinancialHistoryChart current={{ year: currentYear, ventas: ventasTotal, egresos: egresosTotal }} />
-          </CardContent>
-        </Card>
-      )}
 
     </div>
   );

@@ -63,9 +63,9 @@ export default async function NominasPage({
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Nóminas</h1>
         <p className="text-sm text-muted-foreground">
-          Registro mensual de pagos de nómina por razón social. Incluye nómina
-          directa, factura de servicios administrativos, nómina estratégica,
-          comisiones y bonos.
+          Registro mensual de nómina por razón social. Incluye nómina directa,
+          comisiones, bonos, nómina estratégica y facturas de servicios
+          administrativos.
         </p>
       </div>
 

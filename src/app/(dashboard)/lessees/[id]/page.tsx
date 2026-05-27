@@ -4,7 +4,8 @@ import { notFound } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { LesseeDetailTabs } from "@/components/lessees/LesseeDetailTabs";
 import { communicationChannelLabel } from "@/lib/i18n/enums";
-import { getLesseeById } from "@/lib/services/lessees-queries";
+import { getAvailableUnits } from "@/lib/services/contracts-queries";
+import { getLesseeById, getOverdueRentsByLessee } from "@/lib/services/lessees-queries";
 import { getNotificationLogsByLessee } from "@/lib/services/notifications-queries";
 import {
   getLesseeStatement,
@@ -21,12 +22,15 @@ export default async function LesseeDetailPage({
   params: Promise<Params>;
 }) {
   const { id } = await params;
-  const [lessee, statement, payments, notifications] = await Promise.all([
-    getLesseeById(id),
-    getLesseeStatement(id),
-    getPaymentsByLessee(id),
-    getNotificationLogsByLessee(id),
-  ]);
+  const [lessee, statement, payments, notifications, overdueRents, availableUnits] =
+    await Promise.all([
+      getLesseeById(id),
+      getLesseeStatement(id),
+      getPaymentsByLessee(id),
+      getNotificationLogsByLessee(id),
+      getOverdueRentsByLessee(id),
+      getAvailableUnits(),
+    ]);
 
   if (!lessee || !statement) {
     notFound();
@@ -69,6 +73,8 @@ export default async function LesseeDetailPage({
         statement={statement}
         payments={payments}
         notifications={notifications}
+        overdueRents={overdueRents}
+        availableUnits={availableUnits}
       />
     </div>
   );

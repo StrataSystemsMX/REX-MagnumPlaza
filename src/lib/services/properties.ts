@@ -40,8 +40,32 @@ export async function actionCreateProperty(
 
   const data = createPropertySchema.parse(input);
 
-  const property = await prisma.property.create({
-    data: { ...data, tenantId },
+  // Las plazas comerciales agrupan varios locales que se capturan después; sus
+  // unidades se crean una por una en el detalle. En cambio, un inmueble
+  // individual (oficina, edificio, bodega, espectacular, etc.) ES en sí mismo
+  // el espacio rentable, así que le creamos su única unidad de inmediato. Sin
+  // esto, el inmueble nunca tendría una Unit y no podría contratarse (un
+  // contrato se asocia a una Unit, no a una Property).
+  const property = await prisma.$transaction(async (tx) => {
+    const created = await tx.property.create({
+      data: { ...data, tenantId },
+    });
+
+    if (created.type !== "PLAZA_COMERCIAL") {
+      // El código "LP" es solo un valor interno requerido por el schema; en la
+      // UI un inmueble individual se identifica por su nombre, nunca por este
+      // código (ver src/lib/i18n/unit-label.ts → unitLabel/unitWithProperty).
+      await tx.unit.create({
+        data: {
+          tenantId,
+          propertyId: created.id,
+          code: "LP",
+          status: "DISPONIBLE",
+        },
+      });
+    }
+
+    return created;
   });
 
   await logAudit(tenantId, dbUser.id, "CREATE", property.id, {

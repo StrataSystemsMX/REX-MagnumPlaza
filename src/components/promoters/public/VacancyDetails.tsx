@@ -1,6 +1,8 @@
 import { MapPin, Maximize2, Store, Tag } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { propertyTypeLabel } from "@/lib/i18n/enums";
+import { isPlaza } from "@/lib/i18n/unit-label";
+import { cn } from "@/lib/utils";
 import type { PublicVacancyData } from "@/lib/services/promoters-public";
 import { VacancyFeaturesList } from "./VacancyFeaturesList";
 
@@ -21,8 +23,11 @@ export function VacancyDetails({ unit, property }: Props) {
   const stats: Stat[] = [
     { icon: Store, label: "Tipo", value: propertyTypeLabel(property.type) },
     { icon: Maximize2, label: "Área", value: area != null ? `${area} m²` : "—" },
-    { icon: Tag, label: "Local", value: unit.code },
   ];
+  // El código de "Local" solo aplica a plazas; un inmueble individual no lo tiene.
+  if (isPlaza(property.type)) {
+    stats.push({ icon: Tag, label: "Local", value: unit.code });
+  }
 
   return (
     <section className="space-y-6">
@@ -30,7 +35,12 @@ export function VacancyDetails({ unit, property }: Props) {
         <h2 className="text-lg font-semibold tracking-tight sm:text-xl">
           Información del local
         </h2>
-        <div className="mt-4 grid grid-cols-3 gap-3 sm:gap-4">
+        <div
+          className={cn(
+            "mt-4 grid gap-3 sm:gap-4",
+            stats.length === 3 ? "grid-cols-3" : "grid-cols-2",
+          )}
+        >
           {stats.map(({ icon: Icon, label, value }) => (
             <div
               key={label}

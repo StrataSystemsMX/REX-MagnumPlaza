@@ -26,6 +26,11 @@ import type { ReminderLevel } from "@/lib/pdf/template-config";
 
 type Channel = "WHATSAPP" | "EMAIL";
 
+const CHANNEL_LABELS: Record<Channel, string> = {
+  WHATSAPP: "WhatsApp",
+  EMAIL: "Correo electrónico",
+};
+
 interface SendNotificationDialogProps {
   rentId: string;
   level: ReminderLevel;
@@ -111,7 +116,7 @@ export function SendNotificationDialog({
         onClick={() => setOpen(true)}
       >
         <MessageSquare className="size-4" />
-        Enviar
+        Enviar recordatorio
       </Button>
 
       <Dialog
@@ -153,6 +158,7 @@ export function SendNotificationDialog({
               <Select
                 value={channel}
                 onValueChange={(v) => handleChannelChange(v as Channel)}
+                items={CHANNEL_LABELS}
                 disabled={pending}
               >
                 <SelectTrigger id="channel">

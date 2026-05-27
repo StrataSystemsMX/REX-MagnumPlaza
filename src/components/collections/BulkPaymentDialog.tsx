@@ -361,7 +361,7 @@ export function BulkPaymentDialog({
                           />
                           <div className="flex-1">
                             <p className="font-medium">
-                              {capitalizeFirst(PERIOD.format(r.period))} · {r.propertyName} {r.unitCode}
+                              {capitalizeFirst(PERIOD.format(r.period))} · {r.unitLabel}
                             </p>
                             <p className="text-xs text-muted-foreground">
                               Cargo {MXN.format(Number(r.amountDue))} · Pagado{" "}

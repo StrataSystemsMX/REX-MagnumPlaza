@@ -3,12 +3,26 @@ import { getActiveLegalEntityId } from "@/lib/auth/active-legal-entity";
 import { prisma } from "@/lib/prisma/client";
 import type { PayrollType } from "@/generated/prisma/enums";
 
+// PayrollTypes que se gestionan en /nominas (compensación operativa real).
+export const OPERATIONAL_PAYROLL_TYPES: PayrollType[] = [
+  "DIRECT_PAYROLL",
+  "COMMISSION",
+  "BONUS",
+];
+// PayrollTypes que se gestionan en /estrategia-fiscal.
+export const FISCAL_STRATEGY_PAYROLL_TYPES: PayrollType[] = [
+  "STRATEGY_NOMINA",
+  "ADMIN_SERVICE_INVOICE",
+];
+
 export interface PayrollListFilters {
   year?: number;
   /** 1-12. Si está ausente, trae todo el año. */
   month?: number;
   legalEntityId?: string;
   type?: PayrollType;
+  /** Restringe a un subconjunto de tipos. Útil para separar /nominas vs /estrategia-fiscal. */
+  types?: PayrollType[];
 }
 
 /**
@@ -39,7 +53,11 @@ export async function getPayrolls(filters: PayrollListFilters = {}) {
       tenantId,
       period: { gte: start, lt: end },
       ...(effectiveEntityId ? { legalEntityId: effectiveEntityId } : {}),
-      ...(filters.type ? { type: filters.type } : {}),
+      ...(filters.type
+        ? { type: filters.type }
+        : filters.types && filters.types.length > 0
+          ? { type: { in: filters.types } }
+          : {}),
     },
     orderBy: [{ period: "desc" }, { legalEntity: { code: "asc" } }, { type: "asc" }],
     include: {
@@ -80,7 +98,7 @@ export async function getPayrollYears(): Promise<number[]> {
 }
 
 /** Total anual por razón social (para vista anual / stats). */
-export async function getPayrollAnnualTotalsByEntity(year: number) {
+export async function getPayrollAnnualTotalsByEntity(year: number, types?: PayrollType[]) {
   const { tenantId } = await requireAuth();
   const cookieEntityId = await getActiveLegalEntityId();
   const { start, end } = periodRange(year);
@@ -90,6 +108,7 @@ export async function getPayrollAnnualTotalsByEntity(year: number) {
       tenantId,
       period: { gte: start, lt: end },
       ...(cookieEntityId ? { legalEntityId: cookieEntityId } : {}),
+      ...(types && types.length > 0 ? { type: { in: types } } : {}),
     },
     select: {
       legalEntityId: true,

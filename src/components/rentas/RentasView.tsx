@@ -175,7 +175,13 @@ function toneBarClass(tone: Tone): string {
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export function RentasView({ tableData }: { tableData: RentasTableData }) {
+export function RentasView({
+  tableData,
+  modeToggle,
+}: {
+  tableData: RentasTableData;
+  modeToggle?: React.ReactNode;
+}) {
   const router = useRouter();
   const [selectedPropertyId, setSelectedPropertyId] = useState<string | null>(null);
   const [histRow, setHistRow] = useState<RentTableRow | null>(null);
@@ -285,7 +291,8 @@ export function RentasView({ tableData }: { tableData: RentasTableData }) {
               ) : null}
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              {modeToggle}
               {selectedPropertyId ? (
                 <Button
                   variant="outline"

@@ -19,6 +19,7 @@ import {
 } from "@/components/collections/RegisterPaymentDialog";
 import { RentStatusBadge } from "@/components/shared/RentStatusBadge";
 import { contractStatusLabel, paymentMethodLabel } from "@/lib/i18n/enums";
+import { isPlaza, unitWithProperty } from "@/lib/i18n/unit-label";
 import type { LesseeStatement as LesseeStatementData } from "@/lib/services/payments-queries";
 import { capitalizeFirst } from "@/lib/utils";
 
@@ -114,8 +115,14 @@ export function LesseeStatement({ data }: LesseeStatementProps) {
             <div className="flex flex-wrap items-baseline justify-between gap-2">
               <div>
                 <p className="text-sm font-medium">
-                  {c.unit.property.name} — {c.unit.code}
-                  {c.unit.name ? ` (${c.unit.name})` : ""}
+                  {isPlaza(c.unit.property.type) ? (
+                    <>
+                      {c.unit.property.name} — {c.unit.code}
+                      {c.unit.name ? ` (${c.unit.name})` : ""}
+                    </>
+                  ) : (
+                    c.unit.property.name
+                  )}
                 </p>
                 <p className="text-xs text-muted-foreground">
                   Contrato {c.id.slice(-8)} ·{" "}
@@ -179,7 +186,7 @@ export function LesseeStatement({ data }: LesseeStatementProps) {
                                 amountPaid: r.amountPaid.toString(),
                                 period: r.period,
                                 lesseeName: lessee.legalName,
-                                unitLabel: `${c.unit.property.name} ${c.unit.code}`,
+                                unitLabel: unitWithProperty(c.unit, " "),
                               })
                             }
                           >

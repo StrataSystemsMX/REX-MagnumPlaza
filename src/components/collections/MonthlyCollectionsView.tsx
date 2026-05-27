@@ -1,18 +1,23 @@
 "use client";
 
-import { ArrowUpRight, CreditCard, Plus } from "lucide-react";
+import {
+  ArrowUpRight,
+  Building2,
+  ChevronDown,
+  ChevronRight,
+  CreditCard,
+  Eye,
+  KeyRound,
+  Plus,
+  Search,
+  Store,
+} from "lucide-react";
 import Link from "next/link";
-import { useMemo, useState } from "react";
-import { Button } from "@/components/ui/button";
+import { Fragment, useMemo, useState } from "react";
+import { Badge } from "@/components/ui/badge";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  Table,
   TableBody,
   TableCell,
   TableHead,
@@ -24,7 +29,9 @@ import {
   RegisterPaymentDialog,
   type RegisterPaymentDialogContext,
 } from "@/components/collections/RegisterPaymentDialog";
-import { capitalizeFirst, cn } from "@/lib/utils";
+import { SendNotificationDialog } from "@/components/collections/SendNotificationDialog";
+import { INMUEBLES_TAB_VALUE } from "@/components/shared/property-filter-constants";
+import { cn } from "@/lib/utils";
 import type {
   MonthlyCollections,
   MonthlyPropertyGroup,
@@ -44,90 +51,161 @@ const MXN_INT = new Intl.NumberFormat("es-MX", {
   maximumFractionDigits: 0,
 });
 
-const MONTH = new Intl.DateTimeFormat("es-MX", {
-  month: "long",
-  year: "numeric",
-  timeZone: "UTC",
-});
+const TABLE_COLUMN_COUNT = 6;
 
 interface MonthlyCollectionsViewProps {
   data: MonthlyCollections;
+  activePlazaId: string | null;
+  /** Toggle Tarjetas/KPIs montado en la barra de acción para ahorrar una fila. */
+  modeToggle?: React.ReactNode;
 }
 
-export function MonthlyCollectionsView({ data }: MonthlyCollectionsViewProps) {
-  const [propertyFilter, setPropertyFilter] = useState<string>("ALL");
+export function MonthlyCollectionsView({
+  data,
+  activePlazaId,
+  modeToggle,
+}: MonthlyCollectionsViewProps) {
+  const [search, setSearch] = useState("");
   const [paymentContext, setPaymentContext] =
     useState<RegisterPaymentDialogContext | null>(null);
   const [bulkOpen, setBulkOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
 
-  const propertyItems = useMemo<Record<string, string>>(
-    () => ({
-      ALL: "Todas las plazas",
-      ...Object.fromEntries(data.properties.map((p) => [p.propertyId, p.propertyName])),
-    }),
-    [data.properties],
-  );
-
-  const visibleGroups = useMemo(() => {
-    if (propertyFilter === "ALL") return data.properties;
-    return data.properties.filter((p) => p.propertyId === propertyFilter);
-  }, [data.properties, propertyFilter]);
+  function toggleCollapsed(key: string) {
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
 
   const period = data.period;
 
+  const visibleGroups = useMemo<MonthlyPropertyGroup[]>(() => {
+    let groups: MonthlyPropertyGroup[] = [...data.properties];
+    if (activePlazaId === INMUEBLES_TAB_VALUE) {
+      groups = groups.filter((g) => g.propertyType !== "PLAZA_COMERCIAL");
+    } else if (activePlazaId) {
+      groups = groups.filter((g) => g.propertyId === activePlazaId);
+    }
+    const q = search.trim().toLowerCase();
+    if (q) {
+      groups = groups
+        .map((g) => ({
+          ...g,
+          units: g.units.filter((u) => {
+            const haystack = `${u.unitCode} ${u.unitName ?? ""} ${u.lesseeLegalName ?? ""} ${u.lastLesseeName ?? ""}`.toLowerCase();
+            return haystack.includes(q);
+          }),
+        }))
+        .filter((g) => g.units.length > 0);
+    }
+    // Orden: plazas primero, luego inmuebles, ambos alfabéticos.
+    return groups.sort((a, b) => {
+      const aIsPlaza = a.propertyType === "PLAZA_COMERCIAL" ? 0 : 1;
+      const bIsPlaza = b.propertyType === "PLAZA_COMERCIAL" ? 0 : 1;
+      if (aIsPlaza !== bIsPlaza) return aIsPlaza - bIsPlaza;
+      return a.propertyName.localeCompare(b.propertyName, "es");
+    });
+  }, [data.properties, activePlazaId, search]);
+
+  // La columna "Local" solo aplica a plazas. Si no hay ninguna plaza visible
+  // (p. ej. el tab "Inmuebles"), la quitamos por completo; en vistas mixtas
+  // ("Todas") la conservamos para no desalinear la tabla compartida.
+  const hideLocalColumn = useMemo(
+    () => visibleGroups.every((g) => g.propertyType !== "PLAZA_COMERCIAL"),
+    [visibleGroups],
+  );
+
   return (
-    <div className="space-y-5">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 className="text-xl font-semibold tracking-tight">Cobros del Mes</h2>
-          <p className="text-sm text-muted-foreground">
-            {capitalizeFirst(MONTH.format(period))} ·{" "}
-            {propertyFilter === "ALL"
-              ? "Todas las plazas"
-              : (propertyItems[propertyFilter] ?? "")}
-          </p>
+    <div className="space-y-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:gap-4">
+        <div className="relative w-full sm:w-64">
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Buscar local o inquilino..."
+            className="pl-8"
+          />
         </div>
-        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
-          <Select
-            value={propertyFilter}
-            onValueChange={(v) => v && setPropertyFilter(v)}
-            items={propertyItems}
-          >
-            <SelectTrigger className="w-full sm:w-56">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {Object.entries(propertyItems).map(([value, label]) => (
-                <SelectItem key={value} value={value}>
-                  {label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Button onClick={() => setBulkOpen(true)} className="w-full sm:w-auto">
+        <div className="flex flex-wrap items-center gap-3">
+          {modeToggle}
+          <Button onClick={() => setBulkOpen(true)}>
             <Plus className="size-4" />
             Registrar pago
           </Button>
         </div>
       </div>
 
-      <StatsRow totals={data.totals} />
-
-      <div className="space-y-4">
-        {visibleGroups.length === 0 ? (
-          <div className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
-            Sin inmuebles para los filtros aplicados.
-          </div>
-        ) : (
-          visibleGroups.map((g) => (
-            <PropertyGroupCard
-              key={g.propertyId}
-              group={g}
-              period={period}
-              onRegisterPayment={setPaymentContext}
-            />
-          ))
-        )}
+      {/* Usamos una <table> cruda (no el componente Table de shadcn) porque ese
+          envuelve la tabla en un div con overflow, y cualquier overflow-auto/hidden
+          ancestro rompe el sticky relativo al scroll de la página (<main>).
+          overflow-clip recorta las esquinas redondeadas SIN crear contenedor de
+          scroll, así que conserva el sticky de página. */}
+      <div className="overflow-clip rounded-lg border bg-card">
+        <table className="w-full min-w-[760px] caption-bottom text-sm">
+          {/* Encabezados una sola vez al tope, sticky para que persigan el
+              scroll de la página; los grupos solo muestran el nombre del inmueble
+              como separador, sin repetir las columnas. */}
+          {visibleGroups.length > 0 ? (
+            // El scroll vive en <main>, que tiene padding superior (p-4/6/8). El
+            // offset de `sticky` se mide desde el borde de contenido (después del
+            // padding), así que `top-0` fijaría el encabezado ~32px abajo y dejaría
+            // una franja donde se asoman las filas al hacer scroll. Compensamos con
+            // un top negativo que iguala ese padding para anclar el encabezado al
+            // borde superior real. (Acoplado al padding de (dashboard)/layout.tsx.)
+            <TableHeader className="sticky -top-4 z-20 sm:-top-6 lg:-top-8">
+              <TableRow className="hover:bg-transparent">
+                {!hideLocalColumn ? (
+                  <TableHead className="w-16 bg-card shadow-[inset_0_-1px_0_0_var(--border)] text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    Local
+                  </TableHead>
+                ) : null}
+                <TableHead className="bg-card shadow-[inset_0_-1px_0_0_var(--border)] text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  Inquilino
+                </TableHead>
+                <TableHead className="w-32 bg-card shadow-[inset_0_-1px_0_0_var(--border)] text-right text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  Renta Base
+                </TableHead>
+                <TableHead className="w-32 bg-card shadow-[inset_0_-1px_0_0_var(--border)] text-right text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  Cobrado
+                </TableHead>
+                <TableHead className="w-32 bg-card shadow-[inset_0_-1px_0_0_var(--border)] text-center text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  Estado
+                </TableHead>
+                <TableHead className="w-24 bg-card shadow-[inset_0_-1px_0_0_var(--border)] text-right text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  Acción
+                </TableHead>
+              </TableRow>
+            </TableHeader>
+          ) : null}
+          <TableBody>
+            {visibleGroups.length === 0 ? (
+              <TableRow>
+                <TableCell
+                  colSpan={TABLE_COLUMN_COUNT}
+                  className="py-10 text-center text-sm text-muted-foreground"
+                >
+                  Sin inmuebles para los filtros aplicados.
+                </TableCell>
+              </TableRow>
+            ) : (
+              visibleGroups.map((group) => (
+                <PropertyGroupRows
+                  key={group.propertyId}
+                  group={group}
+                  period={period}
+                  hideLocalColumn={hideLocalColumn}
+                  isCollapsed={collapsed.has(group.propertyId)}
+                  onToggle={() => toggleCollapsed(group.propertyId)}
+                  onRegisterPayment={setPaymentContext}
+                />
+              ))
+            )}
+          </TableBody>
+        </table>
       </div>
 
       <RegisterPaymentDialog
@@ -141,113 +219,41 @@ export function MonthlyCollectionsView({ data }: MonthlyCollectionsViewProps) {
 }
 
 // ----------------------------------------------------------------------------
-// Stats row
+// Property group rows
 // ----------------------------------------------------------------------------
 
-function StatsRow({ totals }: { totals: MonthlyCollections["totals"] }) {
-  const cards: Array<{
-    key: MonthlyUnitStatus | "ALL";
-    label: string;
-    value: number;
-    className: string;
-  }> = [
-    {
-      key: "PAID",
-      label: "Pagados",
-      value: totals.paid,
-      className:
-        "border-green-200 bg-green-50 text-green-800 dark:border-green-900 dark:bg-green-950 dark:text-green-200",
-    },
-    {
-      key: "PARTIAL",
-      label: "Parciales",
-      value: totals.partial + totals.abono,
-      className:
-        "border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200",
-    },
-    {
-      key: "SIN_PAGO",
-      label: "Sin pago",
-      value: totals.sinPago,
-      className:
-        "border-red-200 bg-red-50 text-red-800 dark:border-red-900 dark:bg-red-950 dark:text-red-200",
-    },
-    {
-      key: "PRE_PAGADO",
-      label: "Pre-pagado",
-      value: totals.prePagado,
-      className:
-        "border-blue-200 bg-blue-50 text-blue-800 dark:border-blue-900 dark:bg-blue-950 dark:text-blue-200",
-    },
-    {
-      key: "VACANT",
-      label: "Vacíos",
-      value: totals.vacant,
-      className:
-        "border-border bg-muted/30 text-muted-foreground",
-    },
-  ];
-
-  return (
-    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-      {cards.map((c) => (
-        <div
-          key={c.key}
-          className={cn(
-            "rounded-lg border px-4 py-3 text-center tabular-nums",
-            c.className,
-          )}
-        >
-          <div className="text-2xl font-semibold">{c.value}</div>
-          <div className="text-xs">{c.label}</div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-// ----------------------------------------------------------------------------
-// Property group card
-// ----------------------------------------------------------------------------
-
-interface PropertyGroupCardProps {
+interface PropertyGroupRowsProps {
   group: MonthlyPropertyGroup;
   period: Date;
+  /** Oculta la columna "Local" en toda la tabla (cuando no hay plazas visibles). */
+  hideLocalColumn: boolean;
+  isCollapsed: boolean;
+  onToggle: () => void;
   onRegisterPayment: (ctx: RegisterPaymentDialogContext) => void;
 }
 
-const PROPERTY_DOT_COLORS = [
-  "bg-blue-500",
-  "bg-violet-500",
-  "bg-emerald-500",
-  "bg-amber-500",
-  "bg-rose-500",
-  "bg-cyan-500",
-  "bg-fuchsia-500",
-  "bg-orange-500",
-];
-
-function dotColorFor(propertyId: string): string {
-  let hash = 0;
-  for (let i = 0; i < propertyId.length; i++) {
-    hash = (hash * 31 + propertyId.charCodeAt(i)) >>> 0;
-  }
-  return PROPERTY_DOT_COLORS[hash % PROPERTY_DOT_COLORS.length]!;
-}
-
-function PropertyGroupCard({ group, period, onRegisterPayment }: PropertyGroupCardProps) {
+function PropertyGroupRows({
+  group,
+  period,
+  hideLocalColumn,
+  isCollapsed,
+  onToggle,
+  onRegisterPayment,
+}: PropertyGroupRowsProps) {
   const [showAllPaid, setShowAllPaid] = useState(false);
+  const isPlaza = group.propertyType === "PLAZA_COMERCIAL";
+  const Icon = isPlaza ? Store : Building2;
+  const Chevron = isCollapsed ? ChevronRight : ChevronDown;
 
   // Cuando hay muchas filas pagadas, las colapsamos al final con un toggle.
   const COLLAPSE_THRESHOLD = 4;
   const paidCount = group.units.filter((u) => u.status === "PAID").length;
-  const shouldCollapse = paidCount > COLLAPSE_THRESHOLD && !showAllPaid;
+  const shouldCollapseRows = paidCount > COLLAPSE_THRESHOLD && !showAllPaid;
 
   const { displayed, hiddenPaidCount } = useMemo(() => {
-    if (!shouldCollapse) {
+    if (!shouldCollapseRows) {
       return { displayed: group.units, hiddenPaidCount: 0 };
     }
-    // Mostramos los no-PAID + los primeros COLLAPSE_THRESHOLD PAID.
     const out: MonthlyUnitRow[] = [];
     let shown = 0;
     let hidden = 0;
@@ -264,52 +270,56 @@ function PropertyGroupCard({ group, period, onRegisterPayment }: PropertyGroupCa
       }
     }
     return { displayed: out, hiddenPaidCount: hidden };
-  }, [group.units, shouldCollapse]);
+  }, [group.units, shouldCollapseRows]);
 
   return (
-    <div className="overflow-hidden rounded-lg border bg-card">
-      <div className="flex items-center justify-between gap-3 border-b bg-muted/30 px-4 py-3">
-        <div className="flex items-center gap-2">
-          <span className={cn("size-2.5 rounded-full", dotColorFor(group.propertyId))} />
-          <h3 className="font-semibold">{group.propertyName}</h3>
-          <span className="text-xs text-muted-foreground">
-            {group.managerEntityCode} · {group.unitCount} locales
-          </span>
-        </div>
-        <div className="text-right">
-          <div className="text-base font-semibold tabular-nums">
-            {MXN_INT.format(Number(group.expectedTotal))}
+    <Fragment>
+      <TableRow
+        className="cursor-pointer bg-muted/40 hover:bg-muted/60"
+        onClick={onToggle}
+      >
+        <TableCell colSpan={TABLE_COLUMN_COUNT} className="py-2">
+          <div className="flex items-center gap-2">
+            <Chevron className="size-4 text-muted-foreground" />
+            <Icon className="size-4 text-muted-foreground" />
+            <span className="font-medium">{group.propertyName}</span>
+            <Badge variant="outline" className="text-[10px]">
+              {isPlaza ? "Plaza" : "Inmueble"}
+            </Badge>
+            <span className="text-xs text-muted-foreground">
+              {/* Cuando la dueña y la administradora coinciden, basta un código;
+                  si difieren (p. ej. QHS dueña, CRT administra) mostramos ambos. */}
+              {group.ownerEntityCode === group.managerEntityCode
+                ? group.managerEntityCode
+                : `Admin. ${group.managerEntityCode} · Dueña ${group.ownerEntityCode}`}
+              {/* "N locales" solo aplica a plazas; un inmueble individual no
+                  tiene locales internos. */}
+              {isPlaza
+                ? ` · ${group.unitCount} ${group.unitCount === 1 ? "local" : "locales"}`
+                : ""}
+            </span>
+            <span className="ml-auto text-xs tabular-nums text-muted-foreground">
+              {MXN_INT.format(Number(group.expectedTotal))} esperado
+            </span>
           </div>
-          <div className="text-xs text-muted-foreground">esperado</div>
-        </div>
-      </div>
-
-      <div className="overflow-x-auto">
-      <Table className="min-w-[760px] table-fixed">
-        <TableHeader>
-          <TableRow className="bg-transparent hover:bg-transparent">
-            <TableHead className="w-16">Local</TableHead>
-            <TableHead className="w-auto">Inquilino</TableHead>
-            <TableHead className="w-32 text-right">Renta Base</TableHead>
-            <TableHead className="w-32 text-right">Cobrado</TableHead>
-            <TableHead className="w-32 text-center">Estado</TableHead>
-            <TableHead className="w-28">Escalón</TableHead>
-            <TableHead className="w-24 text-right">Acción</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
+        </TableCell>
+      </TableRow>
+      {!isCollapsed && (
+        <>
           {displayed.map((row) => (
             <UnitRow
               key={row.unitId}
               row={row}
               period={period}
               propertyName={group.propertyName}
+              isPlaza={isPlaza}
+              hideLocalColumn={hideLocalColumn}
               onRegisterPayment={onRegisterPayment}
             />
           ))}
           {hiddenPaidCount > 0 ? (
             <TableRow className="hover:bg-transparent">
-              <TableCell colSpan={7} className="py-2 text-center">
+              <TableCell colSpan={TABLE_COLUMN_COUNT} className="py-2 text-center">
                 <button
                   type="button"
                   onClick={() => setShowAllPaid(true)}
@@ -320,10 +330,9 @@ function PropertyGroupCard({ group, period, onRegisterPayment }: PropertyGroupCa
               </TableCell>
             </TableRow>
           ) : null}
-        </TableBody>
-      </Table>
-      </div>
-    </div>
+        </>
+      )}
+    </Fragment>
   );
 }
 
@@ -335,16 +344,31 @@ interface UnitRowProps {
   row: MonthlyUnitRow;
   period: Date;
   propertyName: string;
+  /** Solo las plazas muestran código de local; un inmueble individual no. */
+  isPlaza: boolean;
+  /** Cuando la columna "Local" está oculta en toda la tabla, no renderiza la celda. */
+  hideLocalColumn: boolean;
   onRegisterPayment: (ctx: RegisterPaymentDialogContext) => void;
 }
 
-function UnitRow({ row, period, propertyName, onRegisterPayment }: UnitRowProps) {
+function UnitRow({
+  row,
+  period,
+  propertyName,
+  isPlaza,
+  hideLocalColumn,
+  onRegisterPayment,
+}: UnitRowProps) {
   const rowClass = ROW_BG_BY_STATUS[row.status];
-  const action = renderAction(row, period, propertyName, onRegisterPayment);
+  const action = renderAction(row, period, propertyName, isPlaza, onRegisterPayment);
 
   return (
     <TableRow className={cn("border-b last:border-b-0", rowClass)}>
-      <TableCell className="font-mono text-xs">{row.unitCode}</TableCell>
+      {/* "Local" solo en plazas. En vistas mixtas la celda va vacía para
+          inmuebles (mantiene alineación); si la columna está oculta, no se renderiza. */}
+      {!hideLocalColumn ? (
+        <TableCell className="font-mono text-xs">{isPlaza ? row.unitCode : ""}</TableCell>
+      ) : null}
       <TableCell>
         {row.status === "VACANT" ? (
           <div className="text-sm">
@@ -371,20 +395,6 @@ function UnitRow({ row, period, propertyName, onRegisterPayment }: UnitRowProps)
       </TableCell>
       <TableCell className="text-center">
         <StatusPill row={row} />
-      </TableCell>
-      <TableCell>
-        {row.overdueLevel ? (
-          <span className="inline-flex items-center gap-1.5 text-xs font-medium text-red-700 dark:text-red-300">
-            <span className="size-2 rounded-full bg-red-500" />
-            Escalón {row.overdueLevel}
-          </span>
-        ) : row.status === "PAID" || row.status === "PRE_PAGADO" ? (
-          <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
-            <span className="size-2 rounded-full bg-emerald-500" />0
-          </span>
-        ) : (
-          <span className="text-xs text-muted-foreground">—</span>
-        )}
       </TableCell>
       <TableCell className="text-right">{action}</TableCell>
     </TableRow>
@@ -500,14 +510,18 @@ function renderAction(
   row: MonthlyUnitRow,
   period: Date,
   propertyName: string,
+  isPlaza: boolean,
   onRegisterPayment: (ctx: RegisterPaymentDialogContext) => void,
 ) {
   if (row.status === "VACANT") {
+    // Abre el wizard de nuevo contrato en /contracts con esta unidad ya
+    // preseleccionada (no existe una página /contracts/new).
     return (
       <Link
-        href={`/contracts/new?unitId=${encodeURIComponent(row.unitId)}`}
-        className="text-sm text-primary hover:underline"
+        href={`/contracts?nuevo=1&unitId=${encodeURIComponent(row.unitId)}`}
+        className={cn(buttonVariants({ variant: "outline", size: "sm" }), "h-8 gap-1.5")}
       >
+        <KeyRound className="size-3.5" />
         Rentar
       </Link>
     );
@@ -516,39 +530,50 @@ function renderAction(
     return row.lesseeId ? (
       <Link
         href={`/lessees/${row.lesseeId}`}
-        className="text-sm text-primary hover:underline"
+        className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "h-8 gap-1.5")}
       >
+        <ArrowUpRight className="size-3.5" />
         Historial
       </Link>
     ) : null;
   }
-  if (row.overdueLevel === 2 || row.overdueLevel === 3) {
-    const escalon = row.overdueLevel === 3 ? "3m" : "2m";
+  if (row.rentId && (row.overdueLevel === 2 || row.overdueLevel === 3)) {
+    const level = row.overdueLevel === 3 ? "3M" : "2M";
     return (
-      <Link
-        href={`/collections?tab=por-cobrar&escalon=${escalon}`}
-        className="text-sm font-medium text-red-700 hover:underline dark:text-red-300"
-      >
-        Carta formal
-      </Link>
+      <SendNotificationDialog
+        rentId={row.rentId}
+        level={level}
+        lessee={{
+          legalName: row.lesseeLegalName ?? "",
+          whatsapp: row.lesseeWhatsapp,
+          email: row.lesseeEmail,
+          preferredChannel: row.lesseePreferredChannel ?? "WHATSAPP",
+        }}
+      />
     );
   }
-  if (row.status === "SIN_PAGO") {
+  if (row.rentId && (row.status === "SIN_PAGO" || row.overdueLevel === 1)) {
     return (
-      <Link
-        href={`/collections?tab=por-cobrar&escalon=1m`}
-        className="text-sm font-medium text-red-700 hover:underline dark:text-red-300"
-      >
-        Avisar
-      </Link>
+      <SendNotificationDialog
+        rentId={row.rentId}
+        level="1M"
+        lessee={{
+          legalName: row.lesseeLegalName ?? "",
+          whatsapp: row.lesseeWhatsapp,
+          email: row.lesseeEmail,
+          preferredChannel: row.lesseePreferredChannel ?? "WHATSAPP",
+        }}
+      />
     );
   }
 
   // PAID, PARTIAL, PRE_PAGADO → "Ver" abre dialog para registrar pago si hay rent.
   if (row.rentId) {
     return (
-      <button
-        type="button"
+      <Button
+        variant="ghost"
+        size="sm"
+        className="h-8 gap-1.5"
         onClick={() =>
           onRegisterPayment({
             rentId: row.rentId!,
@@ -556,13 +581,13 @@ function renderAction(
             amountPaid: row.amountPaid,
             period,
             lesseeName: row.lesseeLegalName ?? "",
-            unitLabel: `${propertyName} ${row.unitCode}`,
+            unitLabel: isPlaza ? `${propertyName} ${row.unitCode}` : propertyName,
           })
         }
-        className="text-sm text-primary hover:underline"
       >
+        <Eye className="size-3.5" />
         Ver
-      </button>
+      </Button>
     );
   }
   return row.lesseeId ? (

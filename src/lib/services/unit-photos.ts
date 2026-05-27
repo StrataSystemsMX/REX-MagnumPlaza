@@ -20,7 +20,7 @@ import type { Prisma } from "@/generated/prisma/client";
 async function logDocumentAudit(
   tenantId: string,
   userId: string,
-  action: "CREATE" | "DELETE",
+  action: "CREATE" | "UPDATE" | "DELETE",
   entityId: string,
   changes: Prisma.InputJsonValue | null = null,
 ): Promise<void> {
@@ -128,4 +128,59 @@ export async function actionDeleteUnitPhoto(input: {
   if (doc.unit?.propertyId) {
     revalidatePath(`/properties/${doc.unit.propertyId}`);
   }
+}
+
+/**
+ * Reordena las fotos de un Unit de forma masiva. `orderedIds` es la lista
+ * completa de Document.id en el orden deseado (0 = portada). Valida que TODOS
+ * los ids pertenezcan a fotos del mismo unit + tenant antes de aplicar.
+ */
+export async function actionReorderUnitPhotos(input: {
+  unitId: string;
+  orderedIds: string[];
+}): Promise<void> {
+  const { tenantId, dbUser } = await requireAuth();
+  await requirePermission(dbUser.id, "property.update");
+
+  const { unitId, orderedIds } = input;
+  if (!Array.isArray(orderedIds) || orderedIds.length === 0) {
+    throw new Error("Lista de orden vacía.");
+  }
+
+  const unit = await prisma.unit.findFirst({
+    where: { id: unitId, tenantId },
+    select: { id: true, propertyId: true },
+  });
+  if (!unit) throw new Error("Unit no encontrada o fuera de tu tenant.");
+
+  const photos = await prisma.document.findMany({
+    where: { tenantId, unitId, type: "UNIT_PHOTO" },
+    select: { id: true },
+  });
+  const photoIds = new Set(photos.map((p) => p.id));
+  if (orderedIds.length !== photoIds.size) {
+    throw new Error("La lista no coincide con las fotos del local.");
+  }
+  for (const id of orderedIds) {
+    if (!photoIds.has(id)) {
+      throw new Error("Foto inválida en la lista de orden.");
+    }
+  }
+
+  // updateMany (no update) para satisfacer el tenant guardrail — el where
+  // necesita incluir tenantId. Cada llamada afecta 0 o 1 fila (id es único).
+  await prisma.$transaction(
+    orderedIds.map((id, index) =>
+      prisma.document.updateMany({
+        where: { id, tenantId, type: "UNIT_PHOTO" },
+        data: { sortOrder: index },
+      }),
+    ),
+  );
+
+  await logDocumentAudit(tenantId, dbUser.id, "UPDATE", unitId, {
+    reorderedPhotos: orderedIds,
+  });
+
+  revalidatePath(`/properties/${unit.propertyId}`);
 }

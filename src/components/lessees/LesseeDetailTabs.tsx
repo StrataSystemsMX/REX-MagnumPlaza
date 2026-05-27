@@ -1,7 +1,10 @@
 "use client";
 
-import Link from "next/link";
+import { Plus } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   Table,
   TableBody,
@@ -11,15 +14,19 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ContractWizard } from "@/components/contracts/ContractWizard";
 import { LesseeForm } from "@/components/forms/LesseeForm";
 import { LesseeStatement } from "@/components/lessees/LesseeStatement";
 import { NotificationLogTable } from "@/components/lessees/NotificationLogTable";
+import { OverdueNoticesPanel } from "@/components/lessees/OverdueNoticesPanel";
 import {
   contractStatusLabel,
   contractTypeLabel,
   paymentMethodLabel,
 } from "@/lib/i18n/enums";
-import type { LesseeDetail } from "@/lib/services/lessees-queries";
+import { isPlaza, unitWithProperty } from "@/lib/i18n/unit-label";
+import type { AvailableUnit } from "@/lib/services/contracts-queries";
+import type { LesseeDetail, LesseeOverdueRent } from "@/lib/services/lessees-queries";
 import type { NotificationLogRow } from "@/lib/services/notifications-queries";
 import type { LesseePayment, LesseeStatement as LesseeStatementData } from "@/lib/services/payments-queries";
 import type { ContractStatus } from "@/generated/prisma/enums";
@@ -59,6 +66,8 @@ interface LesseeDetailTabsProps {
   statement: LesseeStatementData;
   payments: ReadonlyArray<LesseePayment>;
   notifications: ReadonlyArray<NotificationLogRow>;
+  overdueRents: ReadonlyArray<LesseeOverdueRent>;
+  availableUnits: ReadonlyArray<AvailableUnit>;
 }
 
 export function LesseeDetailTabs({
@@ -66,19 +75,36 @@ export function LesseeDetailTabs({
   statement,
   payments,
   notifications,
+  overdueRents,
+  availableUnits,
 }: LesseeDetailTabsProps) {
+  const router = useRouter();
+  const [tab, setTab] = useState("info");
+  const [createContractOpen, setCreateContractOpen] = useState(false);
   return (
-    <Tabs defaultValue="info" className="w-full">
-      <div className="-mx-1 overflow-x-auto px-1">
-        <TabsList>
-          <TabsTrigger value="info">Información general</TabsTrigger>
-          <TabsTrigger value="contracts">
-            Contratos ({lessee.contracts.length})
-          </TabsTrigger>
-          <TabsTrigger value="statement">Estado de cuenta</TabsTrigger>
-          <TabsTrigger value="payments">Pagos históricos ({payments.length})</TabsTrigger>
-          <TabsTrigger value="comms">Comunicaciones</TabsTrigger>
-        </TabsList>
+    <Tabs value={tab} onValueChange={setTab} className="w-full">
+      <div className="flex items-center gap-3">
+        <div className="-mx-1 min-w-0 flex-1 overflow-x-auto px-1">
+          <TabsList variant="line">
+            <TabsTrigger value="info">Información general</TabsTrigger>
+            <TabsTrigger value="contracts">
+              Contratos ({lessee.contracts.length})
+            </TabsTrigger>
+            <TabsTrigger value="statement">Estado de cuenta</TabsTrigger>
+            <TabsTrigger value="payments">Pagos históricos ({payments.length})</TabsTrigger>
+            <TabsTrigger value="comms">Comunicaciones</TabsTrigger>
+          </TabsList>
+        </div>
+        {tab === "contracts" ? (
+          <Button
+            size="sm"
+            className="shrink-0"
+            onClick={() => setCreateContractOpen(true)}
+          >
+            <Plus className="size-4" />
+            Nuevo contrato
+          </Button>
+        ) : null}
       </div>
 
       <TabsContent value="info" className="mt-4 rounded-md border bg-card p-6">
@@ -120,21 +146,33 @@ export function LesseeDetailTabs({
                 </TableRow>
               ) : (
                 lessee.contracts.map((c) => (
-                  <TableRow key={c.id}>
+                  <TableRow
+                    key={c.id}
+                    tabIndex={0}
+                    role="link"
+                    aria-label={`Ver contrato ${c.id.slice(-8)}`}
+                    className="cursor-pointer transition-colors hover:bg-muted/40 focus-visible:bg-muted/60 focus-visible:outline-none"
+                    onClick={() => router.push(`/contracts/${c.id}`)}
+                    onMouseEnter={() => router.prefetch(`/contracts/${c.id}`)}
+                    onFocus={() => router.prefetch(`/contracts/${c.id}`)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        router.push(`/contracts/${c.id}`);
+                      }
+                    }}
+                  >
                     <TableCell className="font-mono text-xs">
-                      <Link
-                        href={`/contracts/${c.id}`}
-                        className="hover:underline"
-                      >
-                        {c.id.slice(-8)}
-                      </Link>
+                      {c.id.slice(-8)}
                     </TableCell>
                     <TableCell className="text-sm">
                       <p className="font-medium">{c.unit.property.name}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {c.unit.code}
-                        {c.unit.name ? ` — ${c.unit.name}` : ""}
-                      </p>
+                      {isPlaza(c.unit.property.type) ? (
+                        <p className="text-xs text-muted-foreground">
+                          {c.unit.code}
+                          {c.unit.name ? ` — ${c.unit.name}` : ""}
+                        </p>
+                      ) : null}
                     </TableCell>
                     <TableCell className="text-sm">{contractTypeLabel(c.type)}</TableCell>
                     <TableCell className="text-center text-xs">
@@ -154,6 +192,14 @@ export function LesseeDetailTabs({
             </TableBody>
           </Table>
         </div>
+
+        <ContractWizard
+          availableUnits={availableUnits}
+          open={createContractOpen}
+          onOpenChange={setCreateContractOpen}
+          onCreated={() => router.refresh()}
+          initialLessee={{ id: lessee.id, legalName: lessee.legalName }}
+        />
       </TabsContent>
 
       <TabsContent value="statement" className="mt-4">
@@ -187,7 +233,7 @@ export function LesseeDetailTabs({
                       {capitalizeFirst(DATE.format(p.paymentDate))}
                     </TableCell>
                     <TableCell className="text-sm">
-                      {p.rent.contract.unit.property.name} {p.rent.contract.unit.code}
+                      {unitWithProperty(p.rent.contract.unit, " ")}
                     </TableCell>
                     <TableCell className="text-xs capitalize">
                       {p.rent.period.toISOString().slice(0, 7)}
@@ -207,7 +253,16 @@ export function LesseeDetailTabs({
         </div>
       </TabsContent>
 
-      <TabsContent value="comms" className="mt-4 space-y-3">
+      <TabsContent value="comms" className="mt-4 space-y-4">
+        <OverdueNoticesPanel
+          lessee={{
+            legalName: lessee.legalName,
+            whatsapp: lessee.whatsapp,
+            email: lessee.email,
+            preferredChannel: lessee.preferredChannel,
+          }}
+          rents={overdueRents}
+        />
         <NotificationLogTable logs={notifications} />
       </TabsContent>
     </Tabs>

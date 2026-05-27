@@ -45,6 +45,7 @@ import {
 } from "@/lib/services/promoters";
 import { createPromoterLinkSchema, type CreatePromoterLinkInput } from "@/lib/validators/promoter";
 import type { PromoterRow, UnitForLink } from "@/lib/services/promoters-queries";
+import { unitWithProperty } from "@/lib/i18n/unit-label";
 
 const DATE = new Intl.DateTimeFormat("es-MX", {
   day: "2-digit",
@@ -71,10 +72,7 @@ function LinkDialog({ promoterId, units }: { promoterId: string; units: UnitForL
   // Para plazas mostramos el local específico; para inmuebles independientes
   // (oficina, casa, espectacular, etc.) basta con el nombre del inmueble.
   function formatUnitLabel(u: UnitForLink): string {
-    const base =
-      u.property.type === "PLAZA_COMERCIAL"
-        ? `${u.property.name} · ${u.code}`
-        : u.property.name;
+    const base = unitWithProperty(u);
     return u.estimatedRent ? `${base} — ${MXN.format(u.estimatedRent)}` : base;
   }
 
@@ -307,7 +305,7 @@ export function PromotersTable({ promoters, units, canManage }: Props) {
                         <TableCell className="text-sm">
                           <div className="flex flex-col gap-1">
                             <span className="font-medium">
-                              {l.unit.property.name} · {l.unit.code}
+                              {unitWithProperty(l.unit)}
                             </span>
                             <div className="flex items-center gap-1.5">
                               <a

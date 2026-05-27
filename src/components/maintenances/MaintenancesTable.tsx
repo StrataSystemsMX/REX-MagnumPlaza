@@ -17,6 +17,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
+import { isPlaza } from "@/lib/i18n/unit-label";
 import type {
   MaintenanceRow,
   PropertyForMaintenance,
@@ -165,7 +166,7 @@ export function MaintenancesTable({ maintenances, properties, canManage }: Props
                       </TableCell>
                       <TableCell className="text-sm">
                         <span className="text-muted-foreground">{m.property.name}</span>
-                        {m.unit && (
+                        {m.unit && isPlaza(m.property.type) && (
                           <span className="ml-1 font-medium text-foreground">{m.unit.code}</span>
                         )}
                       </TableCell>

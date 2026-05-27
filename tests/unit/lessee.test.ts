@@ -31,10 +31,23 @@ describe("createLesseeSchema", () => {
     }
   });
 
-  it("rechaza un teléfono que no es +52 + 10 dígitos", () => {
+  it("acepta 10 dígitos y los normaliza a +52", () => {
+    // El validador autocompleta el lada nacional: 10 dígitos → +52XXXXXXXXXX.
     const r = createLesseeSchema.safeParse({
       legalName: "Acme",
       phone: "5551234567", // sin +52
+      preferredChannel: "PHONE_CALL",
+    });
+    expect(r.success).toBe(true);
+    if (r.success) {
+      expect(r.data.phone).toBe("+525551234567");
+    }
+  });
+
+  it("rechaza un teléfono con cantidad de dígitos inválida", () => {
+    const r = createLesseeSchema.safeParse({
+      legalName: "Acme",
+      phone: "12345", // ni 10 dígitos ni 12 con lada → no normalizable
       preferredChannel: "PHONE_CALL",
     });
     expect(r.success).toBe(false);

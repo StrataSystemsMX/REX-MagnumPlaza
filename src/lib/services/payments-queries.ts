@@ -3,7 +3,8 @@ import { requireAuth } from "@/lib/auth/get-session";
 import { OUTSTANDING_STATUSES } from "@/lib/constants/rent-statuses";
 import { prisma } from "@/lib/prisma/client";
 import { serializeDecimals } from "@/lib/utils/serialize-decimals";
-import type { PaymentMethod, RentStatus } from "@/generated/prisma/enums";
+import { unitCode, unitWithProperty } from "@/lib/i18n/unit-label";
+import type { PaymentMethod, PropertyType, RentStatus } from "@/generated/prisma/enums";
 
 export { OUTSTANDING_STATUSES };
 
@@ -173,7 +174,8 @@ export async function getPaymentsByLessee(lesseeId: string) {
               unit: {
                 select: {
                   code: true,
-                  property: { select: { name: true } },
+                  name: true,
+                  property: { select: { name: true, type: true } },
                 },
               },
             },
@@ -257,7 +259,7 @@ export async function getLesseeStatement(lesseeId: string) {
             select: {
               code: true,
               name: true,
-              property: { select: { name: true } },
+              property: { select: { name: true, type: true } },
             },
           },
           rents: {
@@ -305,7 +307,11 @@ export async function getOutstandingRentsForLessee(lesseeId: string) {
       contract: {
         select: {
           unit: {
-            select: { code: true, property: { select: { name: true } } },
+            select: {
+              code: true,
+              name: true,
+              property: { select: { name: true, type: true } },
+            },
           },
         },
       },
@@ -325,6 +331,9 @@ export async function getOutstandingRentsForLessee(lesseeId: string) {
     status: r.status,
     unitCode: r.contract.unit.code,
     propertyName: r.contract.unit.property.name,
+    // Etiqueta lista para UI: "Inmueble · Local" en plazas, solo el nombre del
+    // inmueble en inmuebles individuales (no muestra el código "LP").
+    unitLabel: unitWithProperty(r.contract.unit, " "),
   }));
 }
 
@@ -392,6 +401,10 @@ export interface MonthlyUnitRow {
   contractId: string | null;
   lesseeId: string | null;
   lesseeLegalName: string | null;
+  /** Canal preferido (CommunicationChannel) para enviar avisos. */
+  lesseePreferredChannel: string | null;
+  lesseeWhatsapp: string | null;
+  lesseeEmail: string | null;
   rentId: string | null;
   amountDue: string;
   amountPaid: string;
@@ -408,6 +421,7 @@ export interface MonthlyUnitRow {
 export interface MonthlyPropertyGroup {
   propertyId: string;
   propertyName: string;
+  propertyType: PropertyType;
   managerEntityCode: string;
   ownerEntityCode: string;
   unitCount: number;
@@ -449,12 +463,23 @@ export async function getMonthlyCollectionsByProperty(period: Date): Promise<Mon
       select: {
         id: true,
         name: true,
+        type: true,
         ownerEntity: { select: { code: true } },
         managerEntity: { select: { code: true } },
         units: {
-          where: { isActive: true },
+          // parentUnitId: null → excluimos sub-locales agrupados bajo otro
+          // (p. ej. L4 dentro de L3-L4). Se cobran vía su local padre, no como
+          // unidad independiente; si no, aparecerían como una fila "Vacío".
+          where: { isActive: true, parentUnitId: null },
           orderBy: { code: "asc" },
-          select: { id: true, code: true, name: true },
+          select: {
+            id: true,
+            code: true,
+            name: true,
+            // Para mostrar el código agrupado "L3-L4" cuando el local tiene
+            // sub-locales rentados en conjunto.
+            childUnits: { select: { code: true }, orderBy: { code: "asc" } },
+          },
         },
       },
     }),
@@ -472,7 +497,15 @@ export async function getMonthlyCollectionsByProperty(period: Date): Promise<Mon
         monthlyAmount: true,
         paidInAdvance: true,
         advancePaidUntil: true,
-        lessee: { select: { id: true, legalName: true } },
+        lessee: {
+          select: {
+            id: true,
+            legalName: true,
+            preferredChannel: true,
+            whatsapp: true,
+            email: true,
+          },
+        },
       },
     }),
     prisma.rent.findMany({
@@ -558,16 +591,21 @@ export async function getMonthlyCollectionsByProperty(period: Date): Promise<Mon
     let expected = new Prisma.Decimal(0);
     const rows: MonthlyUnitRow[] = p.units.map((u) => {
       const contract = u.contracts[0];
+      // Código agrupado: "L3-L4" si el local cubre sub-locales; "L3" si no.
+      const displayCode = unitCode(u);
 
       if (!contract) {
         totals.vacant += 1;
         return {
           unitId: u.id,
-          unitCode: u.code,
+          unitCode: displayCode,
           unitName: u.name,
           contractId: null,
           lesseeId: null,
           lesseeLegalName: null,
+          lesseePreferredChannel: null,
+          lesseeWhatsapp: null,
+          lesseeEmail: null,
           rentId: null,
           amountDue: "0",
           amountPaid: "0",
@@ -634,11 +672,14 @@ export async function getMonthlyCollectionsByProperty(period: Date): Promise<Mon
 
       return {
         unitId: u.id,
-        unitCode: u.code,
+        unitCode: displayCode,
         unitName: u.name,
         contractId: contract.id,
         lesseeId: contract.lessee.id,
         lesseeLegalName: contract.lessee.legalName,
+        lesseePreferredChannel: contract.lessee.preferredChannel,
+        lesseeWhatsapp: contract.lessee.whatsapp,
+        lesseeEmail: contract.lessee.email,
         rentId: rent?.id ?? null,
         amountDue: amountDue.toString(),
         amountPaid: amountPaid.toString(),
@@ -653,6 +694,7 @@ export async function getMonthlyCollectionsByProperty(period: Date): Promise<Mon
     return {
       propertyId: p.id,
       propertyName: p.name,
+      propertyType: p.type,
       managerEntityCode: p.managerEntity.code,
       ownerEntityCode: p.ownerEntity.code,
       unitCount: p.units.length,
@@ -728,15 +770,19 @@ export async function getYearlyCollectionsMatrix(year: number): Promise<YearlyCo
   );
 
   const properties = await prisma.property.findMany({
-    where: { tenantId, isActive: true },
+    where: { tenantId, isActive: true, status: "ACTIVO" },
     orderBy: { name: "asc" },
     include: {
       ownerEntity: { select: { code: true } },
       managerEntity: { select: { code: true } },
       units: {
-        where: { isActive: true },
+        // Excluimos sub-locales agrupados (parentUnitId != null): se cobran vía
+        // su local padre, no como unidad independiente.
+        where: { isActive: true, parentUnitId: null },
         orderBy: { code: "asc" },
         include: {
+          // Para mostrar el código agrupado "L3-L4" en la matriz anual.
+          childUnits: { select: { code: true }, orderBy: { code: "asc" } },
           contracts: {
             where: {
               startDate: { lt: yearEnd },
@@ -878,7 +924,7 @@ export async function getYearlyCollectionsMatrix(year: number): Promise<YearlyCo
 
       return {
         unitId: u.id,
-        unitCode: u.code,
+        unitCode: unitCode(u),
         unitName: u.name,
         currentLesseeName: current?.lessee.legalName ?? null,
         currentLesseeId: current?.lessee.id ?? null,

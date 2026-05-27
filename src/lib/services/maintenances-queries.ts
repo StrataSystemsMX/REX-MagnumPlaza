@@ -20,7 +20,7 @@ export async function getMaintenances(filters: MaintenanceFilters = {}) {
     },
     orderBy: [{ status: "asc" }, { scheduledDate: "asc" }, { createdAt: "desc" }],
     include: {
-      property: { select: { id: true, name: true } },
+      property: { select: { id: true, name: true, type: true } },
       unit: { select: { id: true, code: true, name: true } },
     },
   });
@@ -83,6 +83,7 @@ export async function getPropertiesForMaintenanceForm() {
     select: {
       id: true,
       name: true,
+      type: true,
       units: {
         where: { isActive: true },
         orderBy: { code: "asc" },

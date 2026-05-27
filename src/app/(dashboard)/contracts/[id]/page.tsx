@@ -11,6 +11,7 @@ import {
   contractStatusVariant,
   contractTypeLabel,
 } from "@/lib/i18n/enums";
+import { isPlaza, unitCode } from "@/lib/i18n/unit-label";
 import {
   getContractAuditLog,
   getContractById,
@@ -90,10 +91,14 @@ export default async function ContractDetailPage({
                 <span className="font-medium text-foreground">
                   {contract.unit.property.name}
                 </span>
-                <span className="text-muted-foreground">
-                  · {contract.unit.code}
-                  {contract.unit.name ? ` — ${contract.unit.name}` : ""}
-                </span>
+                {/* El código de local solo se muestra en plazas; un inmueble
+                    individual ya queda identificado por su nombre. */}
+                {isPlaza(contract.unit.property.type) ? (
+                  <span className="text-muted-foreground">
+                    · {unitCode(contract.unit)}
+                    {contract.unit.name ? ` — ${contract.unit.name}` : ""}
+                  </span>
+                ) : null}
               </span>
               <span className="inline-flex items-center gap-1.5">
                 <Wallet className="size-3.5" />
@@ -119,6 +124,23 @@ export default async function ContractDetailPage({
               status={contract.status}
               endDate={contract.endDate}
               monthlyAmount={String(contract.monthlyAmount)}
+              editInitial={{
+                type: contract.type,
+                startDate: contract.startDate.toISOString().slice(0, 10),
+                endDate: contract.endDate.toISOString().slice(0, 10),
+                monthlyAmount: String(contract.monthlyAmount),
+                guaranteeAmount: String(contract.guaranteeAmount),
+                paymentDay: String(contract.paymentDay),
+                lateFeePercentage:
+                  contract.lateFeePercentage != null
+                    ? String(contract.lateFeePercentage)
+                    : "",
+                autoRenew: contract.autoRenew,
+                paidInAdvance: contract.paidInAdvance,
+                advancePaidUntil: contract.advancePaidUntil
+                  ? new Date(contract.advancePaidUntil).toISOString().slice(0, 10)
+                  : "",
+              }}
             />
           </div>
         </div>

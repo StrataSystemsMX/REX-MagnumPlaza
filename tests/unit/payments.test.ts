@@ -87,13 +87,26 @@ function rentRow(amountDue: number) {
   };
 }
 
+// Resultado del findFirst inicial: el código lee el saldo (amountDue/Paid/Waived)
+// para calcular cuánto cubre el pago y si hay sobrante a cascadear.
+function rentLookup() {
+  return {
+    id: "rent-1",
+    contractId: "contract-1",
+    period: utc(2026, 3, 1),
+    amountDue: new Prisma.Decimal(10000),
+    amountPaid: new Prisma.Decimal(0),
+    amountWaived: new Prisma.Decimal(0),
+  };
+}
+
 // ============================================================================
 // actionRegisterPayment
 // ============================================================================
 
 describe("actionRegisterPayment", () => {
   it("monto exacto deja la renta en PAID con amountPaid = amountDue", async () => {
-    rentMock.findFirst.mockResolvedValue({ id: "rent-1" });
+    rentMock.findFirst.mockResolvedValue(rentLookup());
     paymentMock.create.mockResolvedValue({ id: "pay-1" });
     paymentMock.findMany.mockResolvedValue([{ amount: 10000 }]);
     rentMock.findFirstOrThrow.mockResolvedValue(rentRow(10000));
@@ -119,7 +132,7 @@ describe("actionRegisterPayment", () => {
   });
 
   it("monto parcial deja la renta en PARTIAL con amountPaid actualizado", async () => {
-    rentMock.findFirst.mockResolvedValue({ id: "rent-1" });
+    rentMock.findFirst.mockResolvedValue(rentLookup());
     paymentMock.create.mockResolvedValue({ id: "pay-1" });
     paymentMock.findMany.mockResolvedValue([{ amount: 4000 }]);
     rentMock.findFirstOrThrow.mockResolvedValue(rentRow(10000));
@@ -142,7 +155,7 @@ describe("actionRegisterPayment", () => {
 
   it("dos pagos parciales que suman el total terminan en PAID", async () => {
     // Primer pago: 6000 sobre amountDue=10000 → PARTIAL
-    rentMock.findFirst.mockResolvedValue({ id: "rent-1" });
+    rentMock.findFirst.mockResolvedValue(rentLookup());
     paymentMock.create.mockResolvedValue({ id: "pay-1" });
     paymentMock.findMany.mockResolvedValue([{ amount: 6000 }]);
     rentMock.findFirstOrThrow.mockResolvedValue(rentRow(10000));
@@ -188,8 +201,8 @@ describe("actionRegisterPayment", () => {
     expect(paymentMock.create).not.toHaveBeenCalled();
   });
 
-  it("respeta WAIVED: no recalcula a otro estado aunque haya pago", async () => {
-    rentMock.findFirst.mockResolvedValue({ id: "rent-1" });
+  it("recalcula una renta WAIVED si entra un pago real (WAIVED no bloquea cobros)", async () => {
+    rentMock.findFirst.mockResolvedValue(rentLookup());
     paymentMock.create.mockResolvedValue({ id: "pay-1" });
     paymentMock.findMany.mockResolvedValue([{ amount: 5000 }]);
     rentMock.findFirstOrThrow.mockResolvedValue({
@@ -203,7 +216,8 @@ describe("actionRegisterPayment", () => {
       paymentDate: utc(2026, 3, 5),
       method: "CASH",
     });
-    expect(r.rentStatus).toBe("WAIVED");
+    // El pago entrante hace que el flujo normal recalcule: WAIVED → PARTIAL.
+    expect(r.rentStatus).toBe("PARTIAL");
   });
 });
 
