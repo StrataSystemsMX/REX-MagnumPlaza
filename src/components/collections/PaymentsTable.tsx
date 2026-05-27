@@ -14,9 +14,11 @@ import {
   ChevronDown,
   ChevronRight,
   Download,
+  FileDown,
   Search,
   Store,
   Trash2,
+  X,
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -103,6 +105,7 @@ export function PaymentsTable({
   activePlazaId,
 }: PaymentsTableProps) {
   const router = useRouter();
+  const todayStr = new Date().toISOString().slice(0, 10);
   const [search, setSearch] = useState("");
   const [methodFilter, setMethodFilter] = useState<PaymentMethod | "ALL">("ALL");
   const [from, setFrom] = useState("");
@@ -190,6 +193,17 @@ export function PaymentsTable({
     a.download = `pagos-${new Date().toISOString().slice(0, 10)}.csv`;
     a.click();
     URL.revokeObjectURL(url);
+  }
+
+  function buildPdfUrl() {
+    const params = new URLSearchParams();
+    // Siempre envía las fechas; si no se eligió, usa hoy para que el PDF lo indique
+    params.set("from", from || todayStr);
+    params.set("to", to || todayStr);
+    if (methodFilter !== "ALL") params.set("method", methodFilter);
+    if (search.trim()) params.set("search", search.trim());
+    if (activePlazaId) params.set("plazaId", activePlazaId);
+    return `/api/documents/payments-history?${params.toString()}`;
   }
 
   const columns = useMemo<ColumnDef<PaymentListItem>[]>(
@@ -328,7 +342,7 @@ export function PaymentsTable({
   return (
     <div className="space-y-3">
       <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
-        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-end">
           <div className="relative w-full sm:w-64">
             <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
             <Input
@@ -365,9 +379,10 @@ export function PaymentsTable({
               <Input
                 id="payments-from"
                 type="date"
-                value={from}
+                value={from || todayStr}
+                max={to || undefined}
                 onChange={(e) => setFrom(e.target.value)}
-                className="w-full sm:w-40"
+                className={cn("w-full sm:w-40", !from && "text-muted-foreground opacity-50")}
               />
             </div>
             <div className="flex flex-col gap-1">
@@ -380,11 +395,22 @@ export function PaymentsTable({
               <Input
                 id="payments-to"
                 type="date"
-                value={to}
+                value={to || todayStr}
+                min={from || undefined}
                 onChange={(e) => setTo(e.target.value)}
-                className="w-full sm:w-40"
+                className={cn("w-full sm:w-40", !to && "text-muted-foreground opacity-50")}
               />
             </div>
+            {(from || to) && (
+              <button
+                type="button"
+                onClick={() => { setFrom(""); setTo(""); }}
+                className="self-end pb-1 text-muted-foreground hover:text-foreground"
+                title="Borrar fechas"
+              >
+                <X className="size-4" />
+              </button>
+            )}
           </div>
         </div>
         <div className="flex items-center justify-between gap-3 sm:justify-end">
@@ -399,6 +425,13 @@ export function PaymentsTable({
           <Button variant="secondary" onClick={downloadCsv}>
             <Download className="size-4" />
             Exportar CSV
+          </Button>
+          <Button
+            variant="secondary"
+            onClick={() => window.open(buildPdfUrl(), "_blank", "noopener,noreferrer")}
+          >
+            <FileDown className="size-4" />
+            Exportar PDF
           </Button>
         </div>
       </div>

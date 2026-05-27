@@ -63,3 +63,4 @@ next-env.d.ts
 
 # PDFs generados localmente cuando R2 no está configurado
 /public/generated-pdfs/
+.claude/settings.local.json

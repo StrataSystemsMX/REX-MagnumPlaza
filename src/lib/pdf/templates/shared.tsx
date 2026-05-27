@@ -29,7 +29,7 @@ export const sharedStyles = StyleSheet.create({
   headerLegalName: { fontSize: 12, fontFamily: "Helvetica-Bold" },
   headerSmall: { fontSize: 8, color: "#555", marginTop: 1 },
 
-  title: { fontSize: 17, fontFamily: "Helvetica-Bold", marginBottom: 4 },
+  title: { fontSize: 17, fontFamily: "Helvetica-Bold", marginBottom: 10 },
   subtitle: { fontSize: 9, color: "#666", marginBottom: 16 },
 
   section: { marginBottom: 12 },
@@ -120,7 +120,9 @@ export function DocHeader({ tenant, billingEntity }: DocHeaderProps) {
         <Image src={tenant.brandLogoUrl} style={sharedStyles.headerLogo} />
       ) : null}
       <View style={sharedStyles.headerTextBlock}>
-        <Text style={sharedStyles.headerTenantName}>{tenant.name}</Text>
+        {tenant.name ? (
+          <Text style={sharedStyles.headerTenantName}>{tenant.name}</Text>
+        ) : null}
         <Text style={sharedStyles.headerLegalName}>{billingEntity.legalName}</Text>
         {billingEntity.rfc ? (
           <Text style={sharedStyles.headerSmall}>RFC: {billingEntity.rfc}</Text>

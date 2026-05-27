@@ -88,7 +88,7 @@ export function OverdueReminderPdf(props: OverdueReminderProps) {
         <Text
           style={[
             sharedStyles.title,
-            { color: accent, marginBottom: 2 },
+            { color: accent },
           ]}
         >
           {props.texts.title}
