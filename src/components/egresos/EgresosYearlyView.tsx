@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   TrendingDown,
@@ -104,6 +105,16 @@ export function EgresosYearlyView({
   const [registerTarget, setRegisterTarget] =
     useState<RegisterExpenseContext | null>(null);
   const [formMode, setFormMode] = useState<"create" | "edit" | null>(null);
+  const [collapsedEntities, setCollapsedEntities] = useState<Set<string>>(new Set());
+
+  function toggleEntity(code: string) {
+    setCollapsedEntities((prev) => {
+      const next = new Set(prev);
+      if (next.has(code)) next.delete(code);
+      else next.add(code);
+      return next;
+    });
+  }
 
   const yearItems = useMemo<Record<string, string>>(
     () => Object.fromEntries(availableYears.map((y) => [String(y), String(y)])),
@@ -319,6 +330,8 @@ export function EgresosYearlyView({
               group={g}
               canUpdate={canUpdate}
               onCellClick={openRegister}
+              collapsed={collapsedEntities.has(g.entityCode)}
+              onToggle={() => toggleEntity(g.entityCode)}
             />
           ))
         )}
@@ -510,9 +523,11 @@ interface EntitySectionProps {
     row: YearlyExpenseRow,
     cell: YearlyExpenseCell,
   ) => void;
+  collapsed: boolean;
+  onToggle: () => void;
 }
 
-function EntitySection({ group, canUpdate, onCellClick }: EntitySectionProps) {
+function EntitySection({ group, canUpdate, onCellClick, collapsed, onToggle }: EntitySectionProps) {
   const theme = themeFor(group.entityCode);
   const paidPct =
     group.expectedTotal > 0
@@ -521,14 +536,23 @@ function EntitySection({ group, canUpdate, onCellClick }: EntitySectionProps) {
 
   return (
     <section className="space-y-3">
-      <div
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={!collapsed}
         className={cn(
-          "flex flex-wrap items-center justify-between gap-3 rounded-lg border px-4 py-2.5 ring-1",
+          "flex w-full flex-wrap items-center justify-between gap-3 rounded-lg border px-4 py-2.5 text-left ring-1 transition-colors hover:brightness-[0.98]",
           theme.bg,
           theme.ring,
         )}
       >
         <div className="flex items-center gap-3">
+          <ChevronDown
+            className={cn(
+              "size-4 shrink-0 text-muted-foreground transition-transform",
+              collapsed && "-rotate-90",
+            )}
+          />
           <span
             className={cn(
               "inline-flex size-7 items-center justify-center rounded-md text-xs font-bold text-white",
@@ -576,13 +600,15 @@ function EntitySection({ group, canUpdate, onCellClick }: EntitySectionProps) {
             </p>
           </div>
         </div>
-      </div>
+      </button>
 
-      <ConceptMatrix
-        group={group}
-        canUpdate={canUpdate}
-        onCellClick={onCellClick}
-      />
+      {!collapsed && (
+        <ConceptMatrix
+          group={group}
+          canUpdate={canUpdate}
+          onCellClick={onCellClick}
+        />
+      )}
     </section>
   );
 }

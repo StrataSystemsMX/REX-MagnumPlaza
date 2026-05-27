@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronLeft, ChevronRight, TrendingUp, Wallet, AlertTriangle, Percent, X } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, TrendingUp, Wallet, AlertTriangle, Percent, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -75,6 +75,16 @@ export function IngresosYearlyView({ data, availableYears }: IngresosYearlyViewP
   const [entityFilter, setEntityFilter] = useState<string>("ALL");
   const [paymentContext, setPaymentContext] =
     useState<RegisterPaymentDialogContext | null>(null);
+  const [collapsedEntities, setCollapsedEntities] = useState<Set<string>>(new Set());
+
+  function toggleEntity(code: string) {
+    setCollapsedEntities((prev) => {
+      const next = new Set(prev);
+      if (next.has(code)) next.delete(code);
+      else next.add(code);
+      return next;
+    });
+  }
 
   // Solo plazas con locales rentables — un inmueble sin Units no genera ingreso.
   const incomeProperties = useMemo(
@@ -282,7 +292,13 @@ export function IngresosYearlyView({ data, availableYears }: IngresosYearlyViewP
           </div>
         ) : (
           visibleEntityGroups.map((g) => (
-            <EntitySection key={g.code} group={g} onCellClick={setPaymentContext} />
+            <EntitySection
+              key={g.code}
+              group={g}
+              onCellClick={setPaymentContext}
+              collapsed={collapsedEntities.has(g.code)}
+              onToggle={() => toggleEntity(g.code)}
+            />
           ))
         )}
       </div>
@@ -445,22 +461,33 @@ function Legend() {
 interface EntitySectionProps {
   group: EntityGroup;
   onCellClick: (ctx: RegisterPaymentDialogContext) => void;
+  collapsed: boolean;
+  onToggle: () => void;
 }
 
-function EntitySection({ group, onCellClick }: EntitySectionProps) {
+function EntitySection({ group, onCellClick, collapsed, onToggle }: EntitySectionProps) {
   const theme = themeFor(group.code);
   const collected = group.expected > 0 ? Math.round((group.paid / group.expected) * 100) : 0;
 
   return (
     <section className="space-y-3">
-      <div
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={!collapsed}
         className={cn(
-          "flex flex-wrap items-center justify-between gap-3 rounded-lg border px-4 py-2.5 ring-1",
+          "flex w-full flex-wrap items-center justify-between gap-3 rounded-lg border px-4 py-2.5 text-left ring-1 transition-colors hover:brightness-[0.98]",
           theme.bg,
           theme.ring,
         )}
       >
         <div className="flex items-center gap-3">
+          <ChevronDown
+            className={cn(
+              "size-4 shrink-0 text-muted-foreground transition-transform",
+              collapsed && "-rotate-90",
+            )}
+          />
           <span className={cn("inline-flex size-7 items-center justify-center rounded-md text-xs font-bold text-white", theme.dot)}>
             {group.code.slice(0, 1)}
           </span>
@@ -492,13 +519,15 @@ function EntitySection({ group, onCellClick }: EntitySectionProps) {
             </p>
           </div>
         </div>
-      </div>
+      </button>
 
-      <div className="space-y-3">
-        {group.properties.map((p) => (
-          <PropertyMatrix key={p.propertyId} group={p} onCellClick={onCellClick} />
-        ))}
-      </div>
+      {!collapsed && (
+        <div className="space-y-3">
+          {group.properties.map((p) => (
+            <PropertyMatrix key={p.propertyId} group={p} onCellClick={onCellClick} />
+          ))}
+        </div>
+      )}
     </section>
   );
 }
