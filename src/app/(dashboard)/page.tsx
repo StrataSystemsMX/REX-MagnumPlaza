@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { AlertCircle, AlertTriangle, BarChart2, Clock, TrendingDown, TrendingUp } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { FinancialHistoryChart } from "@/components/dashboard/charts";
+import { LegalEntitySummaryTable } from "@/components/dashboard/LegalEntitySummaryTable";
 import { MetricCard } from "@/components/shared/metric-card";
 import { getActiveLegalEntityId } from "@/lib/auth/active-legal-entity";
 import { requireAuth } from "@/lib/auth/get-session";
@@ -284,7 +285,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
     const income   = incomeByLE.get(le.id)   ?? 0;
     const expenses = expensesByLE.get(le.id) ?? 0;
     const profit   = income - expenses;
-    return { code: le.code, income, expenses, profit, rent: income > 0 ? profit / income : 0 };
+    return { id: le.id, code: le.code, income, expenses, profit, rent: income > 0 ? profit / income : 0 };
   });
 
   // ── Egresos por tipo ──────────────────────────────────────────────────────
@@ -648,41 +649,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
           <CardTitle className="text-sm font-semibold">Por Razón Social — {periodLabel}</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b text-xs text-muted-foreground">
-                  <th className="pb-2 text-left font-medium">Entidad</th>
-                  <th className="pb-2 text-right font-medium">Ingresos</th>
-                  <th className="pb-2 text-right font-medium">Egresos</th>
-                  <th className="pb-2 text-right font-medium">Utilidad</th>
-                  <th className="pb-2 text-right font-medium">Rentabilidad</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y">
-                {byLegalEntity.map((le) => (
-                  <tr key={le.code} className="hover:bg-muted/30">
-                    <td className="py-2.5 font-semibold">{le.code}</td>
-                    <td className="py-2.5 text-right tabular-nums">{MXN.format(le.income)}</td>
-                    <td className="py-2.5 text-right tabular-nums text-muted-foreground">{MXN.format(le.expenses)}</td>
-                    <td className={`py-2.5 text-right tabular-nums font-medium ${le.profit >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
-                      {MXN.format(le.profit)}
-                    </td>
-                    <td className="py-2.5 text-right tabular-nums text-muted-foreground">
-                      {le.income > 0 ? PCT.format(le.rent) : "—"}
-                    </td>
-                  </tr>
-                ))}
-                {byLegalEntity.length === 0 && (
-                  <tr>
-                    <td colSpan={5} className="py-6 text-center text-xs text-muted-foreground">
-                      Sin movimientos en el período
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
+          <LegalEntitySummaryTable rows={byLegalEntity} />
         </CardContent>
       </Card>
 
