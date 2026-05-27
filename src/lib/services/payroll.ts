@@ -112,7 +112,7 @@ export async function actionUpdatePayroll(
   });
 
   await prisma.payroll.update({
-    where: { id: data.id },
+    where: { id: data.id, tenantId },
     data: {
       legalEntityId: data.legalEntityId,
       period: toPeriod(data.year, data.month),
@@ -152,7 +152,7 @@ export async function actionDeletePayroll(
     select: { id: true },
   });
 
-  await prisma.payroll.delete({ where: { id } });
+  await prisma.payroll.delete({ where: { id, tenantId } });
 
   await logAudit(tenantId, dbUser.id, "DELETE", id);
 

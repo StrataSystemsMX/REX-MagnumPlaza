@@ -1,8 +1,9 @@
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, FileDown } from "lucide-react";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { LegalEntityYearNav } from "@/components/legal-entity/LegalEntityYearNav";
 import {
   Card,
   CardContent,
@@ -73,6 +74,16 @@ export default async function LegalEntityPage({ params, searchParams }: PageProp
   const data = await getLegalEntityMetrics(dbUser.tenantId, id, year);
   if (!data) notFound();
 
+  // Rango de años seleccionable: del próximo año hacia atrás 5 ejercicios,
+  // garantizando que el año visualizado esté incluido.
+  const nowYear = new Date().getUTCFullYear();
+  const availableYears = Array.from(
+    new Set([
+      ...Array.from({ length: 6 }, (_, i) => nowYear + 1 - i),
+      data.year,
+    ]),
+  ).sort((a, b) => b - a);
+
   return (
     <div className="space-y-6">
       <header className="flex items-start justify-between gap-4">
@@ -95,7 +106,18 @@ export default async function LegalEntityPage({ params, searchParams }: PageProp
             </p>
           ) : null}
         </div>
-        <Badge variant="outline">Ejercicio {data.year}</Badge>
+        <div className="flex items-center gap-3">
+          <a
+            href={`/api/legal-entity/${data.id}/pdf?year=${data.year}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={buttonVariants({ variant: "outline", size: "sm" })}
+          >
+            <FileDown className="size-4" />
+            Exportar PDF
+          </a>
+          <LegalEntityYearNav year={data.year} availableYears={availableYears} />
+        </div>
       </header>
 
       {/* Resumen anual */}
