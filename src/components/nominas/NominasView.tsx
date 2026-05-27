@@ -1,8 +1,10 @@
 "use client";
 
 import {
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
+  ChevronUp,
   Loader2,
   MoreHorizontal,
   Pencil,
@@ -42,6 +44,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { PayrollFormDialog } from "@/components/nominas/PayrollFormDialog";
+import { PayrollDetailDialog } from "@/components/nominas/PayrollDetailDialog";
 import { themeFor } from "@/components/cierres/MonthlyPivotTable";
 import { actionDeletePayroll } from "@/lib/services/payroll";
 import type {
@@ -113,6 +116,16 @@ const TYPE_TONES: Record<PayrollType, string> = {
     "bg-pink-100 text-pink-700 hover:bg-pink-100 dark:bg-pink-950 dark:text-pink-200",
 };
 
+// Template de grid compartido entre las dos subsecciones (Operativos /
+// Estrategia fiscal) para que las columnas queden alineadas a la misma X,
+// análogo a PREDIAL_GRID_COLS en PredialesTable.
+// Tipo | Concepto(+notas) | Sin IVA | IVA | Total | Acciones
+const PAYROLL_GRID_COLS =
+  "minmax(0, 0.9fr) minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) 40px";
+// Con columna Mes (vista anual) antepuesta.
+const PAYROLL_GRID_COLS_WITH_MONTH =
+  "minmax(0, 0.7fr) minmax(0, 0.9fr) minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) 40px";
+
 interface Props {
   payrolls: ReadonlyArray<PayrollListItem>;
   legalEntities: ReadonlyArray<LegalEntityOption>;
@@ -154,6 +167,19 @@ export function NominasView({
   const [deleteTarget, setDeleteTarget] = useState<PayrollListItem | null>(
     null,
   );
+  const [detailTarget, setDetailTarget] = useState<PayrollListItem | null>(
+    null,
+  );
+  const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
+
+  function toggleGroup(entityId: string) {
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      if (next.has(entityId)) next.delete(entityId);
+      else next.add(entityId);
+      return next;
+    });
+  }
 
   const yearItems: Record<string, string> = useMemo(
     () => Object.fromEntries(yearsAvailable.map((y) => [String(y), String(y)])),
@@ -422,6 +448,7 @@ export function NominasView({
           byEntity.map((group) => {
             const theme = themeFor(group.entity.code);
             const totalCount = group.operationalItems.length + group.fiscalItems.length;
+            const expanded = !collapsed.has(group.entity.id);
             return (
               <div
                 key={group.entity.id}
@@ -430,37 +457,62 @@ export function NominasView({
                   theme.ring,
                 )}
               >
+                {/* Header colapsable. La zona izquierda (info + total) hace
+                    toggle; el botón "Agregar" queda fuera para no anidar. */}
                 <div
                   className={cn(
                     "flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3",
                     theme.soft,
                   )}
                 >
-                  <div className="flex items-center gap-3">
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    aria-expanded={expanded}
+                    onClick={() => toggleGroup(group.entity.id)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        toggleGroup(group.entity.id);
+                      }
+                    }}
+                    className="flex flex-1 cursor-pointer items-center gap-3 rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    <span className="shrink-0 text-muted-foreground">
+                      {expanded ? (
+                        <ChevronUp className="size-4" />
+                      ) : (
+                        <ChevronDown className="size-4" />
+                      )}
+                    </span>
                     <span
                       className={cn("size-2.5 shrink-0 rounded-full", theme.dot)}
                       aria-hidden
                     />
-                    <div>
-                      <div className="flex items-center gap-2">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
                         <span className="text-lg font-semibold tracking-tight">
                           {group.entity.code}
+                        </span>
+                        <span
+                          className={cn(
+                            "rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider",
+                            theme.badge,
+                          )}
+                        >
+                          {totalCount}{" "}
+                          {totalCount === 1 ? "movimiento" : "movimientos"}
                         </span>
                         <span className="text-xs text-muted-foreground">
                           — {group.entity.legalName}
                         </span>
                       </div>
-                      <p className="text-xs text-muted-foreground">
-                        {totalCount}{" "}
-                        {totalCount === 1 ? "movimiento" : "movimientos"}
-                        {group.fiscalTotal > 0 && group.operationalTotal > 0 ? (
-                          <span>
-                            {" · "}
-                            Operativo {MXN.format(group.operationalTotal)} ·
-                            Estrategia {MXN.format(group.fiscalTotal)}
-                          </span>
-                        ) : null}
-                      </p>
+                      {group.fiscalTotal > 0 && group.operationalTotal > 0 ? (
+                        <p className="mt-0.5 text-xs text-muted-foreground">
+                          Operativo {MXN.format(group.operationalTotal)} ·
+                          Estrategia {MXN.format(group.fiscalTotal)}
+                        </p>
+                      ) : null}
                     </div>
                   </div>
                   <div className="flex items-center gap-3">
@@ -485,31 +537,37 @@ export function NominasView({
                   </div>
                 </div>
 
-                <PayrollSubsection
-                  title="Operativos"
-                  helper="Nómina directa, comisiones, bonos."
-                  tone="emerald"
-                  items={group.operationalItems}
-                  subtotal={group.operationalTotal}
-                  showMonth={selectedMonth === null}
-                  canUpdate={canUpdate}
-                  canDelete={canDelete}
-                  onEdit={openEdit}
-                  onDelete={setDeleteTarget}
-                />
+                {expanded ? (
+                  <>
+                    <PayrollSubsection
+                      title="Operativos"
+                      helper="Nómina directa, comisiones, bonos."
+                      tone="emerald"
+                      items={group.operationalItems}
+                      subtotal={group.operationalTotal}
+                      showMonth={selectedMonth === null}
+                      canUpdate={canUpdate}
+                      canDelete={canDelete}
+                      onEdit={openEdit}
+                      onDelete={setDeleteTarget}
+                      onSelect={setDetailTarget}
+                    />
 
-                <PayrollSubsection
-                  title="Estrategia fiscal"
-                  helper="Nómina estratégica y facturas administrativas."
-                  tone="amber"
-                  items={group.fiscalItems}
-                  subtotal={group.fiscalTotal}
-                  showMonth={selectedMonth === null}
-                  canUpdate={canUpdate}
-                  canDelete={canDelete}
-                  onEdit={openEdit}
-                  onDelete={setDeleteTarget}
-                />
+                    <PayrollSubsection
+                      title="Estrategia fiscal"
+                      helper="Nómina estratégica y facturas administrativas."
+                      tone="amber"
+                      items={group.fiscalItems}
+                      subtotal={group.fiscalTotal}
+                      showMonth={selectedMonth === null}
+                      canUpdate={canUpdate}
+                      canDelete={canDelete}
+                      onEdit={openEdit}
+                      onDelete={setDeleteTarget}
+                      onSelect={setDetailTarget}
+                    />
+                  </>
+                ) : null}
               </div>
             );
           })
@@ -528,6 +586,21 @@ export function NominasView({
           setFormMode(null);
           setFormInitial(null);
           setFormPrefillEntity(null);
+        }}
+      />
+
+      <PayrollDetailDialog
+        item={detailTarget}
+        canUpdate={canUpdate}
+        canDelete={canDelete}
+        onClose={() => setDetailTarget(null)}
+        onEdit={(item) => {
+          setDetailTarget(null);
+          openEdit(item);
+        }}
+        onDelete={(item) => {
+          setDetailTarget(null);
+          setDeleteTarget(item);
         }}
       />
 
@@ -628,6 +701,7 @@ function PayrollSubsection({
   canDelete,
   onEdit,
   onDelete,
+  onSelect,
 }: {
   title: string;
   helper: string;
@@ -639,6 +713,7 @@ function PayrollSubsection({
   canDelete: boolean;
   onEdit: (item: PayrollListItem) => void;
   onDelete: (item: PayrollListItem) => void;
+  onSelect: (item: PayrollListItem) => void;
 }) {
   if (items.length === 0) return null;
 
@@ -647,8 +722,13 @@ function PayrollSubsection({
       ? "text-emerald-700 dark:text-emerald-400"
       : "text-amber-700 dark:text-amber-400";
 
+  const gridCols = showMonth
+    ? PAYROLL_GRID_COLS_WITH_MONTH
+    : PAYROLL_GRID_COLS;
+
   return (
     <div className="border-b last:border-b-0">
+      {/* Barra de subsección: label + helper + subtotal */}
       <div className="flex items-center justify-between gap-2 bg-muted/20 px-4 py-2">
         <div className="flex items-center gap-2">
           <span
@@ -665,79 +745,146 @@ function PayrollSubsection({
           {MXN.format(subtotal)}
         </span>
       </div>
-      <ul className="divide-y">
+
+      {/* Tabla en grid (template compartido para alinear columnas) */}
+      <div role="table" aria-label={title}>
+        <div
+          role="row"
+          className="grid items-center border-b bg-muted/30 text-[11px] font-medium uppercase text-muted-foreground"
+          style={{ gridTemplateColumns: gridCols }}
+        >
+          <div role="columnheader" className="px-3 py-2">
+            Tipo
+          </div>
+          {showMonth ? (
+            <div role="columnheader" className="px-3 py-2">
+              Mes
+            </div>
+          ) : null}
+          <div role="columnheader" className="px-3 py-2">
+            Concepto
+          </div>
+          <div role="columnheader" className="px-3 py-2 text-right">
+            Sin IVA
+          </div>
+          <div role="columnheader" className="px-3 py-2 text-right">
+            IVA
+          </div>
+          <div role="columnheader" className="px-3 py-2 text-right">
+            Total
+          </div>
+          <div role="columnheader" aria-label="Acciones" />
+        </div>
         {items.map((item) => (
-          <li
+          <PayrollRow
             key={item.id}
-            className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 hover:bg-muted/20"
-          >
-            <div className="min-w-0 flex-1">
-              <div className="flex flex-wrap items-center gap-2">
-                <Badge className={TYPE_TONES[item.type]}>
-                  {payrollTypeLabel(item.type)}
-                </Badge>
-                {showMonth ? (
-                  <span className="text-xs text-muted-foreground">
-                    {MONTH_LABELS[item.month - 1]}
-                  </span>
-                ) : null}
-                {item.description ? (
-                  <span className="truncate text-sm">{item.description}</span>
-                ) : null}
-              </div>
-              {item.notes ? (
-                <p className="mt-1 truncate text-xs text-muted-foreground">
-                  {item.notes}
-                </p>
-              ) : null}
-            </div>
-
-            <div className="flex items-center gap-4">
-              <div className="text-right">
-                <p className="text-base font-semibold tabular-nums">
-                  {MXN.format(item.amount)}
-                </p>
-                {item.amountWithoutTax !== null || item.taxAmount !== null ? (
-                  <p className="text-[11px] text-muted-foreground tabular-nums">
-                    {item.amountWithoutTax !== null
-                      ? `Sin IVA ${MXN.format(item.amountWithoutTax)}`
-                      : null}
-                    {item.amountWithoutTax !== null && item.taxAmount !== null
-                      ? " · "
-                      : null}
-                    {item.taxAmount !== null
-                      ? `IVA ${MXN.format(item.taxAmount)}`
-                      : null}
-                  </p>
-                ) : null}
-              </div>
-
-              <DropdownMenu>
-                <DropdownMenuTrigger
-                  render={<Button variant="ghost" size="icon" />}
-                >
-                  <MoreHorizontal className="size-4" />
-                  <span className="sr-only">Acciones</span>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  {canUpdate ? (
-                    <DropdownMenuItem onClick={() => onEdit(item)}>
-                      <Pencil className="size-4" />
-                      Editar
-                    </DropdownMenuItem>
-                  ) : null}
-                  {canDelete ? (
-                    <DropdownMenuItem onClick={() => onDelete(item)}>
-                      <Trash2 className="size-4 text-destructive" />
-                      Eliminar
-                    </DropdownMenuItem>
-                  ) : null}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
-          </li>
+            item={item}
+            gridCols={gridCols}
+            showMonth={showMonth}
+            canUpdate={canUpdate}
+            canDelete={canDelete}
+            onEdit={onEdit}
+            onDelete={onDelete}
+            onSelect={onSelect}
+          />
         ))}
-      </ul>
+      </div>
+    </div>
+  );
+}
+
+function PayrollRow({
+  item,
+  gridCols,
+  showMonth,
+  canUpdate,
+  canDelete,
+  onEdit,
+  onDelete,
+  onSelect,
+}: {
+  item: PayrollListItem;
+  gridCols: string;
+  showMonth: boolean;
+  canUpdate: boolean;
+  canDelete: boolean;
+  onEdit: (item: PayrollListItem) => void;
+  onDelete: (item: PayrollListItem) => void;
+  onSelect: (item: PayrollListItem) => void;
+}) {
+  return (
+    <div
+      role="row"
+      onClick={() => onSelect(item)}
+      className="grid cursor-pointer items-center border-b text-sm transition-colors last:border-b-0 hover:bg-muted/50"
+      style={{ gridTemplateColumns: gridCols }}
+    >
+      <div role="cell" className="px-3 py-2.5">
+        <Badge className={TYPE_TONES[item.type]}>
+          {payrollTypeLabel(item.type)}
+        </Badge>
+      </div>
+      {showMonth ? (
+        <div
+          role="cell"
+          className="px-3 py-2.5 text-xs text-muted-foreground"
+        >
+          {MONTH_LABELS[item.month - 1]}
+        </div>
+      ) : null}
+      <div role="cell" className="min-w-0 px-3 py-2.5">
+        <p className="truncate">{item.description ?? "—"}</p>
+        {item.notes ? (
+          <p className="truncate text-xs text-muted-foreground">
+            {item.notes}
+          </p>
+        ) : null}
+      </div>
+      <div
+        role="cell"
+        className="px-3 py-2.5 text-right tabular-nums text-muted-foreground"
+      >
+        {item.amountWithoutTax !== null
+          ? MXN.format(item.amountWithoutTax)
+          : "—"}
+      </div>
+      <div
+        role="cell"
+        className="px-3 py-2.5 text-right tabular-nums text-muted-foreground"
+      >
+        {item.taxAmount !== null ? MXN.format(item.taxAmount) : "—"}
+      </div>
+      <div
+        role="cell"
+        className="px-3 py-2.5 text-right font-semibold tabular-nums"
+      >
+        {MXN.format(item.amount)}
+      </div>
+      <div role="cell" className="flex justify-end pr-1">
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            render={<Button variant="ghost" size="icon" />}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <MoreHorizontal className="size-4" />
+            <span className="sr-only">Acciones</span>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            {canUpdate ? (
+              <DropdownMenuItem onClick={() => onEdit(item)}>
+                <Pencil className="size-4" />
+                Editar
+              </DropdownMenuItem>
+            ) : null}
+            {canDelete ? (
+              <DropdownMenuItem onClick={() => onDelete(item)}>
+                <Trash2 className="size-4 text-destructive" />
+                Eliminar
+              </DropdownMenuItem>
+            ) : null}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
     </div>
   );
 }
