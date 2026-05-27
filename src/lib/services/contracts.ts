@@ -5,7 +5,11 @@ import { Prisma } from "@/generated/prisma/client";
 import { requireAuth } from "@/lib/auth/get-session";
 import { requirePermission } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/prisma/client";
-import { generateRentsForContract } from "@/lib/services/rent-generation";
+import {
+  generateRentsForContract,
+  reconcileRentsForContract,
+  type ReconcileRentsResult,
+} from "@/lib/services/rent-generation";
 import {
   createContractSchema,
   renewContractSchema,
@@ -129,10 +133,19 @@ export async function actionCreateContract(
   return created;
 }
 
+export interface UpdateContractResult {
+  /** Resumen de la re-sincronización de rentas, si el contrato estaba ACTIVE y
+   *  se tocó algún término que afecta los cargos. `null` si no aplicó. */
+  reconcile: ReconcileRentsResult | null;
+}
+
+// No devolvemos el contrato crudo de Prisma: sus campos Decimal no son
+// serializables hacia un Client Component (Next.js lo rechaza). El único
+// consumidor solo necesita el resumen de reconciliación.
 export async function actionUpdateContract(
   id: string,
   input: UpdateContractInput,
-): Promise<ContractModel> {
+): Promise<UpdateContractResult> {
   const { tenantId, dbUser } = await requireAuth();
   await requirePermission(dbUser.id, "contract.update");
 
@@ -140,6 +153,7 @@ export async function actionUpdateContract(
 
   const update: Prisma.ContractUpdateManyMutationInput = {};
   if (data.status !== undefined) update.status = data.status;
+  if (data.type !== undefined) update.type = data.type;
   if (data.startDate !== undefined) update.startDate = data.startDate;
   if (data.endDate !== undefined) update.endDate = data.endDate;
   if (data.monthlyAmount !== undefined) update.monthlyAmount = decimal(data.monthlyAmount);
@@ -164,15 +178,34 @@ export async function actionUpdateContract(
 
   const updated = await prisma.contract.findFirstOrThrow({
     where: { id, tenantId },
+    select: { status: true },
   });
+
+  // Si el contrato ya está ACTIVE y se editó algo que afecta los cargos
+  // mensuales (fechas, monto, día de cobro, pago adelantado), re-sincronizamos
+  // las rentas para que el calendario de cobranza refleje los nuevos términos.
+  const rentAffecting =
+    data.startDate !== undefined ||
+    data.endDate !== undefined ||
+    data.monthlyAmount !== undefined ||
+    data.paymentDay !== undefined ||
+    data.paidInAdvance !== undefined ||
+    data.advancePaidUntil !== undefined;
+
+  let reconcile: ReconcileRentsResult | null = null;
+  if (updated.status === "ACTIVE" && rentAffecting) {
+    reconcile = await reconcileRentsForContract(tenantId, id);
+  }
 
   await logAudit(tenantId, dbUser.id, "UPDATE", id, {
     after: data as unknown as Prisma.InputJsonValue,
+    ...(reconcile ? { reconcile: reconcile as unknown as Prisma.InputJsonValue } : {}),
   });
 
   revalidatePath("/contracts");
   revalidatePath(`/contracts/${id}`);
-  return updated;
+  revalidatePath("/collections");
+  return { reconcile };
 }
 
 export async function actionActivateContract(id: string): Promise<{

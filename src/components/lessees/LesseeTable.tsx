@@ -15,7 +15,6 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import {
-  Table,
   TableBody,
   TableCell,
   TableHead,
@@ -134,20 +133,30 @@ export function LesseeTable({ lessees }: LesseeTableProps) {
         </Dialog>
       </div>
 
-      <div className="overflow-hidden rounded-lg border bg-card">
-        <Table className="min-w-[640px]">
-          <TableHeader>
+      {/* Usamos una <table> cruda (no el componente Table de shadcn) porque ese
+          envuelve la tabla en un div con overflow-x-auto, y ese contenedor de
+          scroll atrapa el `sticky` (se ancla al div, no al scroll de la página).
+          overflow-clip recorta las esquinas redondeadas SIN crear contenedor de
+          scroll, así que conserva el sticky relativo al <main>. */}
+      <div className="overflow-clip rounded-lg border bg-card">
+        <table className="w-full min-w-[640px] caption-bottom text-sm">
+          {/* El scroll vive en <main>, con padding superior (p-4/6/8). El offset de
+              `sticky` se mide desde el borde de contenido (tras el padding), así que
+              `top-0` dejaría una franja donde se asoman las filas; el top negativo
+              iguala ese padding para anclar el encabezado al borde superior real.
+              (Acoplado al padding de (dashboard)/layout.tsx.) */}
+          <TableHeader className="sticky -top-4 z-20 sm:-top-6 lg:-top-8">
             <TableRow className="hover:bg-transparent">
-              <TableHead className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              <TableHead className="bg-card shadow-[inset_0_-1px_0_0_var(--border)] text-xs font-medium uppercase tracking-wide text-muted-foreground">
                 Inquilino
               </TableHead>
-              <TableHead className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              <TableHead className="bg-card shadow-[inset_0_-1px_0_0_var(--border)] text-xs font-medium uppercase tracking-wide text-muted-foreground">
                 RFC
               </TableHead>
-              <TableHead className="text-xs font-medium uppercase tracking-wide text-muted-foreground text-center">
+              <TableHead className="bg-card shadow-[inset_0_-1px_0_0_var(--border)] text-xs font-medium uppercase tracking-wide text-muted-foreground text-center">
                 Contratos activos
               </TableHead>
-              <TableHead className="text-xs font-medium uppercase tracking-wide text-muted-foreground text-center">
+              <TableHead className="bg-card shadow-[inset_0_-1px_0_0_var(--border)] text-xs font-medium uppercase tracking-wide text-muted-foreground text-center">
                 Canal
               </TableHead>
             </TableRow>
@@ -175,7 +184,7 @@ export function LesseeTable({ lessees }: LesseeTableProps) {
               ))
             )}
           </TableBody>
-        </Table>
+        </table>
       </div>
 
       <p className="text-xs text-muted-foreground">
@@ -223,7 +232,7 @@ function LesseeGroupRows({
                 {groupLabel}
               </Badge>
             )}
-            <span className="ml-auto text-xs text-muted-foreground">
+            <span className="text-xs text-muted-foreground">
               {group.lessees.length} inquilino{group.lessees.length === 1 ? "" : "s"}
             </span>
           </div>

@@ -10,8 +10,12 @@ export interface AuthContext {
   userId: string;
   /** Tenant del usuario, derivado del User en DB. */
   tenantId: string;
-  /** Objeto crudo de Clerk. */
-  user: ClerkUser;
+  /**
+   * Objeto crudo de Clerk. Solo se resuelve cuando hace falta (alta/vinculación
+   * de un usuario aún no presente en la DB); en el camino normal es `null` para
+   * evitar una petición extra al backend de Clerk en cada request.
+   */
+  user: ClerkUser | null;
   /** User de nuestra base. */
   dbUser: DbUser;
 }
@@ -34,61 +38,72 @@ export const requireAuth = cache(async (): Promise<AuthContext> => {
     redirect("/sign-in");
   }
 
-  const clerkUser = await currentUser();
-  if (!clerkUser) {
-    redirect("/sign-in");
-  }
-
-  const primaryEmail =
-    clerkUser.emailAddresses.find((e) => e.id === clerkUser.primaryEmailAddressId)
-      ?.emailAddress ?? clerkUser.emailAddresses[0]?.emailAddress;
-
+  // Caso común: el usuario ya está vinculado por clerkId. En este camino NO
+  // llamamos a currentUser() (una petición extra al backend de Clerk): es
+  // innecesaria —auth() ya validó la sesión— y nos vuelve dependientes de la
+  // disponibilidad de ese endpoint (un 500 de Clerk tumbaría cualquier página).
   let dbUser = await prismaUnsafe.user.findUnique({ where: { clerkId: userId } });
 
-  // Backfill: si el seed creó al user con clerkId=null, y ahora ese mismo
-  // email se autenticó por primera vez en Clerk, vinculamos la cuenta.
-  if (!dbUser && primaryEmail) {
-    const byEmail = await prismaUnsafe.user.findFirst({ where: { email: primaryEmail } });
-    if (byEmail) {
-      dbUser = await prismaUnsafe.user.update({
-        where: { id: byEmail.id },
-        data: { clerkId: userId },
+  // Solo cuando el usuario aún no existe en la DB resolvemos su perfil de Clerk
+  // para vincularlo (backfill por email) o crearlo.
+  let clerkUser: ClerkUser | null = null;
+  if (!dbUser) {
+    clerkUser = await currentUser();
+    if (!clerkUser) {
+      redirect("/sign-in");
+    }
+    // Alias const: el narrowing a no-nulo no sobrevive en closures sobre un `let`.
+    const profile = clerkUser;
+
+    const primaryEmail =
+      profile.emailAddresses.find((e) => e.id === profile.primaryEmailAddressId)
+        ?.emailAddress ?? profile.emailAddresses[0]?.emailAddress;
+
+    // Backfill: si el seed creó al user con clerkId=null, y ahora ese mismo
+    // email se autenticó por primera vez en Clerk, vinculamos la cuenta.
+    if (primaryEmail) {
+      const byEmail = await prismaUnsafe.user.findFirst({ where: { email: primaryEmail } });
+      if (byEmail) {
+        dbUser = await prismaUnsafe.user.update({
+          where: { id: byEmail.id },
+          data: { clerkId: userId },
+        });
+      }
+    }
+
+    // Fallback dev: ningún match. Lo enganchamos al primer Tenant y, en dev,
+    // le pegamos rol MASTER para que pueda operar la app. En prod no aplica
+    // porque el alta entrará vía flujo de invitación con rol explícito.
+    if (!dbUser) {
+      const firstTenant = await prismaUnsafe.tenant.findFirst({
+        orderBy: { createdAt: "asc" },
+      });
+      if (!firstTenant) {
+        throw new Error(
+          "No hay Tenants en la base. Corre `pnpm db:seed` antes de autenticarte.",
+        );
+      }
+      if (!primaryEmail) {
+        throw new Error("La cuenta de Clerk no tiene email primario configurado.");
+      }
+      const fullName =
+        `${profile.firstName ?? ""} ${profile.lastName ?? ""}`.trim() || "Usuario";
+      const masterRoleId =
+        process.env["NODE_ENV"] !== "production"
+          ? (await prismaUnsafe.role.findUnique({ where: { code: "MASTER" } }))?.id
+          : undefined;
+      dbUser = await prismaUnsafe.user.create({
+        data: {
+          tenantId: firstTenant.id,
+          clerkId: userId,
+          email: primaryEmail,
+          name: fullName,
+          ...(masterRoleId
+            ? { roles: { create: [{ roleId: masterRoleId }] } }
+            : {}),
+        },
       });
     }
-  }
-
-  // Fallback dev: ningún match. Lo enganchamos al primer Tenant y, en dev,
-  // le pegamos rol MASTER para que pueda operar la app. En prod no aplica
-  // porque el alta entrará vía flujo de invitación con rol explícito.
-  if (!dbUser) {
-    const firstTenant = await prismaUnsafe.tenant.findFirst({
-      orderBy: { createdAt: "asc" },
-    });
-    if (!firstTenant) {
-      throw new Error(
-        "No hay Tenants en la base. Corre `pnpm db:seed` antes de autenticarte.",
-      );
-    }
-    if (!primaryEmail) {
-      throw new Error("La cuenta de Clerk no tiene email primario configurado.");
-    }
-    const fullName =
-      `${clerkUser.firstName ?? ""} ${clerkUser.lastName ?? ""}`.trim() || "Usuario";
-    const masterRoleId =
-      process.env["NODE_ENV"] !== "production"
-        ? (await prismaUnsafe.role.findUnique({ where: { code: "MASTER" } }))?.id
-        : undefined;
-    dbUser = await prismaUnsafe.user.create({
-      data: {
-        tenantId: firstTenant.id,
-        clerkId: userId,
-        email: primaryEmail,
-        name: fullName,
-        ...(masterRoleId
-          ? { roles: { create: [{ roleId: masterRoleId }] } }
-          : {}),
-      },
-    });
   }
 
   return {

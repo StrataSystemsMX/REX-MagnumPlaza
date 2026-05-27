@@ -2,6 +2,7 @@ import { AlertTriangle, CheckCircle2, FileText } from "lucide-react";
 import { ContractTable } from "@/components/contracts/ContractTable";
 import { MetricCard } from "@/components/shared/metric-card";
 import { PropertyFilterTabs } from "@/components/shared/PropertyFilterTabs";
+import { INMUEBLES_TAB_VALUE } from "@/components/shared/property-filter-constants";
 import {
   getAvailableUnits,
   getContracts,
@@ -22,10 +23,14 @@ export default async function ContractsPage({
 
   // Tabs solo para plazas comerciales
   const propertyMap = new Map<string, { id: string; name: string }>();
+  let hasInmuebles = false;
   for (const c of allContracts) {
     const p = c.unit.property;
-    if (p.type === "PLAZA_COMERCIAL" && !propertyMap.has(p.id))
-      propertyMap.set(p.id, { id: p.id, name: p.name });
+    if (p.type === "PLAZA_COMERCIAL") {
+      if (!propertyMap.has(p.id)) propertyMap.set(p.id, { id: p.id, name: p.name });
+    } else {
+      hasInmuebles = true;
+    }
   }
   const tabProperties = Array.from(propertyMap.values()).sort((a, b) =>
     a.name.localeCompare(b.name),
@@ -38,10 +43,13 @@ export default async function ContractsPage({
     (c) => c.daysToExpire >= 0 && c.daysToExpire <= 60,
   ).length;
 
-  // Tabla filtrada por plaza si hay tab activo
-  const tableContracts = activePlazaId
-    ? allContracts.filter((c) => c.unit.property.id === activePlazaId)
-    : allContracts;
+  // Tabla filtrada por plaza/inmuebles si hay tab activo
+  const tableContracts =
+    activePlazaId === INMUEBLES_TAB_VALUE
+      ? allContracts.filter((c) => c.unit.property.type !== "PLAZA_COMERCIAL")
+      : activePlazaId
+        ? allContracts.filter((c) => c.unit.property.id === activePlazaId)
+        : allContracts;
 
   return (
     <div className="space-y-6">
@@ -73,7 +81,11 @@ export default async function ContractsPage({
         />
       </div>
 
-      <PropertyFilterTabs properties={tabProperties} activePlazaId={activePlazaId} />
+      <PropertyFilterTabs
+        properties={tabProperties}
+        activePlazaId={activePlazaId}
+        showInmueblesTab={hasInmuebles}
+      />
 
       <ContractTable contracts={tableContracts} availableUnits={availableUnits} />
     </div>

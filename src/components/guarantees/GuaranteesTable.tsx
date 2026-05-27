@@ -24,6 +24,7 @@ import type { GuaranteeStatus } from "@/generated/prisma/enums";
 import type { GuaranteeRow } from "@/lib/services/guarantees-queries";
 import type { LegalEntityOption } from "@/lib/services/properties-queries";
 import { capitalizeFirst, cn } from "@/lib/utils";
+import { isPlaza } from "@/lib/i18n/unit-label";
 
 type StatusFilter = "ALL" | GuaranteeStatus;
 
@@ -466,7 +467,9 @@ function GuaranteeRow({
         <span className="text-muted-foreground">
           {guarantee.contract.unit.property.name}
         </span>
-        <span className="ml-1 font-medium">{guarantee.contract.unit.code}</span>
+        {isPlaza(guarantee.contract.unit.property.type) ? (
+          <span className="ml-1 font-medium">{guarantee.contract.unit.code}</span>
+        ) : null}
       </div>
       <div
         role="cell"

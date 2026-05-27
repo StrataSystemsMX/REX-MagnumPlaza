@@ -1,9 +1,9 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm, type Resolver } from "react-hook-form";
-import { Plus, Pencil } from "lucide-react";
+import { Plus } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -46,14 +46,50 @@ const CONCEPT_LABELS: Record<BudgetConceptType, string> = {
 
 const MONTH_SHORT = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
 
-interface Props {
-  budgetId: string;
-  line?: BudgetLineRow;
-  trigger?: React.ReactNode;
+function isIncome(t: BudgetConceptType): boolean {
+  return t === "INCOME_RENT" || t === "INCOME_BILLBOARD" || t === "INCOME_GUARANTEE" || t === "INCOME_OTHER";
 }
 
-export function BudgetLineDialog({ budgetId, line, trigger }: Props) {
+interface PropertyOption {
+  id: string;
+  name: string;
+}
+
+interface BudgetOption {
+  budgetId: string;
+  legalEntityId: string;
+  code: string;
+}
+
+interface Props {
+  budgetId?: string;
+  budgetOptions?: BudgetOption[];
+  line?: BudgetLineRow;
+  properties?: PropertyOption[];
+  defaultConceptType?: BudgetConceptType;
+  trigger?: React.ReactNode;
+  triggerLabel?: string;
+}
+
+export function BudgetLineDialog({
+  budgetId,
+  budgetOptions,
+  line,
+  properties = [],
+  defaultConceptType,
+  trigger,
+  triggerLabel = "Agregar línea",
+}: Props) {
   const [open, setOpen] = useState(false);
+  const [selectedBudgetId, setSelectedBudgetId] = useState<string>(
+    budgetId ?? line?.budgetId ?? budgetOptions?.[0]?.budgetId ?? "",
+  );
+
+  useEffect(() => {
+    if (open) {
+      setSelectedBudgetId(budgetId ?? line?.budgetId ?? budgetOptions?.[0]?.budgetId ?? "");
+    }
+  }, [open, budgetId, line, budgetOptions]);
 
   const defaultMonths = Object.fromEntries(
     MONTH_KEYS.map((k) => [k, line?.months[k] ?? 0]),
@@ -62,16 +98,30 @@ export function BudgetLineDialog({ budgetId, line, trigger }: Props) {
   const form = useForm<UpsertBudgetLineInput>({
     resolver: zodResolver(upsertBudgetLineSchema) as unknown as Resolver<UpsertBudgetLineInput>,
     defaultValues: {
-      budgetId,
+      budgetId: selectedBudgetId,
       lineId: line?.id,
-      conceptType: line?.conceptType ?? "INCOME_RENT",
+      conceptType: line?.conceptType ?? defaultConceptType ?? "INCOME_RENT",
       conceptLabel: line?.conceptLabel ?? "",
+      propertyId: line?.propertyId ?? null,
       months: defaultMonths,
     },
   });
 
+  // mantener budgetId del form en sync con selección
+  useEffect(() => {
+    form.setValue("budgetId", selectedBudgetId);
+  }, [selectedBudgetId, form]);
+
+  const conceptType = form.watch("conceptType");
   const months = form.watch("months");
   const annual = MONTH_KEYS.reduce((acc, k) => acc + (Number(months[k]) || 0), 0);
+
+  // Si el tipo deja de ser INCOME, limpiar propertyId
+  useEffect(() => {
+    if (!isIncome(conceptType)) {
+      form.setValue("propertyId", null);
+    }
+  }, [conceptType, form]);
 
   async function onSubmit(values: UpsertBudgetLineInput) {
     try {
@@ -83,6 +133,9 @@ export function BudgetLineDialog({ budgetId, line, trigger }: Props) {
     }
   }
 
+  const showBudgetSelector = !line && !budgetId && (budgetOptions?.length ?? 0) > 1;
+  const showPropertyField = isIncome(conceptType) && properties.length > 0;
+
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       {trigger ? (
@@ -90,7 +143,7 @@ export function BudgetLineDialog({ budgetId, line, trigger }: Props) {
       ) : (
         <DialogTrigger render={<Button variant="outline" size="sm" />}>
           <Plus className="size-3.5" />
-          Agregar línea
+          {triggerLabel}
         </DialogTrigger>
       )}
       <DialogContent className="max-w-2xl">
@@ -99,6 +152,27 @@ export function BudgetLineDialog({ budgetId, line, trigger }: Props) {
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+            {showBudgetSelector && (
+              <div>
+                <p className="mb-1.5 text-sm font-medium leading-none">Razón social</p>
+                <Select
+                  value={selectedBudgetId}
+                  onValueChange={(v) => setSelectedBudgetId(v ?? "")}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecciona razón social" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {budgetOptions!.map((b) => (
+                      <SelectItem key={b.budgetId} value={b.budgetId}>
+                        {b.code}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
             <div className="grid grid-cols-2 gap-3">
               <FormField
                 control={form.control}
@@ -141,6 +215,37 @@ export function BudgetLineDialog({ budgetId, line, trigger }: Props) {
               />
             </div>
 
+            {showPropertyField && (
+              <FormField
+                control={form.control}
+                name="propertyId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Inmueble (opcional)</FormLabel>
+                    <Select
+                      value={field.value ?? "__none__"}
+                      onValueChange={(v) => field.onChange(v === "__none__" ? null : v)}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Sin inmueble" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="__none__">Sin inmueble</SelectItem>
+                        {properties.map((p) => (
+                          <SelectItem key={p.id} value={p.id}>
+                            {p.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
+
             <div>
               <p className="mb-2 block text-sm font-medium leading-none">Montos mensuales (MXN)</p>
               <div className="grid grid-cols-6 gap-2 sm:grid-cols-12">
@@ -182,7 +287,7 @@ export function BudgetLineDialog({ budgetId, line, trigger }: Props) {
               <Button type="button" variant="outline" onClick={() => setOpen(false)}>
                 Cancelar
               </Button>
-              <Button type="submit" disabled={form.formState.isSubmitting}>
+              <Button type="submit" disabled={form.formState.isSubmitting || !selectedBudgetId}>
                 {form.formState.isSubmitting ? "Guardando..." : "Guardar"}
               </Button>
             </div>

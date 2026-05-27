@@ -73,7 +73,12 @@ export async function getContractById(id: string) {
       // Las entidades se cargan abajo en una sola query para evitar dos
       // SELECT legal_entities IN ($1) duplicados que Prisma dispara cuando
       // hacemos include de ownerEntity + managerEntity por separado.
-      unit: { include: { property: true } },
+      unit: {
+        include: {
+          property: true,
+          childUnits: { select: { id: true, code: true }, orderBy: { code: "asc" } },
+        },
+      },
       rents: {
         // Traemos sólo los últimos 24 meses para evitar cargar 5+ años en contratos viejos.
         orderBy: { period: "desc" },
@@ -182,7 +187,14 @@ export async function getContractAuditLog(contractId: string) {
 export type ContractAuditEntry = Awaited<ReturnType<typeof getContractAuditLog>>[number];
 
 /** Unidades disponibles del tenant — para el formulario de nuevo contrato.
- *  Excluye unidades cuyo inmueble está BLOQUEADO (no rentable). */
+ *  Excluye:
+ *   - unidades cuyo inmueble está BLOQUEADO (no rentable);
+ *   - sub-locales agrupados bajo otro (`parentUnitId != null`): se rentan junto
+ *     con su local padre (ej. L1-L2 = Goyoma), nunca por separado;
+ *   - unidades que ya tengan un contrato vigente. No basta con el campo
+ *     `status`: si por seed, migración o edición manual quedó desincronizado,
+ *     una unidad ya ocupada podría seguir marcada como DISPONIBLE. La fuente de
+ *     verdad es la existencia de un contrato en estado no-terminal. */
 export async function getAvailableUnits() {
   const { tenantId } = await requireAuth();
   const units = await prisma.unit.findMany({
@@ -191,6 +203,10 @@ export async function getAvailableUnits() {
       isActive: true,
       status: { in: ["DISPONIBLE", "APARTADA"] },
       property: { status: "ACTIVO" },
+      parentUnitId: null,
+      contracts: {
+        none: { status: { in: ["DRAFT", "ACTIVE", "PENDING_RENEWAL"] } },
+      },
     },
     orderBy: [{ property: { name: "asc" } }, { code: "asc" }],
     select: {

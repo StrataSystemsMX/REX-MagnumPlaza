@@ -43,13 +43,13 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  Table,
   TableBody,
   TableCell,
   TableHead,
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { INMUEBLES_TAB_VALUE } from "@/components/shared/property-filter-constants";
 import { paymentMethodLabel } from "@/lib/i18n/enums";
 import { actionDeletePayment } from "@/lib/services/payments";
 import type { PaymentListItem } from "@/lib/services/payments-queries";
@@ -93,9 +93,15 @@ interface PaymentsTableProps {
   payments: ReadonlyArray<PaymentListItem>;
   /** Si el usuario es MASTER, muestra el botón de borrar. */
   canDelete: boolean;
+  /** Filtro de plaza/inmueble desde el PropertyFilterTabs a nivel de página. */
+  activePlazaId: string | null;
 }
 
-export function PaymentsTable({ payments, canDelete }: PaymentsTableProps) {
+export function PaymentsTable({
+  payments,
+  canDelete,
+  activePlazaId,
+}: PaymentsTableProps) {
   const router = useRouter();
   const [search, setSearch] = useState("");
   const [methodFilter, setMethodFilter] = useState<PaymentMethod | "ALL">("ALL");
@@ -122,6 +128,11 @@ export function PaymentsTable({ payments, canDelete }: PaymentsTableProps) {
       if (methodFilter !== "ALL" && p.method !== methodFilter) return false;
       if (fromDate && p.paymentDate < fromDate) return false;
       if (toDate && p.paymentDate > toDate) return false;
+      if (activePlazaId === INMUEBLES_TAB_VALUE) {
+        if (p.rent.contract.unit.property.type === "PLAZA_COMERCIAL") return false;
+      } else if (activePlazaId) {
+        if (p.rent.contract.unit.property.id !== activePlazaId) return false;
+      }
       if (q) {
         const haystack =
           p.rent.contract.lessee.legalName.toLowerCase() +
@@ -133,7 +144,7 @@ export function PaymentsTable({ payments, canDelete }: PaymentsTableProps) {
       }
       return true;
     });
-  }, [payments, search, methodFilter, from, to]);
+  }, [payments, search, methodFilter, from, to, activePlazaId]);
 
   const totalAmount = useMemo(
     () => filtered.reduce((acc, p) => acc + Number(p.amount), 0),
@@ -155,7 +166,11 @@ export function PaymentsTable({ payments, canDelete }: PaymentsTableProps) {
       p.paymentDate.toISOString().slice(0, 10),
       p.rent.contract.lessee.legalName,
       p.rent.contract.unit.property.name,
-      p.rent.contract.unit.code,
+      // En inmuebles individuales la columna "Inmueble" ya identifica todo; el
+      // código de local solo aplica a plazas.
+      p.rent.contract.unit.property.type === "PLAZA_COMERCIAL"
+        ? p.rent.contract.unit.code
+        : "",
       p.rent.period.toISOString().slice(0, 7),
       Number(p.amount).toFixed(2),
       p.method,
@@ -388,9 +403,19 @@ export function PaymentsTable({ payments, canDelete }: PaymentsTableProps) {
         </div>
       </div>
 
-      <div className="overflow-hidden rounded-lg border bg-card">
-        <Table className="min-w-[720px]">
-          <TableHeader>
+      {/* Usamos una <table> cruda (no el componente Table de shadcn) porque ese
+          envuelve la tabla en un div con overflow-x-auto, y ese contenedor de
+          scroll atrapa el `sticky` (se ancla al div, no al scroll de la página).
+          overflow-clip recorta las esquinas redondeadas SIN crear contenedor de
+          scroll, así que conserva el sticky relativo al <main>. */}
+      <div className="overflow-clip rounded-lg border bg-card">
+        <table className="w-full min-w-[720px] caption-bottom text-sm">
+          {/* El scroll vive en <main>, con padding superior (p-4/6/8). El offset de
+              `sticky` se mide desde el borde de contenido (tras el padding), así que
+              `top-0` dejaría una franja donde se asoman las filas; el top negativo
+              iguala ese padding para anclar el encabezado al borde superior real.
+              (Acoplado al padding de (dashboard)/layout.tsx.) */}
+          <TableHeader className="sticky -top-4 z-20 sm:-top-6 lg:-top-8">
             {table.getHeaderGroups().map((hg) => (
               <TableRow key={hg.id} className="hover:bg-transparent">
                 {hg.headers.map((h) => {
@@ -406,7 +431,7 @@ export function PaymentsTable({ payments, canDelete }: PaymentsTableProps) {
                     <TableHead
                       key={h.id}
                       className={cn(
-                        "text-xs font-medium uppercase tracking-wide text-muted-foreground",
+                        "bg-card shadow-[inset_0_-1px_0_0_var(--border)] text-xs font-medium uppercase tracking-wide text-muted-foreground",
                         align,
                       )}
                     >
@@ -448,10 +473,12 @@ export function PaymentsTable({ payments, canDelete }: PaymentsTableProps) {
                           <span className="font-medium">
                             {group.unit.property.name}
                           </span>
-                          <span className="text-xs text-muted-foreground">
-                            {group.unit.code}
-                            {group.unit.name ? ` — ${group.unit.name}` : ""}
-                          </span>
+                          {isPlaza ? (
+                            <span className="text-xs text-muted-foreground">
+                              {group.unit.code}
+                              {group.unit.name ? ` — ${group.unit.name}` : ""}
+                            </span>
+                          ) : null}
                           <Badge variant="outline" className="text-[10px]">
                             {isPlaza ? "Plaza" : "Inmueble"}
                           </Badge>
@@ -480,7 +507,7 @@ export function PaymentsTable({ payments, canDelete }: PaymentsTableProps) {
               })
             )}
           </TableBody>
-        </Table>
+        </table>
       </div>
 
       <AlertDialog

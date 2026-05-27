@@ -37,6 +37,7 @@ export async function getGuarantees(filters: GuaranteeFilters = {}) {
                 select: {
                   id: true,
                   name: true,
+                  type: true,
                   ownerEntity: {
                     select: { id: true, code: true, legalName: true },
                   },
@@ -100,7 +101,8 @@ export async function getContractsWithoutGuarantee() {
       unit: {
         select: {
           code: true,
-          property: { select: { name: true } },
+          name: true,
+          property: { select: { name: true, type: true } },
         },
       },
     },

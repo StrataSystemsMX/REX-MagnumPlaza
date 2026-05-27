@@ -168,3 +168,116 @@ export async function generateMonthlyRents(
   }
   return results;
 }
+
+export interface ReconcileRentsResult {
+  /** Meses faltantes del nuevo rango que se generaron. */
+  created: number;
+  /** Rentas vacías fuera del nuevo rango que se eliminaron. */
+  removed: number;
+  /** Rentas sin pago dentro de rango cuyo monto/fecha se re-aplicó. */
+  resynced: number;
+  /** Rentas fuera de rango con dinero aplicado que se conservaron (no se borran). */
+  keptWithPayments: number;
+}
+
+/**
+ * Re-sincroniza las rentas de un contrato ACTIVE después de editar sus
+ * términos (fechas, monto, día de cobro, pago adelantado). Mantiene la
+ * consistencia entre lo que dice el contrato y los Rents ya materializados:
+ *
+ *  1. Genera los meses faltantes del nuevo rango (idempotente).
+ *  2. Elimina las rentas que quedaron FUERA del rango y NO tienen dinero
+ *     aplicado. Las que sí tienen pagos o condonaciones se conservan (no se
+ *     destruye historial) y se reportan en `keptWithPayments`.
+ *  3. Re-aplica monto, día de cobro y pago adelantado a las rentas DENTRO del
+ *     rango que siguen completamente sin pago. Las pagadas, parciales o
+ *     condonadas no se tocan: ya tienen historial.
+ *
+ * Nota: una renta marcada PAID por pago adelantado no se revierte si se acorta
+ * la ventana de adelanto (se considera historial). El cambio de adelanto aplica
+ * a las rentas aún sin pago.
+ */
+export async function reconcileRentsForContract(
+  tenantId: string,
+  contractId: string,
+  options: { now?: Date } = {},
+): Promise<ReconcileRentsResult> {
+  const now = options.now ?? new Date();
+
+  const contract = await prisma.contract.findFirstOrThrow({
+    where: { id: contractId, tenantId },
+  });
+
+  const startDate = toDate(contract.startDate);
+  const endDate = toDate(contract.endDate);
+  const rangeStart = periodStartUTC(
+    startDate.getUTCFullYear(),
+    startDate.getUTCMonth(),
+  ).getTime();
+  const rangeEnd = periodStartUTC(
+    endDate.getUTCFullYear(),
+    endDate.getUTCMonth(),
+  ).getTime();
+  const monthlyAmount = decimal(contract.monthlyAmount);
+  const advanceUntil =
+    contract.paidInAdvance && contract.advancePaidUntil
+      ? toDate(contract.advancePaidUntil)
+      : null;
+
+  const rents = await prisma.rent.findMany({
+    where: { tenantId, contractId },
+    select: { id: true, period: true, amountPaid: true, amountWaived: true },
+  });
+
+  // 1) Fuera de rango: borrar solo las vacías; conservar las que tienen dinero.
+  const toDelete: string[] = [];
+  let keptWithPayments = 0;
+  for (const r of rents) {
+    const p = toDate(r.period).getTime();
+    if (p >= rangeStart && p <= rangeEnd) continue;
+    const hasMoney =
+      !new Prisma.Decimal(r.amountPaid).isZero() ||
+      !new Prisma.Decimal(r.amountWaived ?? 0).isZero();
+    if (hasMoney) keptWithPayments += 1;
+    else toDelete.push(r.id);
+  }
+  if (toDelete.length > 0) {
+    await prisma.rent.deleteMany({ where: { id: { in: toDelete }, tenantId } });
+  }
+
+  // 2) Generar los meses faltantes del nuevo rango (idempotente).
+  const gen = await generateRentsForContract(tenantId, contractId, { now });
+
+  // 3) Re-sincronizar las rentas completamente sin pago que quedan dentro de
+  //    rango (incluye las recién creadas; re-aplicar es idempotente).
+  const unpaid = await prisma.rent.findMany({
+    where: { tenantId, contractId, amountPaid: 0, amountWaived: 0 },
+    select: { id: true, period: true },
+  });
+  let resynced = 0;
+  for (const r of unpaid) {
+    const period = toDate(r.period);
+    const dueDate = dueDateUTC(
+      period.getUTCFullYear(),
+      period.getUTCMonth(),
+      contract.paymentDay,
+    );
+    const advancePaid = advanceUntil !== null && period.getTime() <= advanceUntil.getTime();
+    // updateMany (no update) para poder filtrar por tenantId y respetar el
+    // guardrail multi-tenant (ver lib/prisma/tenant-middleware.ts).
+    await prisma.rent.updateMany({
+      where: { id: r.id, tenantId },
+      data: {
+        amountDue: monthlyAmount,
+        dueDate,
+        amountPaid: advancePaid ? monthlyAmount : decimal(0),
+        status: advancePaid
+          ? "PAID"
+          : computeRentStatus(decimal(0), monthlyAmount, dueDate, now),
+      },
+    });
+    resynced += 1;
+  }
+
+  return { created: gen.created, removed: toDelete.length, resynced, keptWithPayments };
+}

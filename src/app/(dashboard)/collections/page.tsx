@@ -1,6 +1,7 @@
 import { AlertTriangle, CalendarRange, CheckCircle2, Clock } from "lucide-react";
 import Link from "next/link";
 import { MetricCard } from "@/components/shared/metric-card";
+import { PropertyFilterTabs } from "@/components/shared/PropertyFilterTabs";
 import { CollectionsTabs } from "@/components/collections/CollectionsTabs";
 import { Button } from "@/components/ui/button";
 import { requireAuth } from "@/lib/auth/get-session";
@@ -46,11 +47,18 @@ export default async function CollectionsPage({
     mode?: string;
     escalon?: string;
     periodo?: string;
+    plaza?: string;
   }>;
 }) {
   const { tenantId, dbUser } = await requireAuth();
-  const { tab: tabParam, mode: modeParam, escalon: escalonParam, periodo } =
-    await searchParams;
+  const {
+    tab: tabParam,
+    mode: modeParam,
+    escalon: escalonParam,
+    periodo,
+    plaza,
+  } = await searchParams;
+  const activePlazaId = plaza ?? null;
   const activeTab: CollectionsTab = VALID_TABS.includes(tabParam as CollectionsTab)
     ? (tabParam as CollectionsTab)
     : "mes";
@@ -82,7 +90,7 @@ export default async function CollectionsPage({
         prisma.property.findMany({
           where: { tenantId, isActive: true },
           orderBy: { name: "asc" },
-          select: { id: true, name: true },
+          select: { id: true, name: true, type: true },
         }),
       ),
       timed("collections:isMaster", () => isMaster(dbUser.id)),
@@ -105,6 +113,12 @@ export default async function CollectionsPage({
         p.paymentDate.getUTCMonth() === new Date().getUTCMonth(),
     )
     .reduce((acc, p) => acc + Number(p.amount), 0);
+
+  // Tabs: plazas comerciales (con datos) + flag para Inmuebles si hay no-plazas.
+  const tabProperties = properties
+    .filter((p) => p.type === "PLAZA_COMERCIAL")
+    .map((p) => ({ id: p.id, name: p.name }));
+  const hasInmuebles = properties.some((p) => p.type !== "PLAZA_COMERCIAL");
 
 
   return (
@@ -146,16 +160,22 @@ export default async function CollectionsPage({
         </Link>
       </div>
 
+      <PropertyFilterTabs
+        properties={tabProperties}
+        activePlazaId={activePlazaId}
+        showInmueblesTab={hasInmuebles}
+      />
+
       <CollectionsTabs
         outstanding={outstanding}
         payments={payments}
         monthly={monthly}
-        properties={properties}
         canDeletePayment={master}
         rentasData={rentasData}
         activeTab={activeTab}
         mesMode={mesMode}
         escalon={escalon}
+        activePlazaId={activePlazaId}
       />
     </div>
   );

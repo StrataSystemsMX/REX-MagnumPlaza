@@ -2,6 +2,7 @@
 
 import { useRouter, useSearchParams } from "next/navigation";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { INMUEBLES_TAB_VALUE } from "@/components/shared/property-filter-constants";
 
 interface Property {
   id: string;
@@ -11,9 +12,14 @@ interface Property {
 interface PropertyFilterTabsProps {
   properties: ReadonlyArray<Property>;
   activePlazaId: string | null;
+  showInmueblesTab?: boolean;
 }
 
-export function PropertyFilterTabs({ properties, activePlazaId }: PropertyFilterTabsProps) {
+export function PropertyFilterTabs({
+  properties,
+  activePlazaId,
+  showInmueblesTab = false,
+}: PropertyFilterTabsProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -35,6 +41,9 @@ export function PropertyFilterTabs({ properties, activePlazaId }: PropertyFilter
               {p.name}
             </TabsTrigger>
           ))}
+          {showInmueblesTab && (
+            <TabsTrigger value={INMUEBLES_TAB_VALUE}>Inmuebles</TabsTrigger>
+          )}
         </TabsList>
       </div>
     </Tabs>

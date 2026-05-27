@@ -32,7 +32,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  Table,
   TableBody,
   TableCell,
   TableHead,
@@ -46,9 +45,11 @@ import {
 } from "@/components/collections/RegisterPaymentDialog";
 import { SendNotificationDialog } from "@/components/collections/SendNotificationDialog";
 import { RentStatusBadge } from "@/components/shared/RentStatusBadge";
+import { INMUEBLES_TAB_VALUE } from "@/components/shared/property-filter-constants";
 import { Badge } from "@/components/ui/badge";
 import { OUTSTANDING_STATUSES } from "@/lib/constants/rent-statuses";
 import { rentStatusLabel } from "@/lib/i18n/enums";
+import { unitWithProperty } from "@/lib/i18n/unit-label";
 import type { OutstandingRent } from "@/lib/services/payments-queries";
 import type { RentStatus } from "@/generated/prisma/enums";
 import type { ReminderLevel } from "@/lib/pdf/template-config";
@@ -84,20 +85,20 @@ export type EscalonChip = (typeof ESCALON_CHIPS)[number]["key"];
 
 interface OutstandingRentsTableProps {
   rents: ReadonlyArray<OutstandingRent>;
-  properties: ReadonlyArray<{ id: string; name: string }>;
   /** Escalón activo desde la URL. Default `all`. */
   escalon?: EscalonChip;
+  /** Filtro de plaza/inmueble desde el PropertyFilterTabs a nivel de página. */
+  activePlazaId: string | null;
 }
 
 export function OutstandingRentsTable({
   rents,
-  properties,
   escalon = "all",
+  activePlazaId,
 }: OutstandingRentsTableProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("ALL");
-  const [propertyFilter, setPropertyFilter] = useState<string>("ALL");
   const [search, setSearch] = useState("");
   const [paymentContext, setPaymentContext] = useState<RegisterPaymentDialogContext | null>(
     null,
@@ -134,22 +135,17 @@ export function OutstandingRentsTable({
     return counts;
   }, [rents]);
 
-  const propertyFilterItems = useMemo<Record<string, string>>(
-    () => ({
-      ALL: "Todos los inmuebles",
-      ...Object.fromEntries(properties.map((p) => [p.id, p.name])),
-    }),
-    [properties],
-  );
-
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     const escalonStatus = activeEscalonChip.status;
     return rents.filter((r) => {
       if (escalonStatus && r.status !== escalonStatus) return false;
       if (statusFilter !== "ALL" && r.status !== statusFilter) return false;
-      if (propertyFilter !== "ALL" && r.contract.unit.property.id !== propertyFilter)
-        return false;
+      if (activePlazaId === INMUEBLES_TAB_VALUE) {
+        if (r.contract.unit.property.type === "PLAZA_COMERCIAL") return false;
+      } else if (activePlazaId) {
+        if (r.contract.unit.property.id !== activePlazaId) return false;
+      }
       if (q) {
         const haystack =
           r.contract.lessee.legalName.toLowerCase() +
@@ -163,7 +159,7 @@ export function OutstandingRentsTable({
       }
       return true;
     });
-  }, [rents, statusFilter, propertyFilter, search, activeEscalonChip]);
+  }, [rents, statusFilter, activePlazaId, search, activeEscalonChip]);
 
   const totalBalance = useMemo(
     () => filtered.reduce((acc, r) => acc + Number(r.balance), 0),
@@ -307,7 +303,7 @@ export function OutstandingRentsTable({
                   amountPaid: row.original.amountPaid.toString(),
                   period: row.original.period,
                   lesseeName: row.original.contract.lessee.legalName,
-                  unitLabel: `${row.original.contract.unit.property.name} ${row.original.contract.unit.code}`,
+                  unitLabel: unitWithProperty(row.original.contract.unit, " "),
                 })
               }
             >
@@ -416,22 +412,6 @@ export function OutstandingRentsTable({
               ))}
             </SelectContent>
           </Select>
-          <Select
-            value={propertyFilter}
-            onValueChange={(v) => v && setPropertyFilter(v)}
-            items={propertyFilterItems}
-          >
-            <SelectTrigger className="w-full sm:w-56">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {Object.entries(propertyFilterItems).map(([value, label]) => (
-                <SelectItem key={value} value={value}>
-                  {label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
         </div>
         <div className="flex items-center justify-between gap-3 sm:justify-end">
           <div className="text-left sm:text-right">
@@ -447,9 +427,19 @@ export function OutstandingRentsTable({
         </div>
       </div>
 
-      <div className="overflow-hidden rounded-lg border bg-card">
-        <Table className="min-w-[720px]">
-          <TableHeader>
+      {/* Usamos una <table> cruda (no el componente Table de shadcn) porque ese
+          envuelve la tabla en un div con overflow-x-auto, y ese contenedor de
+          scroll atrapa el `sticky` (se ancla al div, no al scroll de la página).
+          overflow-clip recorta las esquinas redondeadas SIN crear contenedor de
+          scroll, así que conserva el sticky relativo al <main>. */}
+      <div className="overflow-clip rounded-lg border bg-card">
+        <table className="w-full min-w-[720px] caption-bottom text-sm">
+          {/* El scroll vive en <main>, con padding superior (p-4/6/8). El offset de
+              `sticky` se mide desde el borde de contenido (tras el padding), así que
+              `top-0` dejaría una franja donde se asoman las filas; el top negativo
+              iguala ese padding para anclar el encabezado al borde superior real.
+              (Acoplado al padding de (dashboard)/layout.tsx.) */}
+          <TableHeader className="sticky -top-4 z-20 sm:-top-6 lg:-top-8">
             {table.getHeaderGroups().map((hg) => (
               <TableRow key={hg.id} className="hover:bg-transparent">
                 {hg.headers.map((h) => {
@@ -467,7 +457,7 @@ export function OutstandingRentsTable({
                     <TableHead
                       key={h.id}
                       className={cn(
-                        "text-xs font-medium uppercase tracking-wide text-muted-foreground",
+                        "bg-card shadow-[inset_0_-1px_0_0_var(--border)] text-xs font-medium uppercase tracking-wide text-muted-foreground",
                         align,
                       )}
                     >
@@ -509,10 +499,12 @@ export function OutstandingRentsTable({
                           <span className="font-medium">
                             {group.unit.property.name}
                           </span>
-                          <span className="text-xs text-muted-foreground">
-                            {group.unit.code}
-                            {group.unit.name ? ` — ${group.unit.name}` : ""}
-                          </span>
+                          {isPlaza ? (
+                            <span className="text-xs text-muted-foreground">
+                              {group.unit.code}
+                              {group.unit.name ? ` — ${group.unit.name}` : ""}
+                            </span>
+                          ) : null}
                           <Badge variant="outline" className="text-[10px]">
                             {isPlaza ? "Plaza" : "Inmueble"}
                           </Badge>
@@ -541,7 +533,7 @@ export function OutstandingRentsTable({
               })
             )}
           </TableBody>
-        </Table>
+        </table>
       </div>
 
       <RegisterPaymentDialog

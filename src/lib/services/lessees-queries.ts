@@ -83,7 +83,7 @@ export async function getLesseeById(id: string) {
               id: true,
               code: true,
               name: true,
-              property: { select: { id: true, name: true } },
+              property: { select: { id: true, name: true, type: true } },
             },
           },
         },
@@ -95,3 +95,44 @@ export async function getLesseeById(id: string) {
 }
 
 export type LesseeDetail = NonNullable<Awaited<ReturnType<typeof getLesseeById>>>;
+
+/**
+ * Rentas vencidas del inquilino con nivel detectado por el sistema
+ * (OVERDUE_1M → 1M, OVERDUE_2M → 2M, OVERDUE_3M → 3M).
+ * Usado en la tab Comunicaciones para disparar avisos manuales.
+ */
+export async function getOverdueRentsByLessee(lesseeId: string) {
+  const { tenantId } = await requireAuth();
+
+  const rents = await prisma.rent.findMany({
+    where: {
+      tenantId,
+      status: { in: ["OVERDUE_1M", "OVERDUE_2M", "OVERDUE_3M"] },
+      contract: { lesseeId },
+    },
+    orderBy: [{ period: "asc" }],
+    select: {
+      id: true,
+      period: true,
+      status: true,
+      amountDue: true,
+      amountPaid: true,
+      contract: {
+        select: {
+          id: true,
+          unit: {
+            select: {
+              code: true,
+              name: true,
+              property: { select: { name: true, type: true } },
+            },
+          },
+        },
+      },
+    },
+  });
+
+  return serializeDecimals(rents);
+}
+
+export type LesseeOverdueRent = Awaited<ReturnType<typeof getOverdueRentsByLessee>>[number];

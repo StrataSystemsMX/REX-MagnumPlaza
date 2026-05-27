@@ -82,6 +82,7 @@ export type CreateContractInput = z.infer<typeof createContractSchema>;
 
 export const updateContractSchema = z.object({
   status: z.enum(CONTRACT_STATUS_VALUES, { message: "Estado inválido." }).optional(),
+  type: z.enum(CONTRACT_TYPE_VALUES, { message: "Tipo de contrato inválido." }).optional(),
   startDate: optionalDateLike,
   endDate: optionalDateLike,
   monthlyAmount: z

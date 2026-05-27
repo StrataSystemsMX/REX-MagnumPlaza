@@ -1,8 +1,8 @@
 "use client";
 
 import { Building2, ChevronDown, ChevronRight, Plus, Search, Store } from "lucide-react";
-import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,7 +14,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  Table,
   TableBody,
   TableCell,
   TableHead,
@@ -27,6 +26,7 @@ import {
   contractStatusVariant,
   contractTypeLabel,
 } from "@/lib/i18n/enums";
+import { isPlaza } from "@/lib/i18n/unit-label";
 import type {
   AvailableUnit,
   ContractListItem,
@@ -112,11 +112,28 @@ function groupByProperty(items: ReadonlyArray<ContractListItem>): PropertyGroup[
 
 export function ContractTable({ contracts, availableUnits }: ContractTableProps) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("ALL");
   const [expiryFilter, setExpiryFilter] = useState<ExpiryFilter>("ALL");
   const [search, setSearch] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+
+  // Lanzamiento externo del wizard: "Rentar" en cobranza navega aquí con
+  // ?nuevo=1&unitId=... para crear el contrato con esa unidad preseleccionada.
+  // Se calcula en render (no en effect) para que el wizard ya nazca con la
+  // unidad; el effect solo abre el diálogo y limpia la URL.
+  const initialUnitId =
+    searchParams.get("nuevo") === "1" ? searchParams.get("unitId") : null;
+
+  useEffect(() => {
+    if (searchParams.get("nuevo") === "1") {
+      setCreateOpen(true);
+      router.replace("/contracts", { scroll: false });
+    }
+    // Solo al montar: la URL se limpia enseguida para no reabrir al refrescar.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -209,27 +226,40 @@ export function ContractTable({ contracts, availableUnits }: ContractTableProps)
         </Button>
       </div>
 
-      <div className="overflow-hidden rounded-lg border bg-card">
-        <Table className="min-w-[860px]">
-          <TableHeader>
-            <TableRow className="hover:bg-transparent">
-              <TableHead className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                Inquilino
-              </TableHead>
-              <TableHead className="text-xs font-medium uppercase tracking-wide text-muted-foreground text-center">
-                Vigencia
-              </TableHead>
-              <TableHead className="text-xs font-medium uppercase tracking-wide text-muted-foreground text-right">
-                Renta
-              </TableHead>
-              <TableHead className="text-xs font-medium uppercase tracking-wide text-muted-foreground text-center">
-                Estado
-              </TableHead>
-              <TableHead className="text-xs font-medium uppercase tracking-wide text-muted-foreground text-center">
-                Vence
-              </TableHead>
-            </TableRow>
-          </TableHeader>
+      {/* Usamos una <table> cruda (no el componente Table de shadcn) porque ese
+          envuelve la tabla en un div con overflow-x-auto, y ese contenedor de
+          scroll atrapa el `sticky` (se ancla al div, no al scroll de la página).
+          overflow-clip recorta las esquinas redondeadas SIN crear contenedor de
+          scroll, así que conserva el sticky relativo al <main>. */}
+      <div className="overflow-clip rounded-lg border bg-card">
+        <table className="w-full min-w-[860px] caption-bottom text-sm">
+          {/* Encabezado único al tope, sticky para que persiga el scroll de la
+              página. El offset de `sticky` se mide desde el borde de contenido del
+              <main> (tras su padding p-4/6/8), así que `top-0` dejaría una franja
+              donde se asoman las filas; el top negativo iguala ese padding para
+              anclar el encabezado al borde superior real. (Acoplado al padding de
+              (dashboard)/layout.tsx.) */}
+          {groups.length > 0 ? (
+            <TableHeader className="sticky -top-4 z-20 sm:-top-6 lg:-top-8">
+              <TableRow className="hover:bg-transparent">
+                <TableHead className="bg-card shadow-[inset_0_-1px_0_0_var(--border)] text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  Inquilino
+                </TableHead>
+                <TableHead className="bg-card shadow-[inset_0_-1px_0_0_var(--border)] text-center text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  Vigencia
+                </TableHead>
+                <TableHead className="bg-card shadow-[inset_0_-1px_0_0_var(--border)] text-right text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  Renta
+                </TableHead>
+                <TableHead className="bg-card shadow-[inset_0_-1px_0_0_var(--border)] text-center text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  Estado
+                </TableHead>
+                <TableHead className="bg-card shadow-[inset_0_-1px_0_0_var(--border)] text-center text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  Vence
+                </TableHead>
+              </TableRow>
+            </TableHeader>
+          ) : null}
           <TableBody>
             {groups.length === 0 ? (
               <TableRow>
@@ -258,7 +288,7 @@ export function ContractTable({ contracts, availableUnits }: ContractTableProps)
               })
             )}
           </TableBody>
-        </Table>
+        </table>
       </div>
 
       <p className="text-xs text-muted-foreground">
@@ -272,6 +302,7 @@ export function ContractTable({ contracts, availableUnits }: ContractTableProps)
         open={createOpen}
         onOpenChange={setCreateOpen}
         onCreated={() => router.refresh()}
+        initialUnitId={initialUnitId}
       />
     </>
   );
@@ -340,9 +371,15 @@ function PropertyGroupRows({
                 <p className="truncate font-medium">{c.lessee.legalName}</p>
                 <p className="truncate text-[10px] text-muted-foreground">
                   <span className="font-mono">{c.id.slice(-8)}</span>
-                  {" · "}
-                  {c.unit.code}
-                  {c.unit.name ? ` — ${c.unit.name}` : ""}
+                  {/* El encabezado del grupo ya nombra el inmueble; el código
+                      del local solo aporta en plazas con varios locales. */}
+                  {isPlaza(c.unit.property.type) ? (
+                    <>
+                      {" · "}
+                      {c.unit.code}
+                      {c.unit.name ? ` — ${c.unit.name}` : ""}
+                    </>
+                  ) : null}
                   {" · "}
                   {contractTypeLabel(c.type)}
                   {c.lessee.contactName ? ` · ${c.lessee.contactName}` : ""}

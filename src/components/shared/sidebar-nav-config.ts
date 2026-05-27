@@ -3,7 +3,6 @@ import {
   Banknote,
   BarChart2,
   Building2,
-  CalendarCheck,
   FileBarChart,
   FileText,
   HandCoins,
@@ -63,8 +62,7 @@ export const NAV_GROUPS: ReadonlyArray<NavGroup> = [
     items: [
       { href: "/presupuesto",             label: "Presupuesto",         icon: Target },
       { href: "/presupuesto/comparativo", label: "Real vs Presupuesto", icon: BarChart2 },
-      { href: "/cierres/mensual",         label: "Cierres Mensuales",   icon: CalendarCheck },
-      { href: "/cierres/anual",           label: "Cierres Anuales",     icon: Archive },
+      { href: "/cierres/anual",           label: "Cierres Anuales/Mensuales", icon: Archive },
       { href: "/reportes",                label: "Reportes",            icon: FileBarChart },
     ],
   },
