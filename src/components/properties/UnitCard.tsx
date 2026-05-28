@@ -421,7 +421,7 @@ export function UnitCard({ unit, propertyId, siblings }: UnitCardProps) {
 }
 
 export const UNIT_GRID_COLS =
-  "minmax(0, 0.7fr) minmax(0, 0.9fr) minmax(0, 2fr) minmax(0, 1fr)";
+  "minmax(60px, 0.7fr) minmax(90px, 0.9fr) minmax(120px, 2fr) minmax(80px, 1fr)";
 
 interface UnitRowProps {
   unit: UnitCardData;
@@ -477,7 +477,7 @@ export function UnitRow({ unit, propertyId, siblings }: UnitRowProps) {
             </span>
           ) : null}
         </div>
-        <div role="cell" className="px-3 py-2.5">
+        <div role="cell" className="overflow-hidden px-3 py-2.5">
           <Badge variant={unitStatusVariant(unit.status)}>
             {unitStatusLabel(unit.status)}
           </Badge>

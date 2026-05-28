@@ -508,7 +508,7 @@ function PlazaCard({
 }
 
 const PLAZA_GRID_COLS =
-  "40px minmax(0, 2fr) minmax(0, 0.9fr) minmax(0, 0.9fr) minmax(0, 0.8fr) minmax(0, 0.7fr)";
+  "40px minmax(150px, 2fr) minmax(60px, 0.9fr) minmax(60px, 0.9fr) minmax(50px, 0.8fr) minmax(70px, 0.7fr)";
 
 function PlazasTableView({
   plazas,
@@ -523,7 +523,8 @@ function PlazasTableView({
 }) {
   return (
     <div className="overflow-hidden rounded-lg border bg-card shadow-sm">
-      <div role="table" aria-label="Plazas">
+      <div className="overflow-x-auto">
+      <div role="table" aria-label="Plazas" className="min-w-[430px]">
         <div
           role="row"
           className="grid items-center border-b bg-muted/30 text-xs font-medium uppercase text-muted-foreground"
@@ -635,7 +636,8 @@ function PlazasTableView({
                     </p>
                   ) : (
                     <div className="overflow-hidden rounded-md border bg-card">
-                      <div role="table" aria-label={`Locales de ${p.name}`}>
+                      <div className="overflow-x-auto">
+                      <div role="table" aria-label={`Locales de ${p.name}`} className="min-w-[350px]">
                         <div
                           role="row"
                           className="grid items-center border-b bg-muted/40 text-xs font-medium uppercase text-muted-foreground"
@@ -673,6 +675,7 @@ function PlazasTableView({
                             />
                           ))}
                       </div>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -680,6 +683,7 @@ function PlazasTableView({
             </Fragment>
           );
         })}
+      </div>
       </div>
     </div>
   );

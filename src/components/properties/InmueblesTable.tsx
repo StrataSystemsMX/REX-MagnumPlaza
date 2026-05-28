@@ -564,7 +564,7 @@ function InmuebleCard({
 }
 
 const INMUEBLE_GRID_COLS =
-  "minmax(0, 2fr) minmax(0, 0.9fr) minmax(0, 0.8fr) minmax(0, 0.8fr) minmax(0, 1.3fr) minmax(0, 1fr)";
+  "minmax(150px, 2fr) minmax(100px, 0.9fr) minmax(55px, 0.8fr) minmax(55px, 0.8fr) minmax(120px, 1.3fr) minmax(80px, 1fr)";
 
 function InmueblesTableView({
   inmuebles,
@@ -575,7 +575,8 @@ function InmueblesTableView({
 }) {
   return (
     <div className="overflow-hidden rounded-lg border bg-card shadow-sm">
-      <div role="table" aria-label="Inmuebles">
+      <div className="overflow-x-auto">
+      <div role="table" aria-label="Inmuebles" className="min-w-[560px]">
         <div
           role="row"
           className="grid items-center border-b bg-muted/30 text-xs font-medium uppercase text-muted-foreground"
@@ -627,7 +628,7 @@ function InmueblesTableView({
                   </p>
                 ) : null}
               </div>
-              <div role="cell" className="flex justify-center px-3 py-2.5">
+              <div role="cell" className="overflow-hidden flex justify-center px-3 py-2.5">
                 <Badge variant="secondary">{propertyTypeLabel(p.type)}</Badge>
               </div>
               <div role="cell" className="truncate px-3 py-2.5">
@@ -680,6 +681,7 @@ function InmueblesTableView({
             </div>
           );
         })}
+      </div>
       </div>
     </div>
   );
