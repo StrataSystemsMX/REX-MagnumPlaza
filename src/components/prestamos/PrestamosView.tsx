@@ -319,10 +319,10 @@ function LoanMatrix({
               </colgroup>
               <thead>
                 <tr className="border-b bg-muted/10">
-                  <th className="sticky left-0 z-20 border-r border-border bg-card px-3 py-2 text-left font-medium">
+                  <th className="sticky left-0 z-20 border-r border-border bg-card px-3 py-2 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
                     Préstamo
                   </th>
-                  <th className="px-2 py-2 text-left font-medium text-muted-foreground">
+                  <th className="px-2 py-2 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
                     Tipo
                   </th>
                   {MONTHS_SHORT.map((m) => (
@@ -330,7 +330,7 @@ function LoanMatrix({
                       {m}
                     </th>
                   ))}
-                  <th className="px-3 py-2 text-right font-medium">Total</th>
+                  <th className="px-3 py-2 text-right text-xs font-medium uppercase tracking-wide text-muted-foreground">Total</th>
                 </tr>
               </thead>
               <tbody>
@@ -555,11 +555,11 @@ function MonthlyTotalsTable({
         <table className="min-w-[520px] w-full text-xs">
           <thead>
             <tr className="border-b bg-muted/10 text-muted-foreground">
-              <th className="px-3 py-2 text-left font-medium">Mes</th>
-              <th className="px-3 py-2 text-right font-medium">Estimado</th>
-              <th className="px-3 py-2 text-right font-medium">Pagado</th>
-              <th className="px-3 py-2 text-right font-medium">Pendiente</th>
-              <th className="px-3 py-2 text-left font-medium">% Pagado</th>
+              <th className="px-3 py-2 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Mes</th>
+              <th className="px-3 py-2 text-right text-xs font-medium uppercase tracking-wide text-muted-foreground">Estimado</th>
+              <th className="px-3 py-2 text-right text-xs font-medium uppercase tracking-wide text-muted-foreground">Pagado</th>
+              <th className="px-3 py-2 text-right text-xs font-medium uppercase tracking-wide text-muted-foreground">Pendiente</th>
+              <th className="px-3 py-2 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">% Pagado</th>
             </tr>
           </thead>
           <tbody>

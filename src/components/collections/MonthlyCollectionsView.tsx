@@ -139,24 +139,10 @@ export function MonthlyCollectionsView({
         </div>
       </div>
 
-      {/* Usamos una <table> cruda (no el componente Table de shadcn) porque ese
-          envuelve la tabla en un div con overflow, y cualquier overflow-auto/hidden
-          ancestro rompe el sticky relativo al scroll de la página (<main>).
-          overflow-clip recorta las esquinas redondeadas SIN crear contenedor de
-          scroll, así que conserva el sticky de página. */}
-      <div className="overflow-clip rounded-lg border bg-card">
+      <div className="overflow-x-auto rounded-lg border bg-card">
         <table className="w-full min-w-[760px] caption-bottom text-sm">
-          {/* Encabezados una sola vez al tope, sticky para que persigan el
-              scroll de la página; los grupos solo muestran el nombre del inmueble
-              como separador, sin repetir las columnas. */}
           {visibleGroups.length > 0 ? (
-            // El scroll vive en <main>, que tiene padding superior (p-4/6/8). El
-            // offset de `sticky` se mide desde el borde de contenido (después del
-            // padding), así que `top-0` fijaría el encabezado ~32px abajo y dejaría
-            // una franja donde se asoman las filas al hacer scroll. Compensamos con
-            // un top negativo que iguala ese padding para anclar el encabezado al
-            // borde superior real. (Acoplado al padding de (dashboard)/layout.tsx.)
-            <TableHeader className="sticky -top-4 z-20 sm:-top-6 lg:-top-8">
+            <TableHeader>
               <TableRow className="hover:bg-transparent">
                 {!hideLocalColumn ? (
                   <TableHead className="w-16 bg-card shadow-[inset_0_-1px_0_0_var(--border)] text-xs font-medium uppercase tracking-wide text-muted-foreground">

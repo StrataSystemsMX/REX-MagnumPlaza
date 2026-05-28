@@ -295,16 +295,16 @@ function PropertyMatrix({ group, onCellClick }: PropertyMatrixProps) {
         <table className="w-full border-collapse text-xs">
           <thead>
             <tr className="border-b bg-muted/10">
-              <th className="sticky left-0 z-10 bg-muted/10 px-3 py-2 text-left font-medium">
+              <th className="sticky left-0 z-10 bg-muted/10 px-3 py-2 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
                 Local
               </th>
-              <th className="px-3 py-2 text-left font-medium">Inquilino</th>
+              <th className="px-3 py-2 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Inquilino</th>
               {MONTHS_SHORT.map((m) => (
                 <th key={m} className="px-1 py-2 text-center font-medium text-muted-foreground">
                   {m}
                 </th>
               ))}
-              <th className="px-3 py-2 text-right font-medium">Total</th>
+              <th className="px-3 py-2 text-right text-xs font-medium uppercase tracking-wide text-muted-foreground">Total</th>
             </tr>
           </thead>
           <tbody>
@@ -487,12 +487,12 @@ function MonthlyTotalsBar({
       <table className="w-full text-xs">
         <thead>
           <tr className="border-b bg-muted/30">
-            <th className="px-3 py-2 text-left font-medium">Mes</th>
-            <th className="px-3 py-2 text-right font-medium">Esperado</th>
-            <th className="px-3 py-2 text-right font-medium">Cobrado</th>
-            <th className="px-3 py-2 text-right font-medium">% Cobrado</th>
-            <th className="px-3 py-2 text-right font-medium">Pagados</th>
-            <th className="px-3 py-2 text-right font-medium">Sin pago</th>
+            <th className="px-3 py-2 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Mes</th>
+            <th className="px-3 py-2 text-right text-xs font-medium uppercase tracking-wide text-muted-foreground">Esperado</th>
+            <th className="px-3 py-2 text-right text-xs font-medium uppercase tracking-wide text-muted-foreground">Cobrado</th>
+            <th className="px-3 py-2 text-right text-xs font-medium uppercase tracking-wide text-muted-foreground">% Cobrado</th>
+            <th className="px-3 py-2 text-right text-xs font-medium uppercase tracking-wide text-muted-foreground">Pagados</th>
+            <th className="px-3 py-2 text-right text-xs font-medium uppercase tracking-wide text-muted-foreground">Sin pago</th>
           </tr>
         </thead>
         <tbody>

@@ -107,7 +107,7 @@ export function MaintenancesTable({ maintenances, properties, canManage }: Props
             <p className="text-muted-foreground">{emptyMessage}</p>
             {canManage && activeTab === "manual" && (
               <p className="text-sm text-muted-foreground">
-                Usa el botón &ldquo;Nuevo mantenimiento&rdquo; para agregar el primero.
+                Usa el botón &ldquo;Registrar mantenimiento&rdquo; para agregar el primero.
               </p>
             )}
           </CardContent>

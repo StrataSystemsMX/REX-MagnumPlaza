@@ -1,5 +1,6 @@
 "use client";
 
+import { Plus } from "lucide-react";
 import { useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm, type Resolver } from "react-hook-form";
@@ -91,7 +92,8 @@ export function NewMaintenanceDialog({ properties }: Props) {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger render={<Button />}>
-        Nuevo mantenimiento
+        <Plus className="size-4" />
+        Registrar mantenimiento
       </DialogTrigger>
       <DialogContent className="max-w-lg">
         <DialogHeader>

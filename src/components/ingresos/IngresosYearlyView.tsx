@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronDown, ChevronLeft, ChevronRight, TrendingUp, Wallet, AlertTriangle, Percent, X } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, TrendingUp, Wallet, AlertTriangle, Percent, Plus, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -11,6 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { BulkPaymentDialog } from "@/components/collections/BulkPaymentDialog";
 import {
   RegisterPaymentDialog,
   type RegisterPaymentDialogContext,
@@ -75,6 +76,7 @@ export function IngresosYearlyView({ data, availableYears }: IngresosYearlyViewP
   const [entityFilter, setEntityFilter] = useState<string>("ALL");
   const [paymentContext, setPaymentContext] =
     useState<RegisterPaymentDialogContext | null>(null);
+  const [bulkOpen, setBulkOpen] = useState(false);
   const [collapsedEntities, setCollapsedEntities] = useState<Set<string>>(new Set());
 
   function toggleEntity(code: string) {
@@ -245,6 +247,11 @@ export function IngresosYearlyView({ data, availableYears }: IngresosYearlyViewP
               ))}
             </SelectContent>
           </Select>
+
+          <Button onClick={() => setBulkOpen(true)} className="w-full sm:w-auto">
+            <Plus className="size-4" />
+            Registrar ingreso
+          </Button>
         </div>
       </div>
 
@@ -310,6 +317,7 @@ export function IngresosYearlyView({ data, availableYears }: IngresosYearlyViewP
         open={paymentContext !== null}
         onOpenChange={(o) => !o && setPaymentContext(null)}
       />
+      <BulkPaymentDialog open={bulkOpen} onOpenChange={setBulkOpen} />
     </div>
   );
 }
@@ -606,17 +614,17 @@ function PropertyMatrix({ group, onCellClick }: PropertyMatrixProps) {
           </colgroup>
           <thead>
             <tr className="border-b bg-muted/10">
-              <th className="sticky left-0 z-20 border-r border-border bg-card px-3 py-2 text-left font-medium">
+              <th className="sticky left-0 z-20 border-r border-border bg-card px-3 py-2 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
                 Local
               </th>
-              <th className="px-3 py-2 text-left font-medium">Inquilino</th>
-              <th className="px-3 py-2 text-right font-medium text-muted-foreground">Renta</th>
+              <th className="px-3 py-2 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Inquilino</th>
+              <th className="px-3 py-2 text-right text-xs font-medium uppercase tracking-wide text-muted-foreground">Renta</th>
               {MONTHS_SHORT.map((m) => (
-                <th key={m} className="px-1 py-2 text-center font-medium text-muted-foreground">
+                <th key={m} className="px-1 py-2 text-center text-xs font-medium uppercase tracking-wide text-muted-foreground">
                   {m}
                 </th>
               ))}
-              <th className="px-3 py-2 text-right font-medium">Total</th>
+              <th className="px-3 py-2 text-right text-xs font-medium uppercase tracking-wide text-muted-foreground">Total</th>
             </tr>
           </thead>
           <tbody>
@@ -857,13 +865,13 @@ function MonthlyTotalsBar({
       <div className="overflow-x-auto">
         <table className="w-full text-xs">
           <thead>
-            <tr className="border-b bg-muted/10 text-muted-foreground">
-              <th className="px-3 py-2 text-left font-medium">Mes</th>
-              <th className="px-3 py-2 text-right font-medium">Esperado</th>
-              <th className="px-3 py-2 text-right font-medium">Cobrado</th>
-              <th className="px-3 py-2 text-left font-medium">% Cobrado</th>
-              <th className="px-3 py-2 text-right font-medium">Pagados</th>
-              <th className="px-3 py-2 text-right font-medium">Sin pago</th>
+            <tr className="border-b bg-muted/10">
+              <th className="px-3 py-2 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Mes</th>
+              <th className="px-3 py-2 text-right text-xs font-medium uppercase tracking-wide text-muted-foreground">Esperado</th>
+              <th className="px-3 py-2 text-right text-xs font-medium uppercase tracking-wide text-muted-foreground">Cobrado</th>
+              <th className="px-3 py-2 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">% Cobrado</th>
+              <th className="px-3 py-2 text-right text-xs font-medium uppercase tracking-wide text-muted-foreground">Pagados</th>
+              <th className="px-3 py-2 text-right text-xs font-medium uppercase tracking-wide text-muted-foreground">Sin pago</th>
             </tr>
           </thead>
           <tbody>

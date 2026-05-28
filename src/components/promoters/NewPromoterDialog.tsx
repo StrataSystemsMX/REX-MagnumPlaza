@@ -1,5 +1,6 @@
 "use client";
 
+import { Plus } from "lucide-react";
 import { useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
@@ -47,7 +48,8 @@ export function NewPromoterDialog() {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger render={<Button />}>
-        Nuevo promotor
+        <Plus className="size-4" />
+        Registrar promotor
       </DialogTrigger>
       <DialogContent className="max-w-md">
         <DialogHeader>

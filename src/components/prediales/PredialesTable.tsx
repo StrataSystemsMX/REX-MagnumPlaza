@@ -328,62 +328,56 @@ export function PredialesTable({
   return (
     <>
       {/* Filters + create */}
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div className="flex flex-wrap items-end gap-3">
-          <FilterField label="Año">
-            <Select
-              value={String(selectedYear)}
-              onValueChange={(v) => v && setYearParam(v)}
-              items={yearItems}
-            >
-              <SelectTrigger className="w-28">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {yearsAvailable.map((y) => (
-                  <SelectItem key={y} value={String(y)}>
-                    {y}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </FilterField>
-          <FilterField label="Dueña">
-            <Select
-              value={ownerFilter}
-              onValueChange={(v) => v && setOwnerFilter(v)}
-              items={ownerItems}
-            >
-              <SelectTrigger className="w-40">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {Object.entries(ownerItems).map(([value, label]) => (
-                  <SelectItem key={value} value={value}>
-                    {label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </FilterField>
-          <FilterField label="Estado">
-            <Select
-              value={statusFilter}
-              onValueChange={(v) => v && setStatusFilter(v as StatusFilter)}
-              items={STATUS_FILTER_ITEMS}
-            >
-              <SelectTrigger className="w-44">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {Object.entries(STATUS_FILTER_ITEMS).map(([value, label]) => (
-                  <SelectItem key={value} value={value}>
-                    {label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </FilterField>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <Select
+            value={String(selectedYear)}
+            onValueChange={(v) => v && setYearParam(v)}
+            items={yearItems}
+          >
+            <SelectTrigger className="w-28">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {yearsAvailable.map((y) => (
+                <SelectItem key={y} value={String(y)}>
+                  {y}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select
+            value={ownerFilter}
+            onValueChange={(v) => v && setOwnerFilter(v)}
+            items={ownerItems}
+          >
+            <SelectTrigger className="w-40">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {Object.entries(ownerItems).map(([value, label]) => (
+                <SelectItem key={value} value={value}>
+                  {label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select
+            value={statusFilter}
+            onValueChange={(v) => v && setStatusFilter(v as StatusFilter)}
+            items={STATUS_FILTER_ITEMS}
+          >
+            <SelectTrigger className="w-44">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {Object.entries(STATUS_FILTER_ITEMS).map(([value, label]) => (
+                <SelectItem key={value} value={value}>
+                  {label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
         {canCreate ? (
           <Button
@@ -393,7 +387,7 @@ export function PredialesTable({
             }}
           >
             <Plus className="size-4" />
-            Nuevo predial
+            Registrar predial
           </Button>
         ) : null}
       </div>
@@ -759,21 +753,6 @@ function PredialRow({
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
-    </div>
-  );
-}
-
-function FilterField({
-  label,
-  children,
-}: {
-  label: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="flex flex-col gap-1">
-      <span className="text-xs uppercase text-muted-foreground">{label}</span>
-      {children}
     </div>
   );
 }
