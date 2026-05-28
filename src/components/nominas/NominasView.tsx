@@ -726,7 +726,8 @@ function PayrollSubsection({
       </div>
 
       {/* Tabla en grid (template compartido para alinear columnas) */}
-      <div role="table" aria-label={title}>
+      <div className="overflow-x-auto">
+      <div role="table" aria-label={title} className="min-w-[560px]">
         <div
           role="row"
           className="grid items-center border-b bg-muted/30 text-[11px] font-medium uppercase text-muted-foreground"
@@ -767,6 +768,7 @@ function PayrollSubsection({
             onSelect={onSelect}
           />
         ))}
+      </div>
       </div>
     </div>
   );
