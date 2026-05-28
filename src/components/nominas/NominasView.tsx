@@ -393,7 +393,7 @@ export function NominasView({
         {canCreate ? (
           <Button onClick={() => openCreate(null)}>
             <Plus className="size-4" />
-            Registrar pago
+            Registrar nómina
           </Button>
         ) : null}
       </div>
@@ -518,16 +518,6 @@ export function NominasView({
                         {MXN.format(group.total)}
                       </p>
                     </div>
-                    {canCreate ? (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => openCreate(group.entity.id)}
-                      >
-                        <Plus className="size-3.5" />
-                        Agregar
-                      </Button>
-                    ) : null}
                   </div>
                 </div>
 
@@ -893,7 +883,7 @@ function EmptyState({
       {canCreate ? (
         <Button onClick={onCreate}>
           <Plus className="size-4" />
-          Registrar pago
+          Registrar nómina
         </Button>
       ) : null}
     </div>
