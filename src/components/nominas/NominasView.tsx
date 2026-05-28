@@ -121,10 +121,10 @@ const TYPE_TONES: Record<PayrollType, string> = {
 // análogo a PREDIAL_GRID_COLS en PredialesTable.
 // Tipo | Concepto(+notas) | Sin IVA | IVA | Total | Acciones
 const PAYROLL_GRID_COLS =
-  "minmax(0, 0.9fr) minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) 40px";
+  "minmax(140px, 1fr) minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) 40px";
 // Con columna Mes (vista anual) antepuesta.
 const PAYROLL_GRID_COLS_WITH_MONTH =
-  "minmax(0, 0.7fr) minmax(0, 0.9fr) minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) 40px";
+  "minmax(140px, 1fr) minmax(0, 0.9fr) minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) 40px";
 
 interface Props {
   payrolls: ReadonlyArray<PayrollListItem>;
@@ -727,7 +727,7 @@ function PayrollSubsection({
 
       {/* Tabla en grid (template compartido para alinear columnas) */}
       <div className="overflow-x-auto">
-      <div role="table" aria-label={title} className="min-w-[560px]">
+      <div role="table" aria-label={title} className="min-w-[640px]">
         <div
           role="row"
           className="grid items-center border-b bg-muted/30 text-[11px] font-medium uppercase text-muted-foreground"
@@ -800,7 +800,7 @@ function PayrollRow({
       className="grid cursor-pointer items-center border-b text-sm transition-colors last:border-b-0 hover:bg-muted/50"
       style={{ gridTemplateColumns: gridCols }}
     >
-      <div role="cell" className="px-3 py-2.5">
+      <div role="cell" className="overflow-hidden px-3 py-2.5">
         <Badge className={TYPE_TONES[item.type]}>
           {payrollTypeLabel(item.type)}
         </Badge>
