@@ -743,7 +743,14 @@ function ConceptRow({ entity, row, canUpdate, onCellClick }: ConceptRowProps) {
         </div>
       </td>
       <td className="px-3 py-1.5 text-xs text-muted-foreground">
-        {row.categoryName}
+        <span className="flex items-center gap-1.5">
+          {row.categoryName}
+          {row.isPayroll && (
+            <span className="rounded bg-violet-100 px-1 py-0.5 text-[9px] font-semibold text-violet-700 dark:bg-violet-900/40 dark:text-violet-300">
+              Nómina
+            </span>
+          )}
+        </span>
       </td>
       {row.cells.map((cell, i) => (
         <td key={i} className="px-1 py-1.5">

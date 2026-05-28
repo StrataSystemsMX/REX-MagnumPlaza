@@ -8,7 +8,6 @@ import {
   Loader2,
   MoreHorizontal,
   Pencil,
-  PiggyBank,
   Plus,
   Receipt,
   Trash2,
@@ -121,10 +120,10 @@ const TYPE_TONES: Record<PayrollType, string> = {
 // análogo a PREDIAL_GRID_COLS en PredialesTable.
 // Tipo | Concepto(+notas) | Sin IVA | IVA | Total | Acciones
 const PAYROLL_GRID_COLS =
-  "minmax(0, 0.9fr) minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) 40px";
+  "minmax(140px, 1fr) minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) 40px";
 // Con columna Mes (vista anual) antepuesta.
 const PAYROLL_GRID_COLS_WITH_MONTH =
-  "minmax(0, 0.7fr) minmax(0, 0.9fr) minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) 40px";
+  "minmax(140px, 1fr) minmax(0, 0.9fr) minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) 40px";
 
 interface Props {
   payrolls: ReadonlyArray<PayrollListItem>;
@@ -393,7 +392,7 @@ export function NominasView({
         {canCreate ? (
           <Button onClick={() => openCreate(null)}>
             <Plus className="size-4" />
-            Registrar pago
+            Registrar nómina
           </Button>
         ) : null}
       </div>
@@ -402,17 +401,9 @@ export function NominasView({
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Stat
           icon={<Receipt className="size-4" />}
-          label={`Operativo ${periodLabel().toLowerCase()}`}
-          value={MXN.format(periodOperationalTotal)}
-          subtitle="Nómina directa, comisiones, bonos"
+          label={`Nómina ${periodLabel().toLowerCase()}`}
+          value={MXN.format(periodOperationalTotal + periodFiscalTotal)}
           tone="primary"
-        />
-        <Stat
-          icon={<PiggyBank className="size-4" />}
-          label={`Estrategia fiscal ${periodLabel().toLowerCase()}`}
-          value={MXN.format(periodFiscalTotal)}
-          subtitle="Nómina estratégica + facturas adm."
-          tone="warning"
         />
         <Stat
           icon={<Users2 className="size-4" />}
@@ -501,12 +492,6 @@ export function NominasView({
                           — {group.entity.legalName}
                         </span>
                       </div>
-                      {group.fiscalTotal > 0 && group.operationalTotal > 0 ? (
-                        <p className="mt-0.5 text-xs text-muted-foreground">
-                          Operativo {MXN.format(group.operationalTotal)} ·
-                          Estrategia {MXN.format(group.fiscalTotal)}
-                        </p>
-                      ) : null}
                     </div>
                   </div>
                   <div className="flex items-center gap-3">
@@ -518,49 +503,19 @@ export function NominasView({
                         {MXN.format(group.total)}
                       </p>
                     </div>
-                    {canCreate ? (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => openCreate(group.entity.id)}
-                      >
-                        <Plus className="size-3.5" />
-                        Agregar
-                      </Button>
-                    ) : null}
                   </div>
                 </div>
 
                 {expanded ? (
-                  <>
-                    <PayrollSubsection
-                      title="Operativos"
-                      helper="Nómina directa, comisiones, bonos."
-                      tone="emerald"
-                      items={group.operationalItems}
-                      subtotal={group.operationalTotal}
-                      showMonth={selectedMonth === null}
-                      canUpdate={canUpdate}
-                      canDelete={canDelete}
-                      onEdit={openEdit}
-                      onDelete={setDeleteTarget}
-                      onSelect={setDetailTarget}
-                    />
-
-                    <PayrollSubsection
-                      title="Estrategia fiscal"
-                      helper="Nómina estratégica y facturas administrativas."
-                      tone="amber"
-                      items={group.fiscalItems}
-                      subtotal={group.fiscalTotal}
-                      showMonth={selectedMonth === null}
-                      canUpdate={canUpdate}
-                      canDelete={canDelete}
-                      onEdit={openEdit}
-                      onDelete={setDeleteTarget}
-                      onSelect={setDetailTarget}
-                    />
-                  </>
+                  <PayrollSubsection
+                    items={[...group.operationalItems, ...group.fiscalItems]}
+                    showMonth={selectedMonth === null}
+                    canUpdate={canUpdate}
+                    canDelete={canDelete}
+                    onEdit={openEdit}
+                    onDelete={setDeleteTarget}
+                    onSelect={setDetailTarget}
+                  />
                 ) : null}
               </div>
             );
@@ -670,11 +625,7 @@ function Stat({
 }
 
 function PayrollSubsection({
-  title,
-  helper,
-  tone,
   items,
-  subtotal,
   showMonth,
   canUpdate,
   canDelete,
@@ -682,11 +633,7 @@ function PayrollSubsection({
   onDelete,
   onSelect,
 }: {
-  title: string;
-  helper: string;
-  tone: "emerald" | "amber";
   items: PayrollListItem[];
-  subtotal: number;
   showMonth: boolean;
   canUpdate: boolean;
   canDelete: boolean;
@@ -696,37 +643,15 @@ function PayrollSubsection({
 }) {
   if (items.length === 0) return null;
 
-  const accentText =
-    tone === "emerald"
-      ? "text-emerald-700 dark:text-emerald-400"
-      : "text-amber-700 dark:text-amber-400";
-
   const gridCols = showMonth
     ? PAYROLL_GRID_COLS_WITH_MONTH
     : PAYROLL_GRID_COLS;
 
   return (
-    <div className="border-b last:border-b-0">
-      {/* Barra de subsección: label + helper + subtotal */}
-      <div className="flex items-center justify-between gap-2 bg-muted/20 px-4 py-2">
-        <div className="flex items-center gap-2">
-          <span
-            className={cn(
-              "text-[11px] font-semibold uppercase tracking-wider",
-              accentText,
-            )}
-          >
-            {title}
-          </span>
-          <span className="text-[10px] text-muted-foreground">{helper}</span>
-        </div>
-        <span className="text-xs font-medium tabular-nums text-muted-foreground">
-          {MXN.format(subtotal)}
-        </span>
-      </div>
-
+    <div>
       {/* Tabla en grid (template compartido para alinear columnas) */}
-      <div role="table" aria-label={title}>
+      <div className="overflow-x-auto">
+      <div role="table" aria-label="Nóminas" className="min-w-[640px]">
         <div
           role="row"
           className="grid items-center border-b bg-muted/30 text-[11px] font-medium uppercase text-muted-foreground"
@@ -768,6 +693,7 @@ function PayrollSubsection({
           />
         ))}
       </div>
+      </div>
     </div>
   );
 }
@@ -798,7 +724,7 @@ function PayrollRow({
       className="grid cursor-pointer items-center border-b text-sm transition-colors last:border-b-0 hover:bg-muted/50"
       style={{ gridTemplateColumns: gridCols }}
     >
-      <div role="cell" className="px-3 py-2.5">
+      <div role="cell" className="overflow-hidden px-3 py-2.5">
         <Badge className={TYPE_TONES[item.type]}>
           {payrollTypeLabel(item.type)}
         </Badge>
@@ -891,7 +817,7 @@ function EmptyState({
       {canCreate ? (
         <Button onClick={onCreate}>
           <Plus className="size-4" />
-          Registrar pago
+          Registrar nómina
         </Button>
       ) : null}
     </div>

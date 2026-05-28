@@ -544,7 +544,7 @@ export function PredialesTable({
 // owner sections. As long as every section renders rows of identical container
 // width, the columns will land at the same X position on the page.
 const PREDIAL_GRID_COLS =
-  "minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.15fr) minmax(0, 0.85fr) 40px";
+  "minmax(140px, 2fr) minmax(90px, 1fr) minmax(70px, 1fr) minmax(80px, 1fr) minmax(100px, 1.15fr) minmax(80px, 0.85fr) 40px";
 
 interface RowHandlers {
   canUpdate: boolean;
@@ -630,10 +630,11 @@ function OwnerSection({
       </button>
 
       {expanded ? (
+        <div className="overflow-x-auto">
         <div
           role="table"
           aria-label={`Prediales ${group.code}`}
-          className="border-t"
+          className="min-w-[600px] border-t"
         >
           <div
             role="row"
@@ -666,6 +667,7 @@ function OwnerSection({
           {group.items.map((p) => (
             <PredialRow key={p.id} payment={p} {...handlers} />
           ))}
+        </div>
         </div>
       ) : null}
     </div>
@@ -712,7 +714,7 @@ function PredialRow({
           ? capitalizeFirst(DATE.format(payment.paymentDate))
           : "—"}
       </div>
-      <div role="cell" className="flex justify-center px-3 py-2.5">
+      <div role="cell" className="overflow-hidden flex justify-center px-3 py-2.5">
         {statusBadge(payment.status)}
       </div>
       <div role="cell" className="flex justify-end pr-1">
