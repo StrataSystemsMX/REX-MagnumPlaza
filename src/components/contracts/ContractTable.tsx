@@ -222,25 +222,14 @@ export function ContractTable({ contracts, availableUnits }: ContractTableProps)
 
         <Button onClick={() => setCreateOpen(true)} className="w-full sm:w-auto">
           <Plus className="size-4" />
-          Nuevo contrato
+          Registrar contrato
         </Button>
       </div>
 
-      {/* Usamos una <table> cruda (no el componente Table de shadcn) porque ese
-          envuelve la tabla en un div con overflow-x-auto, y ese contenedor de
-          scroll atrapa el `sticky` (se ancla al div, no al scroll de la página).
-          overflow-clip recorta las esquinas redondeadas SIN crear contenedor de
-          scroll, así que conserva el sticky relativo al <main>. */}
-      <div className="overflow-clip rounded-lg border bg-card">
+      <div className="overflow-x-auto rounded-lg border bg-card">
         <table className="w-full min-w-[860px] caption-bottom text-sm">
-          {/* Encabezado único al tope, sticky para que persiga el scroll de la
-              página. El offset de `sticky` se mide desde el borde de contenido del
-              <main> (tras su padding p-4/6/8), así que `top-0` dejaría una franja
-              donde se asoman las filas; el top negativo iguala ese padding para
-              anclar el encabezado al borde superior real. (Acoplado al padding de
-              (dashboard)/layout.tsx.) */}
           {groups.length > 0 ? (
-            <TableHeader className="sticky -top-4 z-20 sm:-top-6 lg:-top-8">
+            <TableHeader>
               <TableRow className="hover:bg-transparent">
                 <TableHead className="bg-card shadow-[inset_0_-1px_0_0_var(--border)] text-xs font-medium uppercase tracking-wide text-muted-foreground">
                   Inquilino

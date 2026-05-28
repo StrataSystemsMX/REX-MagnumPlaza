@@ -102,7 +102,7 @@ export function LesseeDetailTabs({
             onClick={() => setCreateContractOpen(true)}
           >
             <Plus className="size-4" />
-            Nuevo contrato
+            Registrar contrato
           </Button>
         ) : null}
       </div>

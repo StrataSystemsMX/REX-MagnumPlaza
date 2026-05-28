@@ -35,12 +35,12 @@ export function LegalEntitySummaryTable({ rows }: Props) {
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b text-xs text-muted-foreground">
-            <th className="pb-2 text-left font-medium">Entidad</th>
-            <th className="pb-2 text-right font-medium">Ingresos</th>
-            <th className="pb-2 text-right font-medium">Egresos</th>
-            <th className="pb-2 text-right font-medium">Utilidad</th>
-            <th className="pb-2 text-right font-medium">Rentabilidad</th>
-            <th className="pb-2" />
+            <th className="pb-2 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Entidad</th>
+            <th className="pb-2 text-right text-xs font-medium uppercase tracking-wide text-muted-foreground">Ingresos</th>
+            <th className="pb-2 text-right text-xs font-medium uppercase tracking-wide text-muted-foreground">Egresos</th>
+            <th className="pb-2 text-right text-xs font-medium uppercase tracking-wide text-muted-foreground">Utilidad</th>
+            <th className="pb-2 text-right text-xs font-medium uppercase tracking-wide text-muted-foreground">Rentabilidad</th>
+            <th className="pb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground" />
           </tr>
         </thead>
         <tbody className="divide-y">

@@ -314,92 +314,86 @@ export function NominasView({
   return (
     <>
       {/* Filtros */}
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div className="flex flex-wrap items-end gap-3">
-          <FilterField label="Año">
-            <Select
-              value={String(selectedYear)}
-              onValueChange={(v) => v && pushParams({ year: v })}
-              items={yearItems}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <Select
+            value={String(selectedYear)}
+            onValueChange={(v) => v && pushParams({ year: v })}
+            items={yearItems}
+          >
+            <SelectTrigger className="w-28">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {yearsAvailable.map((y) => (
+                <SelectItem key={y} value={String(y)}>
+                  {y}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <div className="flex items-center gap-1">
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => shiftMonth(-1)}
+              disabled={selectedMonth === null}
+              aria-label="Mes anterior"
             >
-              <SelectTrigger className="w-28">
+              <ChevronLeft className="size-4" />
+            </Button>
+            <Select
+              value={String(selectedMonth ?? 0)}
+              onValueChange={(v) => v && changeMonthParam(v)}
+              items={MONTH_ITEMS}
+            >
+              <SelectTrigger className="w-44">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {yearsAvailable.map((y) => (
-                  <SelectItem key={y} value={String(y)}>
-                    {y}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </FilterField>
-
-          <FilterField label="Periodo">
-            <div className="flex items-center gap-1">
-              <Button
-                variant="outline"
-                size="icon"
-                onClick={() => shiftMonth(-1)}
-                disabled={selectedMonth === null}
-                aria-label="Mes anterior"
-              >
-                <ChevronLeft className="size-4" />
-              </Button>
-              <Select
-                value={String(selectedMonth ?? 0)}
-                onValueChange={(v) => v && changeMonthParam(v)}
-                items={MONTH_ITEMS}
-              >
-                <SelectTrigger className="w-44">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {Object.entries(MONTH_ITEMS).map(([value, label]) => (
-                    <SelectItem key={value} value={value}>
-                      {label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Button
-                variant="outline"
-                size="icon"
-                onClick={() => shiftMonth(1)}
-                disabled={selectedMonth === null}
-                aria-label="Mes siguiente"
-              >
-                <ChevronRight className="size-4" />
-              </Button>
-            </div>
-          </FilterField>
-
-          <FilterField label="Razón social">
-            <Select
-              value={selectedEntityId ?? "ALL"}
-              onValueChange={(v) =>
-                v && pushParams({ entity: v === "ALL" ? null : v })
-              }
-              items={entityItems}
-            >
-              <SelectTrigger className="w-40">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {Object.entries(entityItems).map(([value, label]) => (
+                {Object.entries(MONTH_ITEMS).map(([value, label]) => (
                   <SelectItem key={value} value={value}>
                     {label}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
-          </FilterField>
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => shiftMonth(1)}
+              disabled={selectedMonth === null}
+              aria-label="Mes siguiente"
+            >
+              <ChevronRight className="size-4" />
+            </Button>
+          </div>
+
+          <Select
+            value={selectedEntityId ?? "ALL"}
+            onValueChange={(v) =>
+              v && pushParams({ entity: v === "ALL" ? null : v })
+            }
+            items={entityItems}
+          >
+            <SelectTrigger className="w-40">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {Object.entries(entityItems).map(([value, label]) => (
+                <SelectItem key={value} value={value}>
+                  {label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
         {canCreate ? (
           <Button onClick={() => openCreate(null)}>
             <Plus className="size-4" />
-            Nuevo pago
+            Registrar pago
           </Button>
         ) : null}
       </div>
@@ -636,21 +630,6 @@ export function NominasView({
   );
 }
 
-function FilterField({
-  label,
-  children,
-}: {
-  label: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="flex flex-col gap-1">
-      <span className="text-xs uppercase text-muted-foreground">{label}</span>
-      {children}
-    </div>
-  );
-}
-
 function Stat({
   icon,
   label,
@@ -833,7 +812,7 @@ function PayrollRow({
         </div>
       ) : null}
       <div role="cell" className="min-w-0 px-3 py-2.5">
-        <p className="truncate">{item.description ?? "—"}</p>
+        <p className="line-clamp-2">{item.description ?? "—"}</p>
         {item.notes ? (
           <p className="truncate text-xs text-muted-foreground">
             {item.notes}

@@ -197,11 +197,11 @@ export function InmueblesTable({
         <Dialog open={createOpen} onOpenChange={setCreateOpen}>
           <DialogTrigger render={<Button />}>
             <Plus className="size-4" />
-            Nuevo Inmueble
+            Registrar inmueble
           </DialogTrigger>
           <DialogContent className="max-w-2xl">
             <DialogHeader>
-              <DialogTitle>Nuevo inmueble</DialogTitle>
+              <DialogTitle>Registrar inmueble</DialogTitle>
               <DialogDescription>
                 Captura los datos del inmueble. Si tiene un local rentable, lo agregas después en el detalle.
               </DialogDescription>

@@ -139,11 +139,11 @@ export function PlazasTable({ plazas, legalEntities, initialView }: PlazasTableP
         <Dialog open={createOpen} onOpenChange={setCreateOpen}>
           <DialogTrigger render={<Button />}>
             <Plus className="size-4" />
-            Nueva Plaza
+            Registrar plaza
           </DialogTrigger>
           <DialogContent className="max-w-2xl">
             <DialogHeader>
-              <DialogTitle>Nueva plaza comercial</DialogTitle>
+              <DialogTitle>Registrar plaza comercial</DialogTitle>
               <DialogDescription>
                 Captura los datos de la plaza. Los locales se agregan después en el detalle.
               </DialogDescription>

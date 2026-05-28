@@ -113,11 +113,11 @@ export function LesseeTable({ lessees }: LesseeTableProps) {
         <Dialog open={createOpen} onOpenChange={setCreateOpen}>
           <DialogTrigger render={<Button />}>
             <Plus className="size-4" />
-            Nuevo inquilino
+            Registrar inquilino
           </DialogTrigger>
           <DialogContent className="max-w-2xl">
             <DialogHeader>
-              <DialogTitle>Nuevo inquilino</DialogTitle>
+              <DialogTitle>Registrar inquilino</DialogTitle>
               <DialogDescription>
                 Captura los datos del inquilino. Después podrás vincularlo a contratos.
               </DialogDescription>
@@ -133,19 +133,9 @@ export function LesseeTable({ lessees }: LesseeTableProps) {
         </Dialog>
       </div>
 
-      {/* Usamos una <table> cruda (no el componente Table de shadcn) porque ese
-          envuelve la tabla en un div con overflow-x-auto, y ese contenedor de
-          scroll atrapa el `sticky` (se ancla al div, no al scroll de la página).
-          overflow-clip recorta las esquinas redondeadas SIN crear contenedor de
-          scroll, así que conserva el sticky relativo al <main>. */}
-      <div className="overflow-clip rounded-lg border bg-card">
+      <div className="overflow-x-auto rounded-lg border bg-card">
         <table className="w-full min-w-[640px] caption-bottom text-sm">
-          {/* El scroll vive en <main>, con padding superior (p-4/6/8). El offset de
-              `sticky` se mide desde el borde de contenido (tras el padding), así que
-              `top-0` dejaría una franja donde se asoman las filas; el top negativo
-              iguala ese padding para anclar el encabezado al borde superior real.
-              (Acoplado al padding de (dashboard)/layout.tsx.) */}
-          <TableHeader className="sticky -top-4 z-20 sm:-top-6 lg:-top-8">
+          <TableHeader>
             <TableRow className="hover:bg-transparent">
               <TableHead className="bg-card shadow-[inset_0_-1px_0_0_var(--border)] text-xs font-medium uppercase tracking-wide text-muted-foreground">
                 Inquilino
