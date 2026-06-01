@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { IDENTIFIER_CODE, SPANISH_TEXT } from "./patterns";
 
 const UNIT_STATUS_VALUES = [
   "DISPONIBLE",
@@ -24,11 +25,13 @@ export const createUnitSchema = z.object({
     .string()
     .trim()
     .min(1, "El identificador es requerido.")
-    .max(20, "Máximo 20 caracteres."),
+    .max(20, "Máximo 20 caracteres.")
+    .regex(IDENTIFIER_CODE, "Solo letras, números, guión y guión bajo."),
   name: z
     .string()
     .trim()
-    .max(120, "Máximo 120 caracteres.")
+    .max(50, "Máximo 50 caracteres.")
+    .regex(SPANISH_TEXT, "Solo letras, números y puntuación básica.")
     .optional()
     .or(z.literal("").transform(() => undefined)),
   area: z
@@ -62,7 +65,7 @@ export const createUnitSchema = z.object({
   notes: z
     .string()
     .trim()
-    .max(2000, "Máximo 2000 caracteres.")
+    .max(1000, "Máximo 1000 caracteres.")
     .optional()
     .or(z.literal("").transform(() => undefined)),
 });

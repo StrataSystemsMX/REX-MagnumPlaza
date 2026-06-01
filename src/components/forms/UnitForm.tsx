@@ -30,6 +30,7 @@ import {
   createUnitSchema,
   type CreateUnitInput,
 } from "@/lib/validators/unit";
+import { CharacterCount } from "@/components/ui/character-count";
 import {
   actionCreateUnit,
   actionUngroupUnit,
@@ -177,8 +178,9 @@ export function UnitForm({
               <FormItem>
                 <FormLabel>Identificador</FormLabel>
                 <FormControl>
-                  <Input {...field} />
+                  <Input {...field} maxLength={20} />
                 </FormControl>
+                <CharacterCount current={field.value?.length ?? 0} max={20} />
                 <FormMessage />
               </FormItem>
             )}
@@ -190,8 +192,9 @@ export function UnitForm({
               <FormItem>
                 <FormLabel>Nombre / Inquilino actual</FormLabel>
                 <FormControl>
-                  <Input {...field} value={field.value ?? ""} />
+                  <Input {...field} value={field.value ?? ""} maxLength={50} />
                 </FormControl>
+                <CharacterCount current={(field.value ?? "").length} max={50} />
                 <FormMessage />
               </FormItem>
             )}
@@ -502,8 +505,9 @@ export function UnitForm({
             <FormItem>
               <FormLabel>Notas internas</FormLabel>
               <FormControl>
-                <Textarea rows={3} {...field} value={field.value ?? ""} />
+                <Textarea rows={3} {...field} value={field.value ?? ""} maxLength={1000} />
               </FormControl>
+              <CharacterCount current={(field.value ?? "").length} max={1000} />
               <FormMessage />
             </FormItem>
           )}

@@ -24,6 +24,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { actionCreatePromoter } from "@/lib/services/promoters";
+import { CharacterCount } from "@/components/ui/character-count";
 import { createPromoterSchema, type CreatePromoterInput } from "@/lib/validators/promoter";
 
 export function NewPromoterDialog() {
@@ -64,8 +65,9 @@ export function NewPromoterDialog() {
                 <FormItem>
                   <FormLabel>Nombre completo</FormLabel>
                   <FormControl>
-                    <Input placeholder="Ej. Juan Pérez" {...field} />
+                    <Input placeholder="Ej. Juan Pérez" {...field} maxLength={50} />
                   </FormControl>
+                  <CharacterCount current={field.value?.length ?? 0} max={50} />
                   <FormMessage />
                 </FormItem>
               )}
@@ -78,7 +80,7 @@ export function NewPromoterDialog() {
                   <FormItem>
                     <FormLabel>Teléfono / WhatsApp</FormLabel>
                     <FormControl>
-                      <Input placeholder="6621234567" {...field} />
+                      <Input placeholder="6621234567" {...field} maxLength={15} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -91,8 +93,9 @@ export function NewPromoterDialog() {
                   <FormItem>
                     <FormLabel>Agencia (opcional)</FormLabel>
                     <FormControl>
-                      <Input placeholder="NEX, Independiente..." {...field} value={field.value ?? ""} />
+                      <Input placeholder="NEX, Independiente..." {...field} value={field.value ?? ""} maxLength={60} />
                     </FormControl>
+                    <CharacterCount current={(field.value ?? "").length} max={60} />
                     <FormMessage />
                   </FormItem>
                 )}
@@ -105,7 +108,7 @@ export function NewPromoterDialog() {
                 <FormItem>
                   <FormLabel>Email (opcional)</FormLabel>
                   <FormControl>
-                    <Input type="email" placeholder="promotor@email.com" {...field} value={field.value ?? ""} />
+                    <Input type="email" placeholder="promotor@email.com" {...field} value={field.value ?? ""} maxLength={100} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -118,8 +121,9 @@ export function NewPromoterDialog() {
                 <FormItem>
                   <FormLabel>Notas</FormLabel>
                   <FormControl>
-                    <Textarea rows={2} placeholder="Especialidad, historial..." {...field} value={field.value ?? ""} />
+                    <Textarea rows={2} placeholder="Especialidad, historial..." {...field} value={field.value ?? ""} maxLength={300} />
                   </FormControl>
+                  <CharacterCount current={(field.value ?? "").length} max={300} />
                   <FormMessage />
                 </FormItem>
               )}

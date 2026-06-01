@@ -65,7 +65,7 @@ export const createContractSchema = z
     notes: z
       .string()
       .trim()
-      .max(2000, "Máximo 2000 caracteres.")
+      .max(1000, "Máximo 1000 caracteres.")
       .optional()
       .or(z.literal("").transform(() => undefined)),
   })
@@ -111,7 +111,7 @@ export const updateContractSchema = z.object({
   notes: z
     .string()
     .trim()
-    .max(2000)
+    .max(1000)
     .optional()
     .or(z.literal("").transform(() => undefined)),
 });
@@ -124,7 +124,7 @@ export const terminateContractSchema = z.object({
     .string()
     .trim()
     .min(1, "Indica el motivo de la terminación.")
-    .max(2000, "Máximo 2000 caracteres."),
+    .max(1000, "Máximo 1000 caracteres."),
 });
 
 export type TerminateContractInput = z.infer<typeof terminateContractSchema>;

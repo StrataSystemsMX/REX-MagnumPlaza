@@ -29,6 +29,7 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { actionUpdateMaintenance } from "@/lib/services/maintenances";
+import { CharacterCount } from "@/components/ui/character-count";
 import {
   updateMaintenanceSchema,
   type UpdateMaintenanceInput,
@@ -149,8 +150,9 @@ export function EditMaintenanceDialog({
                 <FormItem>
                   <FormLabel>Descripción del trabajo</FormLabel>
                   <FormControl>
-                    <Input {...field} />
+                    <Input {...field} maxLength={80} />
                   </FormControl>
+                  <CharacterCount current={field.value?.length ?? 0} max={80} />
                   <FormMessage />
                 </FormItem>
               )}
@@ -358,8 +360,9 @@ export function EditMaintenanceDialog({
                 <FormItem>
                   <FormLabel>Proveedor / Contratista (opcional)</FormLabel>
                   <FormControl>
-                    <Input placeholder="Nombre del proveedor" {...field} value={field.value ?? ""} />
+                    <Input placeholder="Nombre del proveedor" {...field} value={field.value ?? ""} maxLength={100} />
                   </FormControl>
+                  <CharacterCount current={(field.value ?? "").length} max={100} />
                   <FormMessage />
                 </FormItem>
               )}
@@ -377,8 +380,10 @@ export function EditMaintenanceDialog({
                       placeholder="Detalles, observaciones..."
                       {...field}
                       value={field.value ?? ""}
+                      maxLength={300}
                     />
                   </FormControl>
+                  <CharacterCount current={(field.value ?? "").length} max={300} />
                   <FormMessage />
                 </FormItem>
               )}

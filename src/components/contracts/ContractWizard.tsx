@@ -28,6 +28,7 @@ import {
   type CreateContractInput,
 } from "@/lib/validators/contract";
 import type { AvailableUnit } from "@/lib/services/contracts-queries";
+import { CharacterCount } from "@/components/ui/character-count";
 import type { ContractType } from "@/generated/prisma/enums";
 import { capitalizeFirst } from "@/lib/utils";
 
@@ -698,8 +699,10 @@ function StepTerms({
         <Textarea
           rows={3}
           value={terms.notes}
+          maxLength={1000}
           onChange={(e) => set("notes", e.target.value)}
         />
+        <CharacterCount current={(terms.notes ?? "").length} max={1000} />
       </div>
     </div>
   );
