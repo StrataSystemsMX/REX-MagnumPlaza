@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { SPANISH_TEXT } from "./patterns";
 
 const COMMUNICATION_CHANNEL_VALUES = [
   "WHATSAPP",
@@ -65,8 +66,15 @@ export const createLesseeSchema = z.object({
     .string()
     .trim()
     .min(1, "La razón social es requerida.")
-    .max(200, "Máximo 200 caracteres."),
-  contactName: optionalString(120, "Máximo 120 caracteres."),
+    .max(100, "Máximo 100 caracteres.")
+    .regex(SPANISH_TEXT, "Solo letras, números y puntuación básica."),
+  contactName: z
+    .string()
+    .trim()
+    .max(50, "Máximo 50 caracteres.")
+    .regex(SPANISH_TEXT, "Solo letras, números y puntuación básica.")
+    .optional()
+    .or(z.literal("").transform(() => undefined)),
   rfc: optionalRfc,
   email: optionalEmail,
   phone: optionalMxPhone,
@@ -74,7 +82,7 @@ export const createLesseeSchema = z.object({
   preferredChannel: z.enum(COMMUNICATION_CHANNEL_VALUES, {
     message: "Canal preferido inválido.",
   }),
-  notes: optionalString(2000, "Máximo 2000 caracteres."),
+  notes: optionalString(1000, "Máximo 1000 caracteres."),
 });
 
 export type CreateLesseeInput = z.infer<typeof createLesseeSchema>;

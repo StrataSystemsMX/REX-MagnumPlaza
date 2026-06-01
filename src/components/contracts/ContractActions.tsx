@@ -27,6 +27,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { EnumSelect } from "@/components/ui/enum-select";
+import { CharacterCount } from "@/components/ui/character-count";
 import { contractTypeLabel } from "@/lib/i18n/enums";
 import {
   actionActivateContract,
@@ -310,8 +311,10 @@ export function ContractActions({
               <Textarea
                 rows={3}
                 value={terminationReason}
+                maxLength={1000}
                 onChange={(e) => setTerminationReason(e.target.value)}
               />
+              <CharacterCount current={terminationReason.length} max={1000} />
             </div>
           </div>
           <DialogFooter>

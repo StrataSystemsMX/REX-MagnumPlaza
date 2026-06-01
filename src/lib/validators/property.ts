@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { ADDRESS_TEXT, CADASTRAL_KEY, SPANISH_TEXT } from "./patterns";
 
 const PROPERTY_TYPE_VALUES = [
   "PLAZA_COMERCIAL",
@@ -14,18 +15,19 @@ const PROPERTY_TYPE_VALUES = [
 const PROPERTY_STATUS_VALUES = ["ACTIVO", "BLOQUEADO"] as const;
 
 export const createPropertySchema = z.object({
-  name: z.string().trim().min(1, "El nombre es requerido."),
+  name: z.string().trim().min(1, "El nombre es requerido.").max(50, "Máximo 50 caracteres.").regex(SPANISH_TEXT, "Solo letras, números y puntuación básica."),
   type: z.enum(PROPERTY_TYPE_VALUES, {
     message: "Selecciona el tipo de inmueble.",
   }),
   status: z.enum(PROPERTY_STATUS_VALUES).optional(),
-  address: z.string().trim().min(1, "La dirección es requerida."),
+  address: z.string().trim().min(1, "La dirección es requerida.").max(120, "Máximo 120 caracteres.").regex(ADDRESS_TEXT, "Solo letras, números y puntuación de dirección (#, °, etc.)."),
   ownerEntityId: z.string().min(1, "Selecciona la razón social dueña."),
   managerEntityId: z.string().min(1, "Selecciona la razón social administradora."),
   cadastralKey: z
     .string()
     .trim()
-    .max(40, "Máximo 40 caracteres.")
+    .max(30, "Máximo 30 caracteres.")
+    .regex(CADASTRAL_KEY, "Solo letras, números, guiones y diagonal.")
     .optional()
     .or(z.literal("").transform(() => undefined)),
   latitude: z
@@ -45,7 +47,7 @@ export const createPropertySchema = z.object({
   notes: z
     .string()
     .trim()
-    .max(2000, "Máximo 2000 caracteres.")
+    .max(1000, "Máximo 1000 caracteres.")
     .optional()
     .or(z.literal("").transform(() => undefined)),
 });
