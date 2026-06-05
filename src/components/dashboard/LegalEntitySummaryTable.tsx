@@ -2,17 +2,7 @@
 
 import { ChevronRight } from "lucide-react";
 import { useRouter } from "next/navigation";
-
-const MXN = new Intl.NumberFormat("es-MX", {
-  style: "currency",
-  currency: "MXN",
-  maximumFractionDigits: 0,
-});
-const PCT = new Intl.NumberFormat("es-MX", {
-  style: "percent",
-  minimumFractionDigits: 1,
-  maximumFractionDigits: 1,
-});
+import { formatMXN, formatPercent } from "@/lib/format-currency";
 
 export interface LegalEntitySummaryRow {
   id: string;
@@ -61,13 +51,13 @@ export function LegalEntitySummaryTable({ rows }: Props) {
                 className="group cursor-pointer hover:bg-muted/30 focus-visible:bg-muted/30 focus-visible:outline-none"
               >
                 <td className="py-2.5 font-semibold">{le.code}</td>
-                <td className="py-2.5 text-right tabular-nums">{MXN.format(le.income)}</td>
-                <td className="py-2.5 text-right tabular-nums text-muted-foreground">{MXN.format(le.expenses)}</td>
+                <td className="py-2.5 text-right tabular-nums">{formatMXN(le.income)}</td>
+                <td className="py-2.5 text-right tabular-nums text-muted-foreground">{formatMXN(le.expenses)}</td>
                 <td className={`py-2.5 text-right tabular-nums font-medium ${le.profit >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
-                  {MXN.format(le.profit)}
+                  {formatMXN(le.profit)}
                 </td>
                 <td className="py-2.5 text-right tabular-nums text-muted-foreground">
-                  {le.income > 0 ? PCT.format(le.rent) : "—"}
+                  {le.income > 0 ? formatPercent(le.rent) : "—"}
                 </td>
                 <td className="py-2.5 pl-2 text-right">
                   <ChevronRight className="ml-auto size-4 text-muted-foreground/40 transition-colors group-hover:text-muted-foreground" />

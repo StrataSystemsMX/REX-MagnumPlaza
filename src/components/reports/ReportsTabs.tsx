@@ -30,20 +30,8 @@ import type {
   UnitStatus,
 } from "@/generated/prisma/enums";
 import type { ReportsBundle } from "@/lib/services/reports-queries";
-import { capitalizeFirst } from "@/lib/utils";
-
-const MXN = new Intl.NumberFormat("es-MX", {
-  style: "currency",
-  currency: "MXN",
-  maximumFractionDigits: 0,
-});
-
-const DATE = new Intl.DateTimeFormat("es-MX", {
-  day: "2-digit",
-  month: "short",
-  year: "numeric",
-  timeZone: "UTC",
-});
+import { formatMXN } from "@/lib/format-currency";
+import { formatDate } from "@/lib/format-date";
 
 const MONTH_NAMES = [
   "Ene",
@@ -63,12 +51,12 @@ const MONTH_NAMES = [
 function money(v: string | number): string {
   const n = Number(v);
   if (!Number.isFinite(n) || n === 0) return "—";
-  return MXN.format(n);
+  return formatMXN(n);
 }
 
 function moneyZero(v: string | number): string {
   const n = Number(v);
-  return MXN.format(Number.isFinite(n) ? n : 0);
+  return formatMXN(Number.isFinite(n) ? n : 0);
 }
 
 interface ReportsTabsProps {
@@ -131,7 +119,7 @@ function AgingTab({ data }: { data: ReportsBundle["aging"] }) {
           <CardTitle>Adeudo por inquilino</CardTitle>
           <CardDescription>
             Distribución del saldo pendiente según antigüedad. Corte al{" "}
-            {capitalizeFirst(DATE.format(data.asOf))}.
+            {formatDate(data.asOf)}.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -666,7 +654,7 @@ function ExpiringTable({
                 {c.propertyName} · {c.unitCode}
               </TableCell>
               <TableCell className="text-center">
-                {capitalizeFirst(DATE.format(c.endDate))}
+                {formatDate(c.endDate)}
                 <span className="ml-2 text-xs text-muted-foreground">
                   ({mode === "upcoming" ? `en ${days}d` : `hace ${days}d`})
                 </span>

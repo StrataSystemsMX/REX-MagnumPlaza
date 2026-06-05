@@ -5,6 +5,7 @@ import { unitStatusLabel, unitStatusVariant } from "@/lib/i18n/enums";
 import type { PublicVacancyData } from "@/lib/services/promoters-public";
 import { buildWhatsAppUrl } from "@/lib/utils/whatsapp-link";
 import { Badge } from "@/components/ui/badge";
+import { formatMXN } from "@/lib/format-currency";
 
 interface Props {
   estimatedRent: number | null;
@@ -16,12 +17,6 @@ interface Props {
   unitCode: string;
   propertyName: string;
 }
-
-const MXN = new Intl.NumberFormat("es-MX", {
-  style: "currency",
-  currency: "MXN",
-  maximumFractionDigits: 0,
-});
 
 export function VacancyPriceCard({
   estimatedRent,
@@ -51,11 +46,11 @@ export function VacancyPriceCard({
           <Badge variant={unitStatusVariant(status)}>{unitStatusLabel(status)}</Badge>
         </div>
         <p className="mt-2 text-3xl font-semibold tracking-tight sm:text-4xl">
-          {estimatedRent != null ? MXN.format(estimatedRent) : "Consultar"}
+          {estimatedRent != null ? formatMXN(estimatedRent) : "Consultar"}
         </p>
         {pricePerM2 != null ? (
           <p className="mt-1 text-xs text-muted-foreground">
-            {MXN.format(pricePerM2)} / m²
+            {formatMXN(pricePerM2)} / m²
           </p>
         ) : null}
       </div>

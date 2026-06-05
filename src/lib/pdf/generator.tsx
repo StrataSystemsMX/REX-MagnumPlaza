@@ -17,22 +17,15 @@ import {
   type DashboardOptions,
 } from "@/lib/services/dashboard-metrics";
 import { capitalizeFirst } from "@/lib/utils";
+import { formatMXN } from "@/lib/format-currency";
+import { formatPeriodLong } from "@/lib/format-date";
 
+// day+month:"long"+year → no mapea a formatDate (que usa month short). Inline.
 const DATE = new Intl.DateTimeFormat("es-MX", {
   day: "2-digit",
   month: "long",
   year: "numeric",
   timeZone: "UTC",
-});
-const PERIOD_LARGE = new Intl.DateTimeFormat("es-MX", {
-  month: "long",
-  year: "numeric",
-  timeZone: "UTC",
-});
-const MXN = new Intl.NumberFormat("es-MX", {
-  style: "currency",
-  currency: "MXN",
-  maximumFractionDigits: 2,
 });
 
 export interface GeneratedPdf {
@@ -268,10 +261,10 @@ export async function generateOverdueReminder(
 
   const tokens: Record<string, string> = {
     lesseeName: lessee.legalName,
-    period: capitalizeFirst(PERIOD_LARGE.format(rent.period)),
+    period: formatPeriodLong(rent.period),
     unitLabel,
     daysOverdue: String(days(rent.dueDate)),
-    balance: MXN.format(Number(balance)),
+    balance: formatMXN(balance, 2),
     contractSignedDate,
     paymentDay: String(rent.contract.paymentDay),
     billingEntityName: billingEntity.legalName,
@@ -346,7 +339,7 @@ export async function generateOverdueReminder(
       sizeBytes: buffer.byteLength,
       uploadedById: options.uploadedById ?? null,
       contractId: rent.contractId,
-      notes: `Aviso ${level} de ${lessee.legalName} — ${capitalizeFirst(PERIOD_LARGE.format(rent.period))}.`,
+      notes: `Aviso ${level} de ${lessee.legalName} — ${formatPeriodLong(rent.period)}.`,
     },
   });
 

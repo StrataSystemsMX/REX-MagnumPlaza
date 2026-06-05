@@ -33,8 +33,7 @@ import { actionCreateGuarantee } from "@/lib/services/guarantees";
 import { createGuaranteeSchema, type CreateGuaranteeInput } from "@/lib/validators/guarantee";
 import type { ContractForGuarantee } from "@/lib/services/guarantees-queries";
 import { unitWithProperty } from "@/lib/i18n/unit-label";
-
-const MXN = new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" });
+import { formatMXN } from "@/lib/format-currency";
 
 interface Props {
   contracts: ContractForGuarantee[];
@@ -95,7 +94,7 @@ export function NewGuaranteeDialog({ contracts }: Props) {
                   </Select>
                   {selectedContract && (
                     <p className="text-xs text-muted-foreground">
-                      Fianza sugerida: {MXN.format(selectedContract.guaranteeAmount)}
+                      Fianza sugerida: {formatMXN(selectedContract.guaranteeAmount, 2)}
                     </p>
                   )}
                   <FormMessage />

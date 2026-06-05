@@ -25,12 +25,7 @@ import type {
 } from "@/lib/services/contracts-queries";
 import type { ContractStatus, ContractType } from "@/generated/prisma/enums";
 import { capitalizeFirst } from "@/lib/utils";
-
-const MXN = new Intl.NumberFormat("es-MX", {
-  style: "currency",
-  currency: "MXN",
-  maximumFractionDigits: 2,
-});
+import { formatMXN } from "@/lib/format-currency";
 
 const DATE = new Intl.DateTimeFormat("es-MX", {
   year: "numeric",
@@ -60,7 +55,7 @@ function fmtDate(v: unknown): string {
 
 function fmtMoney(v: unknown): string {
   const n = typeof v === "number" ? v : typeof v === "string" ? Number(v) : NaN;
-  return Number.isNaN(n) ? String(v) : MXN.format(n);
+  return Number.isNaN(n) ? String(v) : formatMXN(n, 2);
 }
 
 function statusLabelSafe(s: string): string {
@@ -222,7 +217,7 @@ export function ContractDetailTabs({
             <Row label="Tipo">{contractTypeLabel(contract.type)}</Row>
             <Row label="Renta mensual">
               <span className="font-medium tabular-nums">
-                {MXN.format(Number(contract.monthlyAmount))}
+                {formatMXN(contract.monthlyAmount, 2)}
               </span>
             </Row>
             <Row label="Vigencia">
@@ -274,7 +269,7 @@ export function ContractDetailTabs({
                 <li key={g.id} className="rounded-md border p-3">
                   <div className="flex items-center justify-between">
                     <span className="font-medium tabular-nums">
-                      {MXN.format(Number(g.amount))}
+                      {formatMXN(g.amount, 2)}
                     </span>
                     <Badge variant="secondary">
                       {guaranteeStatusLabel(g.status)}

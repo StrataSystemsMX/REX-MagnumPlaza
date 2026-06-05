@@ -12,7 +12,8 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { capitalizeFirst } from "@/lib/utils";
+import { formatMXN, formatMXNCompact } from "@/lib/format-currency";
+import { formatMonthShort } from "@/lib/format-date";
 
 // Histórico real extraído del Excel del cliente (2009–2025)
 const HISTORICAL_DATA = [
@@ -53,10 +54,10 @@ export function FinancialHistoryChart({ current }: FinancialHistoryChartProps) {
           <YAxis
             stroke="hsl(var(--muted-foreground))"
             fontSize={11}
-            tickFormatter={(v: number) => MXN_COMPACT.format(v)}
+            tickFormatter={(v: number) => formatMXNCompact(v)}
           />
           <Tooltip
-            formatter={(value) => MXN_FULL.format(Number(value))}
+            formatter={(value) => formatMXN(Number(value))}
             contentStyle={{ borderRadius: 8, fontSize: 12 }}
           />
           <Legend wrapperStyle={{ fontSize: 12 }} />
@@ -68,26 +69,11 @@ export function FinancialHistoryChart({ current }: FinancialHistoryChartProps) {
   );
 }
 
-const MXN_COMPACT = new Intl.NumberFormat("es-MX", {
-  style: "currency",
-  currency: "MXN",
-  notation: "compact",
-  maximumFractionDigits: 1,
-});
-
-const MXN_FULL = new Intl.NumberFormat("es-MX", {
-  style: "currency",
-  currency: "MXN",
-  maximumFractionDigits: 0,
-});
-
-const MONTH_LABEL = new Intl.DateTimeFormat("es-MX", { month: "short", timeZone: "UTC" });
-
 function monthShortLabel(yyyymm: string): string {
   const y = Number(yyyymm.slice(0, 4));
   const m = Number(yyyymm.slice(5, 7));
   if (!Number.isFinite(y) || !Number.isFinite(m)) return yyyymm;
-  return capitalizeFirst(MONTH_LABEL.format(new Date(Date.UTC(y, m - 1, 1))));
+  return formatMonthShort(new Date(Date.UTC(y, m - 1, 1)));
 }
 
 export interface IncomeChartProps {
@@ -109,10 +95,10 @@ export function IncomeChart({ data }: IncomeChartProps) {
           <YAxis
             stroke="hsl(var(--muted-foreground))"
             fontSize={12}
-            tickFormatter={(v: number) => MXN_COMPACT.format(Number(v))}
+            tickFormatter={(v: number) => formatMXNCompact(Number(v))}
           />
           <Tooltip
-            formatter={(value) => MXN_FULL.format(Number(value))}
+            formatter={(value) => formatMXN(Number(value))}
             contentStyle={{ borderRadius: 8, fontSize: 12 }}
           />
           <Legend wrapperStyle={{ fontSize: 12 }} />

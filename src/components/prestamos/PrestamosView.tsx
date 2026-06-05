@@ -23,7 +23,9 @@ import {
   RegisterLoanPaymentDialog,
   type LoanPaymentTarget,
 } from "@/components/prestamos/RegisterLoanPaymentDialog";
-import { capitalizeFirst, cn } from "@/lib/utils";
+import { cn } from "@/lib/utils";
+import { formatMXN } from "@/lib/format-currency";
+import { formatPeriodLong } from "@/lib/format-date";
 import type {
   LoanPaymentStatus,
   LoanYearlyCell,
@@ -31,24 +33,6 @@ import type {
   LoansYearlyMatrix,
   PrestamosKpis,
 } from "@/lib/services/prestamos-queries";
-
-const MXN = new Intl.NumberFormat("es-MX", {
-  style: "currency",
-  currency: "MXN",
-  maximumFractionDigits: 2,
-});
-
-const MXN_INT = new Intl.NumberFormat("es-MX", {
-  style: "currency",
-  currency: "MXN",
-  maximumFractionDigits: 0,
-});
-
-const PERIOD_LONG = new Intl.DateTimeFormat("es-MX", {
-  month: "long",
-  year: "numeric",
-  timeZone: "UTC",
-});
 
 const MONTHS_SHORT = [
   "Ene", "Feb", "Mar", "Abr", "May", "Jun",
@@ -126,20 +110,20 @@ function KpiCards({ kpis, year }: { kpis: PrestamosKpis; year: number }) {
       <KpiCard
         icon={<CreditCard className="size-4" />}
         label="Pago mensual"
-        value={MXN_INT.format(kpis.totalMonthlyLoanPayment)}
+        value={formatMXN(kpis.totalMonthlyLoanPayment)}
         sub={`${kpis.activeLoans} financiamiento${kpis.activeLoans !== 1 ? "s" : ""} activo${kpis.activeLoans !== 1 ? "s" : ""}`}
       />
       <KpiCard
         icon={<Wallet className="size-4" />}
         label={`Pagado ${year}`}
-        value={MXN_INT.format(kpis.paidThisYear)}
+        value={formatMXN(kpis.paidThisYear)}
         sub="Cuotas liquidadas en el año"
         valueClass="text-green-700 dark:text-green-300"
       />
       <KpiCard
         icon={<Clock className="size-4" />}
         label={`Pendiente ${year}`}
-        value={MXN_INT.format(kpis.pendingThisYear)}
+        value={formatMXN(kpis.pendingThisYear)}
         sub="Por pagar hasta diciembre"
         valueClass={kpis.pendingThisYear > 0 ? "text-amber-700 dark:text-amber-300" : undefined}
       />
@@ -147,7 +131,7 @@ function KpiCards({ kpis, year }: { kpis: PrestamosKpis; year: number }) {
         icon={<Percent className="size-4" />}
         label={`Avance ${year}`}
         value={`${yearProgress.toFixed(1)}%`}
-        sub={`${MXN_INT.format(kpis.paidThisYear)} de ${MXN_INT.format(yearTotal)}`}
+        sub={`${formatMXN(kpis.paidThisYear)} de ${formatMXN(yearTotal)}`}
         progress={yearProgress}
       />
     </div>
@@ -268,12 +252,12 @@ function LoanMatrix({
         <SummaryPill
           icon={<Wallet className="size-3.5" />}
           label={`Estimado ${matrix.year}`}
-          value={MXN_INT.format(totalYear)}
+          value={formatMXN(totalYear)}
         />
         <SummaryPill
           icon={<Wallet className="size-3.5 text-green-600" />}
           label="Pagado"
-          value={MXN_INT.format(totalPaid)}
+          value={formatMXN(totalPaid)}
           accent="text-green-700 dark:text-green-300"
         />
         <SummaryPill
@@ -357,10 +341,10 @@ function LoanMatrix({
                   })}
                   <td className="px-3 py-2 text-right text-xs tabular-nums">
                     <div className="text-green-700 dark:text-green-300">
-                      {MXN_INT.format(totalPaid)}
+                      {formatMXN(totalPaid)}
                     </div>
                     <div className="text-muted-foreground">
-                      de {MXN_INT.format(totalYear)}
+                      de {formatMXN(totalYear)}
                     </div>
                   </td>
                 </tr>
@@ -451,7 +435,7 @@ function LoanMatrixRow({
         <td key={i} className="px-1 py-1.5">
           <MatrixCell
             cell={cell}
-            tooltip={`${row.name} — ${capitalizeFirst(PERIOD_LONG.format(cell.period))}`}
+            tooltip={`${row.name} — ${formatPeriodLong(cell.period)}`}
             onClick={() => {
               if (cell.status === "EMPTY" || cell.status === "PAID") return;
               onCellClick({
@@ -468,9 +452,9 @@ function LoanMatrixRow({
       ))}
       <td className="px-3 py-1.5 text-right text-xs tabular-nums">
         <div className="font-medium text-green-700 dark:text-green-300">
-          {MXN_INT.format(row.paidTotal)}
+          {formatMXN(row.paidTotal)}
         </div>
-        <div className="text-muted-foreground">de {MXN_INT.format(row.yearTotal)}</div>
+        <div className="text-muted-foreground">de {formatMXN(row.yearTotal)}</div>
       </td>
     </tr>
   );
@@ -498,10 +482,10 @@ function MatrixCell({ cell, tooltip, onClick }: {
     cell.status === "EMPTY"
       ? `${tooltip} — Sin cuota`
       : cell.status === "PAID"
-        ? `${tooltip}\nPagado: ${MXN.format(cell.amount)}`
+        ? `${tooltip}\nPagado: ${formatMXN(cell.amount, 2)}`
         : cell.status === "PENDING"
-          ? `${tooltip}\nPendiente: ${MXN.format(cell.amount)} — Click para registrar`
-          : `${tooltip}\nProgramado: ${MXN.format(cell.amount)}`;
+          ? `${tooltip}\nPendiente: ${formatMXN(cell.amount, 2)} — Click para registrar`
+          : `${tooltip}\nProgramado: ${formatMXN(cell.amount, 2)}`;
 
   if (!clickable) {
     return (
@@ -570,19 +554,19 @@ function MonthlyTotalsTable({
               return (
                 <tr key={i} className="border-b last:border-b-0">
                   <td className="px-3 py-1.5">
-                    {capitalizeFirst(PERIOD_LONG.format(t.period))}
+                    {formatPeriodLong(t.period)}
                   </td>
                   <td className="px-3 py-1.5 text-right tabular-nums">
-                    {MXN_INT.format(t.expected)}
+                    {formatMXN(t.expected)}
                   </td>
                   <td className="px-3 py-1.5 text-right tabular-nums text-green-700 dark:text-green-300">
-                    {MXN_INT.format(t.paid)}
+                    {formatMXN(t.paid)}
                   </td>
                   <td className={cn(
                     "px-3 py-1.5 text-right tabular-nums",
                     t.pending > 0 && "text-amber-700 dark:text-amber-300",
                   )}>
-                    {t.pending > 0 ? MXN_INT.format(t.pending) : "—"}
+                    {t.pending > 0 ? formatMXN(t.pending) : "—"}
                   </td>
                   <td className="px-3 py-1.5">
                     <div className="flex items-center gap-2">

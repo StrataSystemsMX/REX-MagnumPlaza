@@ -25,7 +25,9 @@ import {
   RegisterExpenseDialog,
   type RegisterExpenseContext,
 } from "@/components/egresos/RegisterExpenseDialog";
-import { capitalizeFirst, cn } from "@/lib/utils";
+import { cn } from "@/lib/utils";
+import { formatMXN } from "@/lib/format-currency";
+import { formatPeriodLong } from "@/lib/format-date";
 import type {
   MonthlyExpenseStatus,
   YearlyExpenseCell,
@@ -36,24 +38,6 @@ import type {
   ExpensePropertyOption,
 } from "@/lib/services/expenses-queries";
 import type { LegalEntityOption } from "@/lib/services/properties-queries";
-
-const MXN = new Intl.NumberFormat("es-MX", {
-  style: "currency",
-  currency: "MXN",
-  maximumFractionDigits: 2,
-});
-
-const MXN_INT = new Intl.NumberFormat("es-MX", {
-  style: "currency",
-  currency: "MXN",
-  maximumFractionDigits: 0,
-});
-
-const PERIOD_FULL = new Intl.DateTimeFormat("es-MX", {
-  month: "long",
-  year: "numeric",
-  timeZone: "UTC",
-});
 
 const MONTHS_SHORT = [
   "Ene", "Feb", "Mar", "Abr", "May", "Jun",
@@ -282,19 +266,19 @@ export function EgresosYearlyView({
         <KpiCard
           icon={<TrendingDown className="size-4" />}
           label={`Estimado ${data.year}`}
-          value={MXN_INT.format(filteredTotals.expected)}
+          value={formatMXN(filteredTotals.expected)}
           accent="text-foreground"
         />
         <KpiCard
           icon={<Wallet className="size-4" />}
           label="Pagado"
-          value={MXN_INT.format(filteredTotals.paid)}
+          value={formatMXN(filteredTotals.paid)}
           accent="text-green-700 dark:text-green-300"
         />
         <KpiCard
           icon={<AlertTriangle className="size-4" />}
           label="Por pagar"
-          value={MXN_INT.format(filteredTotals.balance)}
+          value={formatMXN(filteredTotals.balance)}
           accent="text-destructive"
         />
         <KpiCard
@@ -431,7 +415,7 @@ function EntityBreakdown({
           <p className="text-xs text-muted-foreground">
             Total:{" "}
             <span className="font-semibold tabular-nums text-foreground">
-              {MXN_INT.format(totalExpected)}
+              {formatMXN(totalExpected)}
             </span>
           </p>
         </div>
@@ -464,7 +448,7 @@ function EntityBreakdown({
                   </span>
                 </div>
                 <p className="mt-2 text-lg font-semibold tabular-nums">
-                  {MXN_INT.format(g.expectedTotal)}
+                  {formatMXN(g.expectedTotal)}
                 </p>
                 <div className="mt-1 flex items-center justify-between text-[11px] text-muted-foreground">
                   <span>{sharePct}% del total</span>
@@ -579,7 +563,7 @@ function EntitySection({ group, canUpdate, onCellClick, collapsed, onToggle }: E
               Estimado
             </p>
             <p className="font-semibold tabular-nums">
-              {MXN_INT.format(group.expectedTotal)}
+              {formatMXN(group.expectedTotal)}
             </p>
           </div>
           <div className="text-right">
@@ -587,7 +571,7 @@ function EntitySection({ group, canUpdate, onCellClick, collapsed, onToggle }: E
               Pagado
             </p>
             <p className="font-semibold tabular-nums text-green-700 dark:text-green-300">
-              {MXN_INT.format(group.paidTotal)}
+              {formatMXN(group.paidTotal)}
               <span className="ml-1 text-muted-foreground">({paidPct}%)</span>
             </p>
           </div>
@@ -596,7 +580,7 @@ function EntitySection({ group, canUpdate, onCellClick, collapsed, onToggle }: E
               Por pagar
             </p>
             <p className="font-semibold tabular-nums text-destructive">
-              {MXN_INT.format(group.expectedTotal - group.paidTotal)}
+              {formatMXN(group.expectedTotal - group.paidTotal)}
             </p>
           </div>
         </div>
@@ -699,10 +683,10 @@ function ConceptMatrix({ group, canUpdate, onCellClick }: ConceptMatrixProps) {
               })}
               <td className="px-3 py-2 text-right text-xs tabular-nums">
                 <div className="font-semibold text-green-700 dark:text-green-300">
-                  {MXN_INT.format(group.paidTotal)}
+                  {formatMXN(group.paidTotal)}
                 </div>
                 <div className="text-muted-foreground">
-                  de {MXN_INT.format(group.expectedTotal)}
+                  de {formatMXN(group.expectedTotal)}
                 </div>
               </td>
             </tr>
@@ -751,16 +735,16 @@ function ConceptRow({ entity, row, canUpdate, onCellClick }: ConceptRowProps) {
             cell={cell}
             canUpdate={canUpdate}
             onClick={() => onCellClick(entity, row, cell)}
-            tooltipHead={`${row.description} — ${capitalizeFirst(PERIOD_FULL.format(cell.period))}`}
+            tooltipHead={`${row.description} — ${formatPeriodLong(cell.period)}`}
           />
         </td>
       ))}
       <td className="px-3 py-1.5 text-right text-xs tabular-nums">
         <div className="font-medium text-green-700 dark:text-green-300">
-          {MXN_INT.format(row.paidTotal)}
+          {formatMXN(row.paidTotal)}
         </div>
         <div className="text-muted-foreground">
-          de {MXN_INT.format(row.expectedTotal)}
+          de {formatMXN(row.expectedTotal)}
         </div>
       </td>
     </tr>
@@ -850,7 +834,7 @@ function MatrixCell({ cell, canUpdate, onClick, tooltipHead }: MatrixCellProps) 
 
 function buildTooltip(cell: YearlyExpenseCell, head: string): string {
   if (cell.status === "EMPTY") return `${head} — Sin registro`;
-  const monto = MXN.format(cell.amount);
+  const monto = formatMXN(cell.amount, 2);
   switch (cell.status) {
     case "PAID":
       return `${head}\nPagado: ${monto}`;
@@ -905,13 +889,13 @@ function MonthlyTotalsBar({
               return (
                 <tr key={i} className="border-b last:border-b-0">
                   <td className="px-3 py-1.5">
-                    {capitalizeFirst(PERIOD_FULL.format(t.period))}
+                    {formatPeriodLong(t.period)}
                   </td>
                   <td className="px-3 py-1.5 text-right tabular-nums">
-                    {MXN_INT.format(t.expected)}
+                    {formatMXN(t.expected)}
                   </td>
                   <td className="px-3 py-1.5 text-right tabular-nums text-green-700 dark:text-green-300">
-                    {MXN_INT.format(t.paid)}
+                    {formatMXN(t.paid)}
                   </td>
                   <td className="px-3 py-1.5">
                     <div className="flex items-center gap-2">

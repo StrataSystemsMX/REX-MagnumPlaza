@@ -1,6 +1,7 @@
 import { MessageCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { buildWhatsAppUrl } from "@/lib/utils/whatsapp-link";
+import { formatMXN } from "@/lib/format-currency";
 
 interface Props {
   contactPhone: string | null;
@@ -10,12 +11,6 @@ interface Props {
   propertyName: string;
   estimatedRent: number | null;
 }
-
-const MXN = new Intl.NumberFormat("es-MX", {
-  style: "currency",
-  currency: "MXN",
-  maximumFractionDigits: 0,
-});
 
 export function VacancyContactCTA({
   contactPhone,
@@ -36,7 +31,7 @@ export function VacancyContactCTA({
         <div className="min-w-0 flex-1">
           <p className="text-xs text-muted-foreground">Renta mensual</p>
           <p className="truncate text-base font-semibold">
-            {estimatedRent != null ? MXN.format(estimatedRent) : "Consultar"}
+            {estimatedRent != null ? formatMXN(estimatedRent) : "Consultar"}
           </p>
         </div>
         <a href={url} target="_blank" rel="noopener noreferrer" className="shrink-0">

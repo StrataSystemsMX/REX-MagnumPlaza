@@ -53,19 +53,9 @@ import { unitWithProperty } from "@/lib/i18n/unit-label";
 import type { OutstandingRent } from "@/lib/services/payments-queries";
 import type { RentStatus } from "@/generated/prisma/enums";
 import type { ReminderLevel } from "@/lib/pdf/template-config";
-import { capitalizeFirst, cn } from "@/lib/utils";
-
-const MXN = new Intl.NumberFormat("es-MX", {
-  style: "currency",
-  currency: "MXN",
-  maximumFractionDigits: 2,
-});
-
-const PERIOD = new Intl.DateTimeFormat("es-MX", {
-  month: "long",
-  year: "numeric",
-  timeZone: "UTC",
-});
+import { cn } from "@/lib/utils";
+import { formatMXN } from "@/lib/format-currency";
+import { formatPeriodLong } from "@/lib/format-date";
 
 type StatusFilter = RentStatus | "ALL";
 
@@ -192,7 +182,7 @@ export function OutstandingRentsTable({
         header: "Periodo",
         cell: ({ row }) => (
           <div className="text-center text-xs tabular-nums text-muted-foreground">
-            {capitalizeFirst(PERIOD.format(row.original.period))}
+            {formatPeriodLong(row.original.period)}
           </div>
         ),
       },
@@ -201,7 +191,7 @@ export function OutstandingRentsTable({
         header: "Cargo",
         cell: ({ row }) => (
           <div className="text-right tabular-nums">
-            {MXN.format(Number(row.original.amountDue))}
+            {formatMXN(row.original.amountDue, 2)}
           </div>
         ),
       },
@@ -210,7 +200,7 @@ export function OutstandingRentsTable({
         header: "Pagado",
         cell: ({ row }) => (
           <div className="text-right tabular-nums text-muted-foreground">
-            {MXN.format(Number(row.original.amountPaid))}
+            {formatMXN(row.original.amountPaid, 2)}
           </div>
         ),
       },
@@ -219,7 +209,7 @@ export function OutstandingRentsTable({
         header: "Saldo",
         cell: ({ row }) => (
           <div className="text-right font-medium tabular-nums">
-            {MXN.format(Number(row.original.balance))}
+            {formatMXN(row.original.balance, 2)}
           </div>
         ),
       },
@@ -417,7 +407,7 @@ export function OutstandingRentsTable({
           <div className="text-left sm:text-right">
             <p className="text-xs text-muted-foreground">Saldo filtrado</p>
             <p className="text-lg font-semibold tabular-nums">
-              {MXN.format(totalBalance)}
+              {formatMXN(totalBalance, 2)}
             </p>
           </div>
           <Button onClick={() => setBulkOpen(true)}>

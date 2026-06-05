@@ -18,7 +18,8 @@ import {
 } from "@/lib/validators/payment";
 import type { PaymentModel } from "@/generated/prisma/models";
 import type { RentStatus } from "@/generated/prisma/enums";
-import { capitalizeFirst } from "@/lib/utils";
+import { formatMXN } from "@/lib/format-currency";
+import { formatPeriodLong } from "@/lib/format-date";
 
 type TxClient = Parameters<Parameters<typeof prisma.$transaction>[0]>[0];
 
@@ -244,7 +245,7 @@ export async function actionRegisterPayment(
         .minus(new Prisma.Decimal(fr.amountWaived ?? 0));
       if (frBalance.lessThanOrEqualTo(0)) continue;
       const apply = Prisma.Decimal.min(remaining, frBalance);
-      const noteSuffix = `Aplicado automáticamente desde sobrante de la renta de ${formatPeriodEs(rent.period)}.`;
+      const noteSuffix = `Aplicado automáticamente desde sobrante de la renta de ${formatPeriodLong(rent.period)}.`;
       const cascadePayment = await tx.payment.create({
         data: {
           tenantId,
@@ -339,16 +340,6 @@ export async function actionRegisterPayment(
     })),
     remainderApplied: result.remainderAmount.toNumber(),
   };
-}
-
-const PERIOD_ES = new Intl.DateTimeFormat("es-MX", {
-  month: "long",
-  year: "numeric",
-  timeZone: "UTC",
-});
-
-function formatPeriodEs(d: Date): string {
-  return capitalizeFirst(PERIOD_ES.format(d));
 }
 
 export async function actionRegisterBulkPayment(input: BulkPaymentInput): Promise<{
@@ -577,10 +568,10 @@ export async function actionWaiveRents(input: WaiveRentsInput): Promise<{
     }
 
     const action = isRemoval
-      ? `Condonación REMOVIDA (era ${MXNFormat(Number(r.amountWaived))})`
+      ? `Condonación REMOVIDA (era ${formatMXN(r.amountWaived, 2)})`
       : isReplace
-        ? `Condonación ACTUALIZADA de ${MXNFormat(Number(r.amountWaived))} a ${MXNFormat(it.amount)}`
-        : `Condonado ${MXNFormat(it.amount)}`;
+        ? `Condonación ACTUALIZADA de ${formatMXN(r.amountWaived, 2)} a ${formatMXN(it.amount, 2)}`
+        : `Condonado ${formatMXN(it.amount, 2)}`;
     const noteLine = `[${action} — ${stamp} por ${author}] ${reason}`;
     const newNotes = r.notes ? `${r.notes}\n${noteLine}` : noteLine;
 
@@ -630,13 +621,4 @@ export async function actionWaiveRents(input: WaiveRentsInput): Promise<{
   }
 
   return { affected, totalWaived };
-}
-
-const MXN_FORMAT = new Intl.NumberFormat("es-MX", {
-  style: "currency",
-  currency: "MXN",
-  maximumFractionDigits: 2,
-});
-function MXNFormat(n: number): string {
-  return MXN_FORMAT.format(n);
 }

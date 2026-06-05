@@ -5,20 +5,9 @@ import { Badge } from "@/components/ui/badge";
 import { SendNotificationDialog } from "@/components/collections/SendNotificationDialog";
 import type { LesseeDetail, LesseeOverdueRent } from "@/lib/services/lessees-queries";
 import type { ReminderLevel } from "@/lib/pdf/template-config";
-import { capitalizeFirst } from "@/lib/utils";
+import { formatMXN } from "@/lib/format-currency";
+import { formatPeriodLong } from "@/lib/format-date";
 import { isPlaza } from "@/lib/i18n/unit-label";
-
-const MXN = new Intl.NumberFormat("es-MX", {
-  style: "currency",
-  currency: "MXN",
-  maximumFractionDigits: 2,
-});
-
-const PERIOD = new Intl.DateTimeFormat("es-MX", {
-  year: "numeric",
-  month: "long",
-  timeZone: "UTC",
-});
 
 function levelFromStatus(status: LesseeOverdueRent["status"]): ReminderLevel {
   if (status === "OVERDUE_2M") return "2M";
@@ -87,9 +76,9 @@ export function OverdueNoticesPanel({ lessee, rents }: OverdueNoticesPanelProps)
                   </span>
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  Periodo {capitalizeFirst(PERIOD.format(r.period))} ·{" "}
+                  Periodo {formatPeriodLong(r.period)} ·{" "}
                   <span className="font-semibold text-rose-600 tabular-nums">
-                    {MXN.format(balance)}
+                    {formatMXN(balance, 2)}
                   </span>{" "}
                   por cobrar
                 </p>

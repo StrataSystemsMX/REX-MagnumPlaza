@@ -30,6 +30,7 @@ import {
 import type { AvailableUnit } from "@/lib/services/contracts-queries";
 import type { ContractType } from "@/generated/prisma/enums";
 import { capitalizeFirst } from "@/lib/utils";
+import { formatMXN } from "@/lib/format-currency";
 
 const CONTRACT_TYPES: ReadonlyArray<ContractType> = [
   "ARRENDAMIENTO",
@@ -37,12 +38,6 @@ const CONTRACT_TYPES: ReadonlyArray<ContractType> = [
   "ADMINISTRACION_INTERNA",
   "COMPRAVENTA",
 ];
-
-const MXN = new Intl.NumberFormat("es-MX", {
-  style: "currency",
-  currency: "MXN",
-  maximumFractionDigits: 2,
-});
 
 const DATE = new Intl.DateTimeFormat("es-MX", {
   year: "numeric",
@@ -344,12 +339,6 @@ export function ContractWizard({
 // Steps
 // =============================================================================
 
-const MXN_RENT = new Intl.NumberFormat("es-MX", {
-  style: "currency",
-  currency: "MXN",
-  maximumFractionDigits: 0,
-});
-
 function StepUnit({
   units,
   value,
@@ -459,7 +448,7 @@ function StepUnit({
                       </p>
                       <p className="mt-0.5 text-xs text-muted-foreground">
                         {u.estimatedRent !== null
-                          ? `Renta estimada: ${MXN_RENT.format(u.estimatedRent)}/mes`
+                          ? `Renta estimada: ${formatMXN(u.estimatedRent)}/mes`
                           : "Sin renta estimada"}
                       </p>
                     </div>
@@ -737,10 +726,10 @@ function StepConfirm({
         {terms.endDate ? capitalizeFirst(DATE.format(new Date(terms.endDate))) : "—"}
       </Row>
       <Row label="Renta mensual">
-        {terms.monthlyAmount ? MXN.format(Number(terms.monthlyAmount)) : "—"}
+        {terms.monthlyAmount ? formatMXN(terms.monthlyAmount, 2) : "—"}
       </Row>
       <Row label="Fianza">
-        {terms.guaranteeAmount ? MXN.format(Number(terms.guaranteeAmount)) : "—"}
+        {terms.guaranteeAmount ? formatMXN(terms.guaranteeAmount, 2) : "—"}
       </Row>
       <Row label="Día de cobro">{terms.paymentDay}</Row>
       {terms.lateFeePercentage ? (

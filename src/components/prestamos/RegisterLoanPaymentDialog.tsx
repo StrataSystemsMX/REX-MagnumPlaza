@@ -17,7 +17,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { actionMarkLoanPaymentPaid } from "@/lib/services/prestamos-actions";
-import { capitalizeFirst } from "@/lib/utils";
+import { formatMXN } from "@/lib/format-currency";
+import { formatPeriodLong } from "@/lib/format-date";
 
 export interface LoanPaymentTarget {
   loanId: string;
@@ -27,18 +28,6 @@ export interface LoanPaymentTarget {
   period: Date;
   amount: number;
 }
-
-const MXN = new Intl.NumberFormat("es-MX", {
-  style: "currency",
-  currency: "MXN",
-  maximumFractionDigits: 2,
-});
-
-const DATE = new Intl.DateTimeFormat("es-MX", {
-  year: "numeric",
-  month: "long",
-  timeZone: "UTC",
-});
 
 interface Props {
   target: LoanPaymentTarget | null;
@@ -90,7 +79,7 @@ export function RegisterLoanPaymentDialog({ target, onClose }: Props) {
           <DialogDescription>
             Confirma el monto pagado. El estimado es{" "}
             <span className="font-medium">
-              {target ? MXN.format(target.amount) : ""}
+              {target ? formatMXN(target.amount, 2) : ""}
             </span>
             .
           </DialogDescription>
@@ -100,7 +89,7 @@ export function RegisterLoanPaymentDialog({ target, onClose }: Props) {
           <div className="rounded-md border bg-muted/40 p-3 text-sm">
             <div className="flex items-center justify-between gap-2">
               <span className="text-muted-foreground">
-                {capitalizeFirst(DATE.format(target.period))}
+                {formatPeriodLong(target.period)}
               </span>
               <span className="rounded bg-muted px-1.5 py-0.5 text-xs font-medium">
                 {target.entityCode}

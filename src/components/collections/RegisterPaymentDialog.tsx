@@ -25,7 +25,9 @@ import {
 } from "@/lib/services/payments";
 import { registerPaymentSchema } from "@/lib/validators/payment";
 import type { PaymentMethod } from "@/generated/prisma/enums";
-import { capitalizeFirst, cn } from "@/lib/utils";
+import { cn } from "@/lib/utils";
+import { formatMXN } from "@/lib/format-currency";
+import { formatPeriodLong } from "@/lib/format-date";
 
 const METHODS: ReadonlyArray<PaymentMethod> = [
   "TRANSFER",
@@ -35,18 +37,6 @@ const METHODS: ReadonlyArray<PaymentMethod> = [
   "CARD",
   "OTHER",
 ];
-
-const MXN = new Intl.NumberFormat("es-MX", {
-  style: "currency",
-  currency: "MXN",
-  maximumFractionDigits: 2,
-});
-
-const PERIOD = new Intl.DateTimeFormat("es-MX", {
-  year: "numeric",
-  month: "long",
-  timeZone: "UTC",
-});
 
 export interface RegisterPaymentDialogContext {
   rentId: string;
@@ -155,7 +145,7 @@ export function RegisterPaymentDialog({
     }
     if (!isRemoval && targetAmount > maxWaivable + 0.0001) {
       toast.error(
-        `El monto excede lo condonable (máx ${MXN.format(maxWaivable)}).`,
+        `El monto excede lo condonable (máx ${formatMXN(maxWaivable, 2)}).`,
       );
       return;
     }
@@ -168,8 +158,8 @@ export function RegisterPaymentDialog({
         });
         toast.success(
           isRemoval
-            ? `Condonación removida en ${capitalizeFirst(PERIOD.format(context.period))}.`
-            : `Condonación aplicada: ${MXN.format(targetAmount)} en ${capitalizeFirst(PERIOD.format(context.period))}.`,
+            ? `Condonación removida en ${formatPeriodLong(context.period)}.`
+            : `Condonación aplicada: ${formatMXN(targetAmount, 2)} en ${formatPeriodLong(context.period)}.`,
         );
         onOpenChange(false);
         router.refresh();
@@ -206,11 +196,11 @@ export function RegisterPaymentDialog({
         const result = await actionRegisterPayment(parsed.data);
         const statusLabel = rentStatusLabel(result.rentStatus as Parameters<typeof rentStatusLabel>[0]);
         const parts = [
-          `Pago de ${MXN.format(parsed.data.amount)} registrado. Renta queda ${statusLabel.toLowerCase()}.`,
+          `Pago de ${formatMXN(parsed.data.amount, 2)} registrado. Renta queda ${statusLabel.toLowerCase()}.`,
         ];
         if (result.cascade.length > 0) {
           const months = result.cascade
-            .map((c) => capitalizeFirst(PERIOD.format(c.period)))
+            .map((c) => formatPeriodLong(c.period))
             .join(", ");
           parts.push(
             `Sobrante aplicado a ${result.cascade.length} mensualidad${result.cascade.length === 1 ? "" : "es"} (${months}).`,
@@ -218,7 +208,7 @@ export function RegisterPaymentDialog({
         }
         if (result.remainderApplied > 0) {
           parts.push(
-            `Quedó ${MXN.format(result.remainderApplied)} a favor.`,
+            `Quedó ${formatMXN(result.remainderApplied, 2)} a favor.`,
           );
         }
         toast.success(parts.join(" "));
@@ -251,7 +241,7 @@ export function RegisterPaymentDialog({
           <DialogDescription className="truncate">
             {context.lesseeName} · {context.unitLabel}
             {!isWaive ? (
-              <> · {capitalizeFirst(PERIOD.format(context.period))}</>
+              <> · {formatPeriodLong(context.period)}</>
             ) : null}
           </DialogDescription>
         </DialogHeader>
@@ -259,23 +249,23 @@ export function RegisterPaymentDialog({
         {!isWaive ? (
           <>
             <div className="rounded-md border bg-secondary/30 p-3 text-sm">
-              <Row label="Cargo del mes">{MXN.format(Number(context.amountDue))}</Row>
+              <Row label="Cargo del mes">{formatMXN(context.amountDue, 2)}</Row>
               {waivedAmount > 0 ? (
                 <Row label="Condonado">
                   <span className="font-medium text-blue-700 dark:text-blue-300">
-                    − {MXN.format(waivedAmount)}
+                    − {formatMXN(waivedAmount, 2)}
                   </span>
                 </Row>
               ) : null}
-              <Row label="Ya pagado">{MXN.format(Number(context.amountPaid))}</Row>
+              <Row label="Ya pagado">{formatMXN(context.amountPaid, 2)}</Row>
               <Row label={waivedAmount > 0 ? "Nuevo saldo a pagar" : "Saldo pendiente"}>
-                <span className="font-semibold">{MXN.format(balance)}</span>
+                <span className="font-semibold">{formatMXN(balance, 2)}</span>
               </Row>
             </div>
             {waivedAmount > 0 ? (
               <div className="-mt-1 rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-900 dark:border-blue-900 dark:bg-blue-950 dark:text-blue-200">
                 Esta renta fue condonada por{" "}
-                <span className="font-semibold">{MXN.format(waivedAmount)}</span>.
+                <span className="font-semibold">{formatMXN(waivedAmount, 2)}</span>.
                 Se cobrará el saldo restante.
               </div>
             ) : null}
@@ -345,7 +335,7 @@ export function RegisterPaymentDialog({
 
               {!hasNoBalance && overpay > 0 ? (
                 <div className="rounded-md border border-amber-200 bg-amber-50 p-2 text-xs text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200">
-                  <strong>Excede el saldo en {MXN.format(overpay)}.</strong> El sobrante se aplicará
+                  <strong>Excede el saldo en {formatMXN(overpay, 2)}.</strong> El sobrante se aplicará
                   a las siguientes mensualidades pendientes del contrato.
                 </div>
               ) : null}
@@ -356,25 +346,25 @@ export function RegisterPaymentDialog({
             <div className="rounded-md border bg-secondary/30 p-3 text-sm">
               <Row label="Mes">
                 <span className="font-medium">
-                  {capitalizeFirst(PERIOD.format(context.period))}
+                  {formatPeriodLong(context.period)}
                 </span>
               </Row>
               <Row label="Cargo del mes">
                 <span className="tabular-nums">
-                  {MXN.format(Number(context.amountDue))}
+                  {formatMXN(context.amountDue, 2)}
                 </span>
               </Row>
               {Number(context.amountPaid) > 0 ? (
                 <Row label="Ya pagado">
                   <span className="tabular-nums">
-                    {MXN.format(Number(context.amountPaid))}
+                    {formatMXN(context.amountPaid, 2)}
                   </span>
                 </Row>
               ) : null}
               {waivedAmount > 0 ? (
                 <Row label="Condonación actual">
                   <span className="font-medium text-blue-700 dark:text-blue-300">
-                    {MXN.format(waivedAmount)}
+                    {formatMXN(waivedAmount, 2)}
                   </span>
                 </Row>
               ) : null}
@@ -386,7 +376,7 @@ export function RegisterPaymentDialog({
                       "text-blue-700 dark:text-blue-300",
                   )}
                 >
-                  {MXN.format(newBalanceAfterWaive)}
+                  {formatMXN(newBalanceAfterWaive, 2)}
                 </span>
               </Row>
             </div>
@@ -533,8 +523,8 @@ export function RegisterPaymentDialog({
                 {waiving
                   ? "Guardando..."
                   : waivedAmount > 0
-                    ? `Guardar ${MXN.format(numericWaiveAmount)}`
-                    : `Condonar ${MXN.format(numericWaiveAmount)}`}
+                    ? `Guardar ${formatMXN(numericWaiveAmount, 2)}`
+                    : `Condonar ${formatMXN(numericWaiveAmount, 2)}`}
               </Button>
             )}
           </div>

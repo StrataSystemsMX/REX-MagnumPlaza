@@ -21,29 +21,12 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
+import { formatMXN } from "@/lib/format-currency";
+import { formatDate } from "@/lib/format-date";
 import type {
   InversionesKpis,
   InvestmentProjectListItem,
 } from "@/lib/services/inversiones-queries";
-
-const MXN = new Intl.NumberFormat("es-MX", {
-  style: "currency",
-  currency: "MXN",
-  maximumFractionDigits: 2,
-});
-
-const MXN_INT = new Intl.NumberFormat("es-MX", {
-  style: "currency",
-  currency: "MXN",
-  maximumFractionDigits: 0,
-});
-
-const DATE_MED = new Intl.DateTimeFormat("es-MX", {
-  day: "2-digit",
-  month: "short",
-  year: "numeric",
-  timeZone: "UTC",
-});
 
 const ENTITY_THEME: Record<string, { dot: string; text: string; badge: string }> = {
   CRT: { dot: "bg-orange-500", text: "text-orange-700 dark:text-orange-300", badge: "bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300" },
@@ -83,14 +66,14 @@ function KpiCards({ kpis }: { kpis: InversionesKpis }) {
       <KpiCard
         icon={<Landmark className="size-4" />}
         label="Inversión total"
-        value={MXN_INT.format(kpis.totalProjectBudget)}
+        value={formatMXN(kpis.totalProjectBudget)}
         sub="Suma contratada"
       />
       <KpiCard
         icon={<Wallet className="size-4" />}
         label="Ejecutado"
-        value={MXN_INT.format(kpis.totalProjectExecuted)}
-        sub={`${MXN_INT.format(remaining)} por entregar`}
+        value={formatMXN(kpis.totalProjectExecuted)}
+        sub={`${formatMXN(remaining)} por entregar`}
         valueClass="text-green-700 dark:text-green-300"
       />
       <KpiCard
@@ -228,12 +211,12 @@ function ProjectCard({ project }: { project: InvestmentProjectListItem }) {
           <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
             <div>
               <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Total contratado</div>
-              <div className="font-mono text-sm font-semibold">{MXN_INT.format(project.budgetAmount)}</div>
+              <div className="font-mono text-sm font-semibold">{formatMXN(project.budgetAmount)}</div>
             </div>
             <div>
               <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Entregado</div>
               <div className="font-mono text-sm font-semibold text-green-700 dark:text-green-300">
-                {MXN_INT.format(project.executedAmount)}
+                {formatMXN(project.executedAmount)}
               </div>
             </div>
             <div>
@@ -242,7 +225,7 @@ function ProjectCard({ project }: { project: InvestmentProjectListItem }) {
                 "font-mono text-sm font-semibold",
                 remaining < 0 ? "text-destructive" : "text-amber-700 dark:text-amber-300",
               )}>
-                {MXN_INT.format(remaining)}
+                {formatMXN(remaining)}
               </div>
             </div>
             <div className="col-span-2 sm:col-span-1">
@@ -280,10 +263,10 @@ function ProjectCard({ project }: { project: InvestmentProjectListItem }) {
                 <TableRow key={pay.id}>
                   <TableCell className="text-sm">{pay.description}</TableCell>
                   <TableCell className="text-center text-sm text-muted-foreground">
-                    {DATE_MED.format(new Date(pay.paymentDate))}
+                    {formatDate(pay.paymentDate)}
                   </TableCell>
                   <TableCell className="text-right font-mono text-sm">
-                    {MXN.format(pay.amount)}
+                    {formatMXN(pay.amount, 2)}
                   </TableCell>
                   <TableCell className="text-center">
                     <Badge variant={pay.isPaid ? "secondary" : "outline"} className="text-xs">

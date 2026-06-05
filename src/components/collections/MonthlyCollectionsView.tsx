@@ -32,24 +32,13 @@ import {
 import { SendNotificationDialog } from "@/components/collections/SendNotificationDialog";
 import { INMUEBLES_TAB_VALUE } from "@/components/shared/property-filter-constants";
 import { cn } from "@/lib/utils";
+import { formatMXN } from "@/lib/format-currency";
 import type {
   MonthlyCollections,
   MonthlyPropertyGroup,
   MonthlyUnitRow,
   MonthlyUnitStatus,
 } from "@/lib/services/payments-queries";
-
-const MXN = new Intl.NumberFormat("es-MX", {
-  style: "currency",
-  currency: "MXN",
-  maximumFractionDigits: 2,
-});
-
-const MXN_INT = new Intl.NumberFormat("es-MX", {
-  style: "currency",
-  currency: "MXN",
-  maximumFractionDigits: 0,
-});
 
 const TABLE_COLUMN_COUNT = 6;
 
@@ -299,7 +288,7 @@ function PropertyGroupRows({
                 : ""}
             </span>
             <span className="ml-auto text-xs tabular-nums text-muted-foreground">
-              {MXN_INT.format(Number(group.expectedTotal))} esperado
+              {formatMXN(group.expectedTotal)} esperado
             </span>
           </div>
         </TableCell>
@@ -387,7 +376,7 @@ function UnitRow({
         {row.status === "VACANT" ? (
           <span className="text-muted-foreground">—</span>
         ) : (
-          MXN.format(Number(row.amountDue))
+          formatMXN(row.amountDue, 2)
         )}
       </TableCell>
       <TableCell className="text-right tabular-nums">
@@ -427,28 +416,28 @@ function CobradoCell({ row }: { row: MonthlyUnitRow }) {
   if (row.status === "SIN_PAGO") {
     return (
       <span className="font-semibold text-red-700 dark:text-red-300">
-        {MXN.format(0)}
+        {formatMXN(0, 2)}
       </span>
     );
   }
   if (row.status === "PAID") {
     return (
       <span className="font-semibold text-green-700 dark:text-green-300">
-        {MXN.format(Number(row.amountPaid))}
+        {formatMXN(row.amountPaid, 2)}
       </span>
     );
   }
   if (row.status === "ABONO") {
     return (
       <span className="font-semibold text-sky-600 dark:text-sky-300">
-        {MXN.format(Number(row.amountPaid))}
+        {formatMXN(row.amountPaid, 2)}
       </span>
     );
   }
   // PARTIAL
   return (
     <span className="font-semibold text-amber-700 dark:text-amber-300">
-      {MXN.format(Number(row.amountPaid))}
+      {formatMXN(row.amountPaid, 2)}
     </span>
   );
 }

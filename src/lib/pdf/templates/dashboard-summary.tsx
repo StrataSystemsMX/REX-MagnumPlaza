@@ -7,19 +7,8 @@ import {
   type DocumentBillingEntity,
   type DocumentTenantInfo,
 } from "./shared";
-import { capitalizeFirst } from "@/lib/utils";
-
-const MXN = new Intl.NumberFormat("es-MX", {
-  style: "currency",
-  currency: "MXN",
-  maximumFractionDigits: 0,
-});
-const PCT = (n: number) => `${Math.round(n * 100)}%`;
-const MONTH_LABEL = new Intl.DateTimeFormat("es-MX", {
-  month: "long",
-  year: "numeric",
-  timeZone: "UTC",
-});
+import { formatMXN, formatPercent } from "@/lib/format-currency";
+import { formatPeriodLong } from "@/lib/format-date";
 
 const styles = StyleSheet.create({
   kpiRow: {
@@ -100,7 +89,7 @@ export interface DashboardSummaryPdfProps {
 function monthLabel(yyyymm: string): string {
   const y = Number(yyyymm.slice(0, 4));
   const m = Number(yyyymm.slice(5, 7));
-  return capitalizeFirst(MONTH_LABEL.format(new Date(Date.UTC(y, m - 1, 1))));
+  return formatPeriodLong(new Date(Date.UTC(y, m - 1, 1)));
 }
 
 export function DashboardSummaryPdf(props: DashboardSummaryPdfProps) {
@@ -127,25 +116,25 @@ export function DashboardSummaryPdf(props: DashboardSummaryPdfProps) {
             <Text style={styles.kpiLabel}>Inmuebles</Text>
             <Text style={styles.kpiValue}>{props.summary.totalProperties}</Text>
             <Text style={styles.kpiSub}>
-              {props.summary.totalUnits} unidades · {PCT(props.summary.occupancyRate)} ocupadas
+              {props.summary.totalUnits} unidades · {formatPercent(props.summary.occupancyRate, 0)} ocupadas
             </Text>
           </View>
           <View style={styles.kpiBox}>
             <Text style={styles.kpiLabel}>Esperado del mes</Text>
-            <Text style={styles.kpiValue}>{MXN.format(expected)}</Text>
+            <Text style={styles.kpiValue}>{formatMXN(expected)}</Text>
           </View>
         </View>
 
         <View style={styles.kpiRow}>
           <View style={styles.kpiBox}>
             <Text style={styles.kpiLabel}>Cobrado este mes</Text>
-            <Text style={styles.kpiValue}>{MXN.format(collected)}</Text>
+            <Text style={styles.kpiValue}>{formatMXN(collected)}</Text>
             <Text style={styles.kpiSub}>{collectionRate}% del esperado</Text>
           </View>
           <View style={styles.kpiBox}>
             <Text style={styles.kpiLabel}>Por cobrar</Text>
             <Text style={styles.kpiValue}>
-              {MXN.format(Number(props.summary.totalOutstanding))}
+              {formatMXN(props.summary.totalOutstanding)}
             </Text>
             <Text style={styles.kpiSub}>
               1M: {props.summary.overdueByLevel["1M"]} · 2M:{" "}
@@ -168,9 +157,9 @@ export function DashboardSummaryPdf(props: DashboardSummaryPdfProps) {
             {props.byProperty.map((p) => (
               <View key={p.propertyName} style={styles.tableRow}>
                 <Text style={styles.cellLeft}>{p.propertyName}</Text>
-                <Text style={styles.cellRight}>{PCT(p.occupancyRate)}</Text>
-                <Text style={styles.cellRight}>{MXN.format(Number(p.expectedIncome))}</Text>
-                <Text style={styles.cellRight}>{MXN.format(Number(p.collectedIncome))}</Text>
+                <Text style={styles.cellRight}>{formatPercent(p.occupancyRate, 0)}</Text>
+                <Text style={styles.cellRight}>{formatMXN(p.expectedIncome)}</Text>
+                <Text style={styles.cellRight}>{formatMXN(p.collectedIncome)}</Text>
               </View>
             ))}
           </>
@@ -191,9 +180,9 @@ export function DashboardSummaryPdf(props: DashboardSummaryPdfProps) {
                 <Text style={styles.cellLeft}>
                   {le.code} — {le.legalName}
                 </Text>
-                <Text style={styles.cellRight}>{MXN.format(Number(le.income))}</Text>
-                <Text style={styles.cellRight}>{MXN.format(Number(le.expenses))}</Text>
-                <Text style={styles.cellRight}>{MXN.format(Number(le.profit))}</Text>
+                <Text style={styles.cellRight}>{formatMXN(le.income)}</Text>
+                <Text style={styles.cellRight}>{formatMXN(le.expenses)}</Text>
+                <Text style={styles.cellRight}>{formatMXN(le.profit)}</Text>
               </View>
             ))}
           </>
@@ -211,7 +200,7 @@ export function DashboardSummaryPdf(props: DashboardSummaryPdfProps) {
             {props.topOverdue.map((row) => (
               <View key={row.legalName} style={styles.tableRow}>
                 <Text style={styles.cellLeft}>{row.legalName}</Text>
-                <Text style={styles.cellRight}>{MXN.format(Number(row.outstanding))}</Text>
+                <Text style={styles.cellRight}>{formatMXN(row.outstanding)}</Text>
                 <Text style={styles.cellRight}>{row.oldestDaysOverdue}d</Text>
               </View>
             ))}

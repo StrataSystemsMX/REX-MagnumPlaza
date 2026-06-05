@@ -24,19 +24,8 @@ import { getUserRoleCodes } from "@/lib/auth/permissions";
 import { propertyTypeLabel } from "@/lib/i18n/enums";
 import { getLegalEntityMetrics } from "@/lib/services/legal-entity-queries";
 import type { PropertyType } from "@/generated/prisma/enums";
-import { capitalizeFirst } from "@/lib/utils";
-
-const MXN = new Intl.NumberFormat("es-MX", {
-  style: "currency",
-  currency: "MXN",
-  maximumFractionDigits: 0,
-});
-const DATE = new Intl.DateTimeFormat("es-MX", {
-  day: "2-digit",
-  month: "short",
-  year: "numeric",
-  timeZone: "UTC",
-});
+import { formatMXN } from "@/lib/format-currency";
+import { formatDate } from "@/lib/format-date";
 
 const MONTH_NAMES = [
   "Ene",
@@ -125,13 +114,13 @@ export default async function LegalEntityPage({ params, searchParams }: PageProp
         <Card>
           <CardHeader>
             <CardDescription>Ingresos del año</CardDescription>
-            <CardTitle className="text-2xl">{MXN.format(Number(data.totalIncome))}</CardTitle>
+            <CardTitle className="text-2xl">{formatMXN(Number(data.totalIncome))}</CardTitle>
           </CardHeader>
         </Card>
         <Card>
           <CardHeader>
             <CardDescription>Egresos del año</CardDescription>
-            <CardTitle className="text-2xl">{MXN.format(Number(data.totalExpenses))}</CardTitle>
+            <CardTitle className="text-2xl">{formatMXN(Number(data.totalExpenses))}</CardTitle>
           </CardHeader>
         </Card>
         <Card>
@@ -146,7 +135,7 @@ export default async function LegalEntityPage({ params, searchParams }: PageProp
                     : "text-2xl"
               }
             >
-              {MXN.format(Number(data.totalProfit))}
+              {formatMXN(Number(data.totalProfit))}
             </CardTitle>
           </CardHeader>
         </Card>
@@ -176,22 +165,22 @@ export default async function LegalEntityPage({ params, searchParams }: PageProp
                 <TableCell className="font-medium">Ingresos</TableCell>
                 {data.monthlyIncome.map((v, i) => (
                   <TableCell key={i} className="text-right tabular-nums">
-                    {Number(v) === 0 ? "—" : MXN.format(Number(v))}
+                    {Number(v) === 0 ? "—" : formatMXN(Number(v))}
                   </TableCell>
                 ))}
                 <TableCell className="text-right font-semibold tabular-nums">
-                  {MXN.format(Number(data.totalIncome))}
+                  {formatMXN(Number(data.totalIncome))}
                 </TableCell>
               </TableRow>
               <TableRow>
                 <TableCell className="font-medium">Egresos</TableCell>
                 {data.monthlyExpenses.map((v, i) => (
                   <TableCell key={i} className="text-right tabular-nums">
-                    {Number(v) === 0 ? "—" : MXN.format(Number(v))}
+                    {Number(v) === 0 ? "—" : formatMXN(Number(v))}
                   </TableCell>
                 ))}
                 <TableCell className="text-right font-semibold tabular-nums">
-                  {MXN.format(Number(data.totalExpenses))}
+                  {formatMXN(Number(data.totalExpenses))}
                 </TableCell>
               </TableRow>
               <TableRow className="bg-muted/30">
@@ -205,7 +194,7 @@ export default async function LegalEntityPage({ params, searchParams }: PageProp
                         n > 0 ? "text-emerald-600" : n < 0 ? "text-rose-600" : ""
                       }`}
                     >
-                      {n === 0 ? "—" : MXN.format(n)}
+                      {n === 0 ? "—" : formatMXN(n)}
                     </TableCell>
                   );
                 })}
@@ -218,7 +207,7 @@ export default async function LegalEntityPage({ params, searchParams }: PageProp
                         : ""
                   }`}
                 >
-                  {MXN.format(Number(data.totalProfit))}
+                  {formatMXN(Number(data.totalProfit))}
                 </TableCell>
               </TableRow>
             </TableBody>
@@ -251,7 +240,7 @@ export default async function LegalEntityPage({ params, searchParams }: PageProp
                     <TableRow key={row.categoryName}>
                       <TableCell>{row.categoryName}</TableCell>
                       <TableCell className="text-right tabular-nums">
-                        {MXN.format(Number(row.amount))}
+                        {formatMXN(Number(row.amount))}
                       </TableCell>
                     </TableRow>
                   ))}
@@ -333,7 +322,7 @@ export default async function LegalEntityPage({ params, searchParams }: PageProp
               <TableBody>
                 {data.recentExpenses.map((e) => (
                   <TableRow key={e.id}>
-                    <TableCell className="whitespace-nowrap">{capitalizeFirst(DATE.format(e.expenseDate))}</TableCell>
+                    <TableCell className="whitespace-nowrap">{formatDate(e.expenseDate)}</TableCell>
                     <TableCell>
                       <Badge variant="outline">{e.category}</Badge>
                     </TableCell>
@@ -342,7 +331,7 @@ export default async function LegalEntityPage({ params, searchParams }: PageProp
                       {e.vendor ?? "—"}
                     </TableCell>
                     <TableCell className="text-right tabular-nums">
-                      {MXN.format(Number(e.amount))}
+                      {formatMXN(Number(e.amount))}
                     </TableCell>
                   </TableRow>
                 ))}

@@ -30,8 +30,7 @@ import {
   returnGuaranteeSchema,
   type ReturnGuaranteeInput,
 } from "@/lib/validators/guarantee";
-
-const MXN = new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" });
+import { formatMXN } from "@/lib/format-currency";
 
 interface InitialReturn {
   returnedAmount: number | null;
@@ -117,7 +116,7 @@ export function ReturnGuaranteeDialog({
     if (values.returnedAmount > totalAmount) {
       form.setError("returnedAmount", {
         type: "max",
-        message: `No puede exceder el depósito original (${MXN.format(totalAmount)}).`,
+        message: `No puede exceder el depósito original (${formatMXN(totalAmount, 2)}).`,
       });
       return;
     }
@@ -164,7 +163,7 @@ export function ReturnGuaranteeDialog({
 
         <div className="rounded-md border bg-muted/40 px-4 py-3 text-sm">
           <p className="text-muted-foreground">Depósito original</p>
-          <p className="text-lg font-semibold tabular-nums">{MXN.format(totalAmount)}</p>
+          <p className="text-lg font-semibold tabular-nums">{formatMXN(totalAmount, 2)}</p>
         </div>
 
         <Form {...form}>
@@ -232,7 +231,7 @@ export function ReturnGuaranteeDialog({
                 <div className="mt-2 flex justify-between text-sm">
                   <span className="text-muted-foreground">Total deducido:</span>
                   <span className="font-medium text-destructive tabular-nums">
-                    -{MXN.format(totalDeducted)}
+                    -{formatMXN(totalDeducted, 2)}
                   </span>
                 </div>
               )}
@@ -241,7 +240,7 @@ export function ReturnGuaranteeDialog({
             <div className="rounded-md border bg-emerald-50 px-4 py-3 text-sm">
               <p className="text-muted-foreground">A devolver al inquilino</p>
               <p className="text-lg font-semibold text-emerald-700 tabular-nums">
-                {MXN.format(Math.max(0, net))}
+                {formatMXN(Math.max(0, net), 2)}
               </p>
             </div>
 
@@ -251,7 +250,7 @@ export function ReturnGuaranteeDialog({
               rules={{
                 validate: (v) =>
                   typeof v === "number" && v > totalAmount
-                    ? `No puede exceder el depósito original (${MXN.format(totalAmount)}).`
+                    ? `No puede exceder el depósito original (${formatMXN(totalAmount, 2)}).`
                     : true,
               }}
               render={({ field, fieldState }) => {
@@ -355,8 +354,8 @@ export function ReturnGuaranteeDialog({
                 {form.formState.isSubmitting
                   ? "Guardando..."
                   : isEdit
-                    ? `Guardar ${MXN.format(numericReturned)}`
-                    : `Registrar ${MXN.format(numericReturned)}`}
+                    ? `Guardar ${formatMXN(numericReturned, 2)}`
+                    : `Registrar ${formatMXN(numericReturned, 2)}`}
               </Button>
             </div>
           </form>

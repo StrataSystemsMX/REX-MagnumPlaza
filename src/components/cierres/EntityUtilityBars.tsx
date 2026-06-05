@@ -1,11 +1,6 @@
 import { cn } from "@/lib/utils";
+import { formatMXN } from "@/lib/format-currency";
 import { themeFor } from "./MonthlyPivotTable";
-
-const MXN_INT = new Intl.NumberFormat("es-MX", {
-  style: "currency",
-  currency: "MXN",
-  maximumFractionDigits: 0,
-});
 
 interface EntityUtilityBarsProps {
   entities: ReadonlyArray<{
@@ -68,8 +63,8 @@ export function EntityUtilityBars({ entities, periodLabel }: EntityUtilityBarsPr
                 </div>
                 <div className="mt-1 flex items-center justify-between text-[11px] text-muted-foreground">
                   <span>
-                    Ing {MXN_INT.format(Number(e.income))} · Eg{" "}
-                    {MXN_INT.format(Number(e.expense))}
+                    Ing {formatMXN(Number(e.income))} · Eg{" "}
+                    {formatMXN(Number(e.expense))}
                   </span>
                 </div>
               </div>
@@ -79,7 +74,7 @@ export function EntityUtilityBars({ entities, periodLabel }: EntityUtilityBarsPr
                   isNegative ? "text-rose-700" : "",
                 )}
               >
-                {MXN_INT.format(utility)}
+                {formatMXN(utility)}
               </div>
             </div>
           );

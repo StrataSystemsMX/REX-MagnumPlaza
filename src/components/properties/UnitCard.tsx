@@ -38,24 +38,14 @@ import { UnitPhotoGallery } from "@/components/properties/UnitPhotoGallery";
 import { unitStatusLabel, unitStatusVariant } from "@/lib/i18n/enums";
 import { actionDeleteUnit } from "@/lib/services/units";
 import type { UnitStatus } from "@/generated/prisma/enums";
+import { formatMXN } from "@/lib/format-currency";
+import { formatDate } from "@/lib/format-date";
 
-const MXN = new Intl.NumberFormat("es-MX", {
-  style: "currency",
-  currency: "MXN",
-  maximumFractionDigits: 0,
-});
-
-const DATE = new Intl.DateTimeFormat("es-MX", {
-  day: "2-digit",
-  month: "short",
-  year: "numeric",
-});
-
-function formatDate(d: string | Date | null | undefined): string | null {
+function formatContractDate(d: string | Date | null | undefined): string | null {
   if (!d) return null;
   const date = d instanceof Date ? d : new Date(d);
   if (Number.isNaN(date.getTime())) return null;
-  return DATE.format(date);
+  return formatDate(date);
 }
 
 export interface UnitCardData {
@@ -406,7 +396,7 @@ export function UnitCard({ unit, propertyId, siblings }: UnitCardProps) {
                     : "text-sm font-medium text-muted-foreground"
                 }`}
               >
-                {MXN.format(monthly)}
+                {formatMXN(monthly)}
               </span>
             ) : (
               <span className="text-sm text-muted-foreground">—</span>
@@ -504,10 +494,10 @@ export function UnitRow({ unit, propertyId, siblings }: UnitRowProps) {
         >
           {monthly !== null ? (
             contract ? (
-              <span className="font-semibold">{MXN.format(monthly)}</span>
+              <span className="font-semibold">{formatMXN(monthly)}</span>
             ) : (
               <span className="text-muted-foreground">
-                ~{MXN.format(monthly)}
+                ~{formatMXN(monthly)}
               </span>
             )
           ) : (
@@ -543,8 +533,8 @@ function UnitDetailDialog({
       : null;
 
   const area = unit.area !== null && unit.area !== undefined ? Number(unit.area) : null;
-  const startDate = formatDate(contract?.startDate);
-  const endDate = formatDate(contract?.endDate);
+  const startDate = formatContractDate(contract?.startDate);
+  const endDate = formatContractDate(contract?.endDate);
 
   function handlePhotos() {
     onOpenChange(false);
@@ -625,7 +615,7 @@ function UnitDetailDialog({
             {monthly !== null ? (
               <DetailField
                 label={contract ? "Renta mensual" : "Renta estimada"}
-                value={MXN.format(monthly)}
+                value={formatMXN(monthly)}
                 emphasis={!!contract}
               />
             ) : null}

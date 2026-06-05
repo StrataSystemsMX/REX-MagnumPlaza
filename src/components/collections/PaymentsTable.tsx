@@ -56,26 +56,9 @@ import { paymentMethodLabel } from "@/lib/i18n/enums";
 import { actionDeletePayment } from "@/lib/services/payments";
 import type { PaymentListItem } from "@/lib/services/payments-queries";
 import type { PaymentMethod } from "@/generated/prisma/enums";
-import { capitalizeFirst, cn } from "@/lib/utils";
-
-const MXN = new Intl.NumberFormat("es-MX", {
-  style: "currency",
-  currency: "MXN",
-  maximumFractionDigits: 2,
-});
-
-const DATE = new Intl.DateTimeFormat("es-MX", {
-  year: "numeric",
-  month: "short",
-  day: "2-digit",
-  timeZone: "UTC",
-});
-
-const PERIOD = new Intl.DateTimeFormat("es-MX", {
-  month: "short",
-  year: "numeric",
-  timeZone: "UTC",
-});
+import { cn } from "@/lib/utils";
+import { formatMXN } from "@/lib/format-currency";
+import { formatDate, formatPeriodShort } from "@/lib/format-date";
 
 const METHODS: ReadonlyArray<PaymentMethod> = [
   "TRANSFER",
@@ -232,7 +215,7 @@ export function PaymentsTable({
         header: "Fecha",
         cell: ({ row }) => (
           <div className="text-center text-xs tabular-nums text-muted-foreground">
-            {capitalizeFirst(DATE.format(row.original.paymentDate))}
+            {formatDate(row.original.paymentDate)}
           </div>
         ),
       },
@@ -241,7 +224,7 @@ export function PaymentsTable({
         header: "Periodo",
         cell: ({ row }) => (
           <div className="text-center text-xs tabular-nums text-muted-foreground">
-            {capitalizeFirst(PERIOD.format(row.original.rent.period))}
+            {formatPeriodShort(row.original.rent.period)}
           </div>
         ),
       },
@@ -250,7 +233,7 @@ export function PaymentsTable({
         header: "Monto",
         cell: ({ row }) => (
           <div className="text-right font-medium tabular-nums">
-            {MXN.format(Number(row.original.amount))}
+            {formatMXN(row.original.amount, 2)}
           </div>
         ),
       },
@@ -419,7 +402,7 @@ export function PaymentsTable({
               {filtered.length} pago{filtered.length === 1 ? "" : "s"}
             </p>
             <p className="text-lg font-semibold tabular-nums">
-              {MXN.format(totalAmount)}
+              {formatMXN(totalAmount, 2)}
             </p>
           </div>
           <Button variant="secondary" onClick={downloadCsv}>

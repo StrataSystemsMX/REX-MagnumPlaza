@@ -12,25 +12,13 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { formatMXN, formatMXNCompact } from "@/lib/format-currency";
 import type { Monthly12 } from "@/lib/services/cierres-queries";
 
 const MONTHS_SHORT = [
   "Ene", "Feb", "Mar", "Abr", "May", "Jun",
   "Jul", "Ago", "Sep", "Oct", "Nov", "Dic",
 ];
-
-const MXN_COMPACT = new Intl.NumberFormat("es-MX", {
-  style: "currency",
-  currency: "MXN",
-  notation: "compact",
-  maximumFractionDigits: 1,
-});
-
-const MXN_FULL = new Intl.NumberFormat("es-MX", {
-  style: "currency",
-  currency: "MXN",
-  maximumFractionDigits: 0,
-});
 
 interface UtilityMonthlyChartProps {
   income: Monthly12;
@@ -90,11 +78,11 @@ export function UtilityMonthlyChart({
           <YAxis
             stroke="hsl(var(--muted-foreground))"
             fontSize={11}
-            tickFormatter={(v: number) => MXN_COMPACT.format(v)}
+            tickFormatter={(v: number) => formatMXNCompact(v)}
           />
           <Tooltip
             formatter={(value, name) => [
-              MXN_FULL.format(Math.abs(Number(value))),
+              formatMXN(Math.abs(Number(value))),
               name,
             ]}
             contentStyle={{ borderRadius: 8, fontSize: 12 }}

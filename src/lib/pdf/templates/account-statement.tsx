@@ -11,17 +11,10 @@ import {
   type DocumentTenantInfo,
 } from "./shared";
 import { capitalizeFirst } from "@/lib/utils";
+import { formatMXN } from "@/lib/format-currency";
+import { formatPeriodLong } from "@/lib/format-date";
 
-const MXN = new Intl.NumberFormat("es-MX", {
-  style: "currency",
-  currency: "MXN",
-  maximumFractionDigits: 2,
-});
-const PERIOD = new Intl.DateTimeFormat("es-MX", {
-  month: "long",
-  year: "numeric",
-  timeZone: "UTC",
-});
+// day+month:"long"+year → no mapea a formatDate (que usa month short). Inline.
 const DATE = new Intl.DateTimeFormat("es-MX", {
   day: "2-digit",
   month: "long",
@@ -112,7 +105,7 @@ export function AccountStatementPdf(props: AccountStatementProps) {
               {c.unitName ? ` (${c.unitName})` : ""}
             </Text>
             <Text style={sharedStyles.headerSmall}>
-              Renta mensual: {MXN.format(Number(c.monthlyAmount))} · Contrato{" "}
+              Renta mensual: {formatMXN(c.monthlyAmount, 2)} · Contrato{" "}
               {c.contractId.slice(-8)}
             </Text>
 
@@ -129,15 +122,15 @@ export function AccountStatementPdf(props: AccountStatementProps) {
               return (
                 <View key={idx} style={sharedStyles.tableRow}>
                   <Text style={cell.period}>
-                    {capitalizeFirst(PERIOD.format(r.period))}
+                    {formatPeriodLong(r.period)}
                   </Text>
                   <Text style={cell.due}>
-                    {MXN.format(Number(r.amountDue))}
+                    {formatMXN(r.amountDue, 2)}
                   </Text>
                   <Text style={cell.paid}>
-                    {MXN.format(Number(r.amountPaid))}
+                    {formatMXN(r.amountPaid, 2)}
                   </Text>
-                  <Text style={cell.bal}>{MXN.format(balance)}</Text>
+                  <Text style={cell.bal}>{formatMXN(balance, 2)}</Text>
                   <Text style={cell.status}>
                     {rentStatusLabel(r.status as RentStatus)}
                   </Text>
@@ -153,7 +146,7 @@ export function AccountStatementPdf(props: AccountStatementProps) {
               Cargado total
             </Text>
             <Text style={{ width: "40%", textAlign: "right" }}>
-              {MXN.format(Number(props.totals.totalDue))}
+              {formatMXN(props.totals.totalDue, 2)}
             </Text>
           </View>
           <View style={{ flexDirection: "row", marginTop: 2 }}>
@@ -161,7 +154,7 @@ export function AccountStatementPdf(props: AccountStatementProps) {
               Pagado total
             </Text>
             <Text style={{ width: "40%", textAlign: "right" }}>
-              {MXN.format(Number(props.totals.totalPaid))}
+              {formatMXN(props.totals.totalPaid, 2)}
             </Text>
           </View>
           <View
@@ -184,7 +177,7 @@ export function AccountStatementPdf(props: AccountStatementProps) {
                 fontFamily: "Helvetica-Bold",
               }}
             >
-              {MXN.format(Number(props.totals.balance))}
+              {formatMXN(props.totals.balance, 2)}
             </Text>
           </View>
         </View>

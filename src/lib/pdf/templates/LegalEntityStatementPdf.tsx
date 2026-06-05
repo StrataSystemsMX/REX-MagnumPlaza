@@ -10,12 +10,7 @@ import {
 import { propertyTypeLabel } from "@/lib/i18n/enums";
 import type { PropertyType } from "@/generated/prisma/enums";
 import type { LegalEntityYearMetrics } from "@/lib/services/legal-entity-queries";
-
-const MXN_INT = new Intl.NumberFormat("es-MX", {
-  style: "currency",
-  currency: "MXN",
-  maximumFractionDigits: 0,
-});
+import { formatMXN } from "@/lib/format-currency";
 
 const MONTHS_SHORT = [
   "Ene", "Feb", "Mar", "Abr", "May", "Jun",
@@ -157,13 +152,13 @@ export function LegalEntityStatementPdf(props: LegalEntityStatementPdfProps) {
           <View style={styles.summaryCard}>
             <Text style={styles.summaryCardLabel}>INGRESOS DEL AÑO</Text>
             <Text style={styles.summaryCardValue}>
-              {MXN_INT.format(Number(metrics.totalIncome))}
+              {formatMXN(metrics.totalIncome)}
             </Text>
           </View>
           <View style={styles.summaryCard}>
             <Text style={styles.summaryCardLabel}>EGRESOS DEL AÑO</Text>
             <Text style={styles.summaryCardValue}>
-              {MXN_INT.format(Number(metrics.totalExpenses))}
+              {formatMXN(metrics.totalExpenses)}
             </Text>
           </View>
           <View
@@ -179,7 +174,7 @@ export function LegalEntityStatementPdf(props: LegalEntityStatementPdfProps) {
                 { color: profit >= 0 ? "#047857" : "#b91c1c" },
               ]}
             >
-              {MXN_INT.format(profit)}
+              {formatMXN(profit)}
             </Text>
           </View>
         </View>
@@ -210,10 +205,10 @@ export function LegalEntityStatementPdf(props: LegalEntityStatementPdfProps) {
             <Text style={styles.cellConcept}>Utilidad</Text>
             {metrics.monthlyProfit.map((v, i) => (
               <Text key={i} style={styles.cellMonth}>
-                {Number(v) === 0 ? "—" : MXN_INT.format(Number(v))}
+                {Number(v) === 0 ? "—" : formatMXN(v)}
               </Text>
             ))}
-            <Text style={styles.cellTotal}>{MXN_INT.format(profit)}</Text>
+            <Text style={styles.cellTotal}>{formatMXN(profit)}</Text>
           </View>
         </View>
 
@@ -233,14 +228,14 @@ export function LegalEntityStatementPdf(props: LegalEntityStatementPdfProps) {
                   <View key={row.categoryName} style={styles.simpleRow}>
                     <Text style={{ flex: 3 }}>{row.categoryName}</Text>
                     <Text style={{ flex: 1, textAlign: "right" }}>
-                      {MXN_INT.format(Number(row.amount))}
+                      {formatMXN(row.amount)}
                     </Text>
                   </View>
                 ))}
                 <View style={styles.simpleTotalRow}>
                   <Text style={{ flex: 3 }}>TOTAL</Text>
                   <Text style={{ flex: 1, textAlign: "right" }}>
-                    {MXN_INT.format(Number(metrics.totalExpenses))}
+                    {formatMXN(metrics.totalExpenses)}
                   </Text>
                 </View>
               </View>
@@ -302,10 +297,10 @@ function MonthlyRow({
       <Text style={styles.cellConcept}>{label}</Text>
       {monthly.map((v, i) => (
         <Text key={i} style={styles.cellMonth}>
-          {Number(v) === 0 ? "—" : MXN_INT.format(Number(v))}
+          {Number(v) === 0 ? "—" : formatMXN(v)}
         </Text>
       ))}
-      <Text style={styles.cellTotal}>{MXN_INT.format(Number(total))}</Text>
+      <Text style={styles.cellTotal}>{formatMXN(total)}</Text>
     </View>
   );
 }

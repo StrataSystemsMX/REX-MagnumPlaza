@@ -55,6 +55,7 @@ import type { LegalEntityOption } from "@/lib/services/properties-queries";
 import { payrollTypeLabel } from "@/lib/i18n/enums";
 import type { PayrollType } from "@/generated/prisma/enums";
 import { cn } from "@/lib/utils";
+import { formatMXN } from "@/lib/format-currency";
 
 // Clasificación contable: operativos (gente real) vs estrategia fiscal
 // (vehículos fiscales). Usado para sub-agrupar dentro de cada card.
@@ -65,12 +66,6 @@ const FISCAL_STRATEGY_TYPES: ReadonlySet<PayrollType> = new Set([
 function isFiscalStrategy(t: PayrollType): boolean {
   return FISCAL_STRATEGY_TYPES.has(t);
 }
-
-const MXN = new Intl.NumberFormat("es-MX", {
-  style: "currency",
-  currency: "MXN",
-  maximumFractionDigits: 2,
-});
 
 const MONTH_LABELS = [
   "Enero",
@@ -409,14 +404,14 @@ export function NominasView({
         <Stat
           icon={<Receipt className="size-4" />}
           label={`Operativo ${periodLabel().toLowerCase()}`}
-          value={MXN.format(periodOperationalTotal)}
+          value={formatMXN(periodOperationalTotal, 2)}
           subtitle="Nómina directa, comisiones, bonos"
           tone="primary"
         />
         <Stat
           icon={<PiggyBank className="size-4" />}
           label={`Estrategia fiscal ${periodLabel().toLowerCase()}`}
-          value={MXN.format(periodFiscalTotal)}
+          value={formatMXN(periodFiscalTotal, 2)}
           subtitle="Nómina estratégica + facturas adm."
           tone="warning"
         />
@@ -431,7 +426,7 @@ export function NominasView({
         <Stat
           icon={<Wallet className="size-4" />}
           label={`Total año ${selectedYear}`}
-          value={MXN.format(annualTotal)}
+          value={formatMXN(annualTotal, 2)}
           tone="positive"
         />
       </div>
@@ -509,8 +504,8 @@ export function NominasView({
                       </div>
                       {group.fiscalTotal > 0 && group.operationalTotal > 0 ? (
                         <p className="mt-0.5 text-xs text-muted-foreground">
-                          Operativo {MXN.format(group.operationalTotal)} ·
-                          Estrategia {MXN.format(group.fiscalTotal)}
+                          Operativo {formatMXN(group.operationalTotal, 2)} ·
+                          Estrategia {formatMXN(group.fiscalTotal, 2)}
                         </p>
                       ) : null}
                     </div>
@@ -521,7 +516,7 @@ export function NominasView({
                         Total
                       </p>
                       <p className="text-lg font-semibold tabular-nums">
-                        {MXN.format(group.total)}
+                        {formatMXN(group.total, 2)}
                       </p>
                     </div>
                     {canCreate ? (
@@ -613,7 +608,7 @@ export function NominasView({
             <AlertDialogTitle>¿Eliminar pago de nómina?</AlertDialogTitle>
             <AlertDialogDescription>
               {deleteTarget
-                ? `Se borrará el pago de ${MXN.format(deleteTarget.amount)} de ${deleteTarget.legalEntity.code} (${MONTH_LABELS[deleteTarget.month - 1]} ${deleteTarget.year}). Esta acción no se puede deshacer.`
+                ? `Se borrará el pago de ${formatMXN(deleteTarget.amount, 2)} de ${deleteTarget.legalEntity.code} (${MONTH_LABELS[deleteTarget.month - 1]} ${deleteTarget.year}). Esta acción no se puede deshacer.`
                 : ""}
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -742,7 +737,7 @@ function PayrollSubsection({
           <span className="text-[10px] text-muted-foreground">{helper}</span>
         </div>
         <span className="text-xs font-medium tabular-nums text-muted-foreground">
-          {MXN.format(subtotal)}
+          {formatMXN(subtotal, 2)}
         </span>
       </div>
 
@@ -845,20 +840,20 @@ function PayrollRow({
         className="px-3 py-2.5 text-right tabular-nums text-muted-foreground"
       >
         {item.amountWithoutTax !== null
-          ? MXN.format(item.amountWithoutTax)
+          ? formatMXN(item.amountWithoutTax, 2)
           : "—"}
       </div>
       <div
         role="cell"
         className="px-3 py-2.5 text-right tabular-nums text-muted-foreground"
       >
-        {item.taxAmount !== null ? MXN.format(item.taxAmount) : "—"}
+        {item.taxAmount !== null ? formatMXN(item.taxAmount, 2) : "—"}
       </div>
       <div
         role="cell"
         className="px-3 py-2.5 text-right font-semibold tabular-nums"
       >
-        {MXN.format(item.amount)}
+        {formatMXN(item.amount, 2)}
       </div>
       <div role="cell" className="flex justify-end pr-1">
         <DropdownMenu>

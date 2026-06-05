@@ -30,20 +30,8 @@ import type { LesseeDetail, LesseeOverdueRent } from "@/lib/services/lessees-que
 import type { NotificationLogRow } from "@/lib/services/notifications-queries";
 import type { LesseePayment, LesseeStatement as LesseeStatementData } from "@/lib/services/payments-queries";
 import type { ContractStatus } from "@/generated/prisma/enums";
-import { capitalizeFirst } from "@/lib/utils";
-
-const MXN = new Intl.NumberFormat("es-MX", {
-  style: "currency",
-  currency: "MXN",
-  maximumFractionDigits: 2,
-});
-
-const DATE = new Intl.DateTimeFormat("es-MX", {
-  year: "numeric",
-  month: "short",
-  day: "2-digit",
-  timeZone: "UTC",
-});
+import { formatMXN } from "@/lib/format-currency";
+import { formatDate } from "@/lib/format-date";
 
 function statusVariant(s: ContractStatus): "default" | "secondary" | "destructive" | "outline" {
   switch (s) {
@@ -176,10 +164,10 @@ export function LesseeDetailTabs({
                     </TableCell>
                     <TableCell className="text-sm">{contractTypeLabel(c.type)}</TableCell>
                     <TableCell className="text-center text-xs">
-                      {capitalizeFirst(DATE.format(c.startDate))} → {capitalizeFirst(DATE.format(c.endDate))}
+                      {formatDate(c.startDate)} → {formatDate(c.endDate)}
                     </TableCell>
                     <TableCell className="text-right tabular-nums">
-                      {MXN.format(Number(c.monthlyAmount))}
+                      {formatMXN(c.monthlyAmount, 2)}
                     </TableCell>
                     <TableCell className="text-center">
                       <Badge variant={statusVariant(c.status)}>
@@ -230,7 +218,7 @@ export function LesseeDetailTabs({
                 payments.map((p) => (
                   <TableRow key={p.id}>
                     <TableCell className="text-center text-xs tabular-nums">
-                      {capitalizeFirst(DATE.format(p.paymentDate))}
+                      {formatDate(p.paymentDate)}
                     </TableCell>
                     <TableCell className="text-sm">
                       {unitWithProperty(p.rent.contract.unit, " ")}
@@ -239,7 +227,7 @@ export function LesseeDetailTabs({
                       {p.rent.period.toISOString().slice(0, 7)}
                     </TableCell>
                     <TableCell className="text-right tabular-nums font-medium">
-                      {MXN.format(Number(p.amount))}
+                      {formatMXN(p.amount, 2)}
                     </TableCell>
                     <TableCell className="text-center">
                       <Badge variant="secondary">{paymentMethodLabel(p.method)}</Badge>

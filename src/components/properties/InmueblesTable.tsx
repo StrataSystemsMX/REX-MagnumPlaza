@@ -58,6 +58,7 @@ import type {
   PropertyListItem,
 } from "@/lib/services/properties-queries";
 import type { PropertyType } from "@/generated/prisma/enums";
+import { formatMXN } from "@/lib/format-currency";
 
 const INMUEBLE_TYPES: ReadonlyArray<PropertyType> = [
   "TERRENO_RENTADO",
@@ -68,12 +69,6 @@ const INMUEBLE_TYPES: ReadonlyArray<PropertyType> = [
   "ESPECTACULAR",
   "OTRO",
 ];
-
-const MXN = new Intl.NumberFormat("es-MX", {
-  style: "currency",
-  currency: "MXN",
-  maximumFractionDigits: 0,
-});
 
 interface InmueblesTableProps {
   inmuebles: ReadonlyArray<PropertyListItem>;
@@ -508,7 +503,7 @@ function InmuebleCard({
               <p className="truncate font-medium">{snap.lesseeName}</p>
               {snap.monthly !== null ? (
                 <p className="tabular-nums text-sm">
-                  {MXN.format(snap.monthly)}
+                  {formatMXN(snap.monthly)}
                   <span className="text-xs text-muted-foreground"> / mes</span>
                 </p>
               ) : null}
@@ -537,7 +532,7 @@ function InmuebleCard({
               </div>
               {snap.estimatedRent !== null ? (
                 <p className="tabular-nums text-sm">
-                  {MXN.format(snap.estimatedRent)}
+                  {formatMXN(snap.estimatedRent)}
                   <span className="text-xs text-muted-foreground"> / mes estimado</span>
                 </p>
               ) : (
@@ -668,10 +663,10 @@ function InmueblesTableView({
                 {isBlocked ? (
                   <span className="text-muted-foreground">—</span>
                 ) : snap.monthly !== null ? (
-                  MXN.format(snap.monthly)
+                  formatMXN(snap.monthly)
                 ) : snap.estimatedRent !== null ? (
                   <span className="text-muted-foreground">
-                    ~{MXN.format(snap.estimatedRent)}
+                    ~{formatMXN(snap.estimatedRent)}
                   </span>
                 ) : (
                   "—"
@@ -811,13 +806,13 @@ function InmuebleDetailDialog({
                 {!isBlocked && snap.monthly !== null ? (
                   <InmuebleDetailField
                     label="Renta mensual"
-                    value={MXN.format(snap.monthly)}
+                    value={formatMXN(snap.monthly)}
                     emphasis
                   />
                 ) : !isBlocked && snap.estimatedRent !== null ? (
                   <InmuebleDetailField
                     label="Renta estimada"
-                    value={MXN.format(snap.estimatedRent)}
+                    value={formatMXN(snap.estimatedRent)}
                   />
                 ) : null}
               </div>

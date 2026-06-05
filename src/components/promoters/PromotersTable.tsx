@@ -46,19 +46,8 @@ import {
 import { createPromoterLinkSchema, type CreatePromoterLinkInput } from "@/lib/validators/promoter";
 import type { PromoterRow, UnitForLink } from "@/lib/services/promoters-queries";
 import { unitWithProperty } from "@/lib/i18n/unit-label";
-
-const DATE = new Intl.DateTimeFormat("es-MX", {
-  day: "2-digit",
-  month: "short",
-  year: "numeric",
-  timeZone: "UTC",
-});
-
-const MXN = new Intl.NumberFormat("es-MX", {
-  style: "currency",
-  currency: "MXN",
-  maximumFractionDigits: 0,
-});
+import { formatMXN } from "@/lib/format-currency";
+import { formatDate } from "@/lib/format-date";
 
 function LinkDialog({ promoterId, units }: { promoterId: string; units: UnitForLink[] }) {
   const [open, setOpen] = useState(false);
@@ -73,7 +62,7 @@ function LinkDialog({ promoterId, units }: { promoterId: string; units: UnitForL
   // (oficina, casa, espectacular, etc.) basta con el nombre del inmueble.
   function formatUnitLabel(u: UnitForLink): string {
     const base = unitWithProperty(u);
-    return u.estimatedRent ? `${base} — ${MXN.format(u.estimatedRent)}` : base;
+    return u.estimatedRent ? `${base} — ${formatMXN(u.estimatedRent)}` : base;
   }
 
   const unitLabels = Object.fromEntries(units.map((u) => [u.id, formatUnitLabel(u)]));
@@ -329,7 +318,7 @@ export function PromotersTable({ promoters, units, canManage }: Props) {
                           </div>
                         </TableCell>
                         <TableCell className="text-sm text-muted-foreground">
-                          {DATE.format(l.expiresAt)}
+                          {formatDate(l.expiresAt)}
                         </TableCell>
                         <TableCell className="text-right tabular-nums text-sm">
                           {l.visitCount}

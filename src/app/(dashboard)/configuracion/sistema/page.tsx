@@ -7,16 +7,11 @@ import { requireAuth } from "@/lib/auth/get-session";
 import { isMaster } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/prisma/client";
 import { capitalizeFirst } from "@/lib/utils";
+import { formatMXN } from "@/lib/format-currency";
 
 const DATETIME = new Intl.DateTimeFormat("es-MX", {
   dateStyle: "medium",
   timeStyle: "short",
-});
-
-const MXN = new Intl.NumberFormat("es-MX", {
-  style: "currency",
-  currency: "MXN",
-  maximumFractionDigits: 0,
 });
 
 export default async function ConfiguracionSistemaPage() {
@@ -101,10 +96,10 @@ export default async function ConfiguracionSistemaPage() {
                       {s.date.toISOString().slice(0, 10)}
                     </td>
                     <td className="py-1.5 pr-3 text-right tabular-nums">
-                      {MXN.format(Number(s.totalAmount))}
+                      {formatMXN(Number(s.totalAmount))}
                     </td>
                     <td className="py-1.5 pr-3 text-right tabular-nums text-destructive">
-                      {MXN.format(Number(s.overdueAmount))}
+                      {formatMXN(Number(s.overdueAmount))}
                     </td>
                     <td className="py-1.5 pr-3 font-mono text-[10px]">
                       {JSON.stringify(s.byStatus)}

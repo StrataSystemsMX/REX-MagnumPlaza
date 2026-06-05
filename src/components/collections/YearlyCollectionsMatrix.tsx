@@ -14,7 +14,9 @@ import {
   RegisterPaymentDialog,
   type RegisterPaymentDialogContext,
 } from "@/components/collections/RegisterPaymentDialog";
-import { capitalizeFirst, cn } from "@/lib/utils";
+import { cn } from "@/lib/utils";
+import { formatMXN } from "@/lib/format-currency";
+import { formatPeriodLong } from "@/lib/format-date";
 import type {
   MonthlyUnitStatus,
   YearlyCell,
@@ -22,24 +24,6 @@ import type {
   YearlyPropertyGroup,
   YearlyUnitRow,
 } from "@/lib/services/payments-queries";
-
-const MXN = new Intl.NumberFormat("es-MX", {
-  style: "currency",
-  currency: "MXN",
-  maximumFractionDigits: 2,
-});
-
-const MXN_INT = new Intl.NumberFormat("es-MX", {
-  style: "currency",
-  currency: "MXN",
-  maximumFractionDigits: 0,
-});
-
-const PERIOD_FULL = new Intl.DateTimeFormat("es-MX", {
-  month: "long",
-  year: "numeric",
-  timeZone: "UTC",
-});
 
 const MONTHS_SHORT = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
 
@@ -141,19 +125,19 @@ export function YearlyCollectionsMatrix({
           <div>
             <p className="text-xs text-muted-foreground">Esperado</p>
             <p className="font-semibold tabular-nums">
-              {MXN_INT.format(filteredTotals.expected)}
+              {formatMXN(filteredTotals.expected)}
             </p>
           </div>
           <div>
             <p className="text-xs text-muted-foreground">Cobrado</p>
             <p className="font-semibold tabular-nums text-green-700 dark:text-green-300">
-              {MXN_INT.format(filteredTotals.paid)}
+              {formatMXN(filteredTotals.paid)}
             </p>
           </div>
           <div>
             <p className="text-xs text-muted-foreground">Por cobrar</p>
             <p className="font-semibold tabular-nums text-destructive">
-              {MXN_INT.format(filteredTotals.balance)}
+              {formatMXN(filteredTotals.balance)}
             </p>
           </div>
         </div>
@@ -278,13 +262,13 @@ function PropertyMatrix({ group, onCellClick }: PropertyMatrixProps) {
           <div>
             <span className="text-muted-foreground">Esperado: </span>
             <span className="font-semibold tabular-nums">
-              {MXN_INT.format(Number(group.expectedTotal))}
+              {formatMXN(group.expectedTotal)}
             </span>
           </div>
           <div>
             <span className="text-muted-foreground">Cobrado: </span>
             <span className="font-semibold tabular-nums text-green-700 dark:text-green-300">
-              {MXN_INT.format(Number(group.paidTotal))}
+              {formatMXN(group.paidTotal)}
             </span>
             <span className="ml-1 text-muted-foreground">({collected}%)</span>
           </div>
@@ -359,10 +343,10 @@ function UnitMatrixRow({ row, propertyName, onCellClick }: UnitMatrixRowProps) {
       ))}
       <td className="px-3 py-1.5 text-right text-xs tabular-nums">
         <div className="font-medium text-green-700 dark:text-green-300">
-          {MXN_INT.format(Number(row.paidTotal))}
+          {formatMXN(row.paidTotal)}
         </div>
         <div className="text-muted-foreground">
-          de {MXN_INT.format(Number(row.expectedTotal))}
+          de {formatMXN(row.expectedTotal)}
         </div>
       </td>
     </tr>
@@ -452,22 +436,22 @@ function MatrixCell({ cell, unitCode, propertyName, lesseeName, onClick }: Matri
 }
 
 function buildTooltip(cell: YearlyCell, lesseeName: string | null): string {
-  const period = capitalizeFirst(PERIOD_FULL.format(cell.period));
+  const period = formatPeriodLong(cell.period);
   if (cell.status === "VACANT") {
     return `${period} — Vacío`;
   }
   const head = lesseeName ? `${lesseeName} — ${period}` : period;
   switch (cell.status) {
     case "PAID":
-      return `${head}\nPagado ${MXN.format(Number(cell.amountPaid))}`;
+      return `${head}\nPagado ${formatMXN(cell.amountPaid, 2)}`;
     case "PARTIAL":
-      return `${head}\nParcial: ${MXN.format(Number(cell.amountPaid))} de ${MXN.format(Number(cell.amountDue))}`;
+      return `${head}\nParcial: ${formatMXN(cell.amountPaid, 2)} de ${formatMXN(cell.amountDue, 2)}`;
     case "ABONO":
-      return `${head}\nAbono: ${MXN.format(Number(cell.amountPaid))} (renta ${MXN.format(Number(cell.amountDue))})`;
+      return `${head}\nAbono: ${formatMXN(cell.amountPaid, 2)} (renta ${formatMXN(cell.amountDue, 2)})`;
     case "PRE_PAGADO":
       return `${head}\nPre-pagado${cell.prePaidMonths ? ` (+${cell.prePaidMonths} meses)` : ""}`;
     case "SIN_PAGO":
-      return `${head}\nSin pago — ${MXN.format(Number(cell.amountDue))}${cell.overdueLevel ? ` · Escalón ${cell.overdueLevel}` : ""}`;
+      return `${head}\nSin pago — ${formatMXN(cell.amountDue, 2)}${cell.overdueLevel ? ` · Escalón ${cell.overdueLevel}` : ""}`;
     default:
       return head;
   }
@@ -502,12 +486,12 @@ function MonthlyTotalsBar({
             const pct = expected > 0 ? Math.round((paid / expected) * 100) : 0;
             return (
               <tr key={i} className="border-b last:border-b-0">
-                <td className="px-3 py-1.5">{capitalizeFirst(PERIOD_FULL.format(t.period))}</td>
+                <td className="px-3 py-1.5">{formatPeriodLong(t.period)}</td>
                 <td className="px-3 py-1.5 text-right tabular-nums">
-                  {MXN_INT.format(expected)}
+                  {formatMXN(expected)}
                 </td>
                 <td className="px-3 py-1.5 text-right tabular-nums text-green-700 dark:text-green-300">
-                  {MXN_INT.format(paid)}
+                  {formatMXN(paid)}
                 </td>
                 <td className="px-3 py-1.5 text-right tabular-nums">{pct}%</td>
                 <td className="px-3 py-1.5 text-right tabular-nums">{t.paidCount}</td>

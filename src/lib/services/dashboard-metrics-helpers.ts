@@ -1,6 +1,7 @@
 import { Prisma } from "@/generated/prisma/client";
 import { auditActionLabel } from "@/lib/i18n/enums";
 import type { AuditAction, RentStatus } from "@/generated/prisma/enums";
+import { formatMXN } from "@/lib/format-currency";
 
 // ============================================================================
 // Tipos públicos del dashboard
@@ -319,9 +320,5 @@ function entityTypeLabel(type: string): string {
 function formatCurrency(value: string | number): string {
   const n = typeof value === "number" ? value : Number(value);
   if (!Number.isFinite(n)) return String(value);
-  return new Intl.NumberFormat("es-MX", {
-    style: "currency",
-    currency: "MXN",
-    maximumFractionDigits: 0,
-  }).format(n);
+  return formatMXN(n);
 }

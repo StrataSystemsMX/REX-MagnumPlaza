@@ -9,6 +9,8 @@ import { sendTemplate, WhatsAppError } from "@/lib/whatsapp/client";
 import type { ReminderLevel } from "@/lib/pdf/template-config";
 import type { NotificationLogModel } from "@/generated/prisma/models";
 import { capitalizeFirst } from "@/lib/utils";
+import { formatMXN } from "@/lib/format-currency";
+import { formatPeriodLong } from "@/lib/format-date";
 
 /**
  * Plantillas pre-aprobadas en Meta Business. Los nombres deben coincidir
@@ -22,18 +24,7 @@ export const WHATSAPP_TEMPLATES = {
   CONTRACT_EXPIRING: "contract_expiring",
 } as const;
 
-const MXN = new Intl.NumberFormat("es-MX", {
-  style: "currency",
-  currency: "MXN",
-  maximumFractionDigits: 2,
-});
-
-const PERIOD = new Intl.DateTimeFormat("es-MX", {
-  month: "long",
-  year: "numeric",
-  timeZone: "UTC",
-});
-
+// day+month:"long"+year → no mapea a formatDate (que usa month short). Inline.
 const DATE = new Intl.DateTimeFormat("es-MX", {
   day: "2-digit",
   month: "long",
@@ -383,9 +374,9 @@ export async function sendRentReminder(
   const overdueCount = allPending.length;
 
   const lessee = rent.contract.lessee;
-  const periodLabel = capitalizeFirst(PERIOD.format(rent.period));
-  const balanceFormatted = MXN.format(Number(totalBalance));
-  const monthlyAmount = MXN.format(Number(rent.amountDue));
+  const periodLabel = formatPeriodLong(rent.period);
+  const balanceFormatted = formatMXN(totalBalance, 2);
+  const monthlyAmount = formatMXN(rent.amountDue, 2);
   const pdfUrl = pdf.url ?? "";
 
   let templateName: string;
@@ -522,8 +513,8 @@ export async function sendPaymentConfirmation(
   });
 
   const lessee = payment.rent.contract.lessee;
-  const amount = MXN.format(Number(payment.amount));
-  const concept = `Renta ${capitalizeFirst(PERIOD.format(payment.rent.period))} — ${payment.rent.contract.unit.property.name} ${payment.rent.contract.unit.code}`;
+  const amount = formatMXN(payment.amount, 2);
+  const concept = `Renta ${formatPeriodLong(payment.rent.period)} — ${payment.rent.contract.unit.property.name} ${payment.rent.contract.unit.code}`;
   const parameters = [lessee.legalName, amount, concept];
 
   return dispatchWhatsApp({
