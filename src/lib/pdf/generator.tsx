@@ -17,6 +17,7 @@ import {
   type DashboardOptions,
 } from "@/lib/services/dashboard-metrics";
 import { capitalizeFirst } from "@/lib/utils";
+import { computeBalance } from "@/lib/services/rent-status";
 import { formatMXN } from "@/lib/format-currency";
 import { formatPeriodLong } from "@/lib/format-date";
 
@@ -96,10 +97,12 @@ export async function generateAccountStatement(
 
   let totalDue = new Prisma.Decimal(0);
   let totalPaid = new Prisma.Decimal(0);
+  let totalWaived = new Prisma.Decimal(0);
   const contractBlocks = lessee.contracts.map((c) => {
     for (const r of c.rents) {
       totalDue = totalDue.plus(new Prisma.Decimal(r.amountDue));
       totalPaid = totalPaid.plus(new Prisma.Decimal(r.amountPaid));
+      totalWaived = totalWaived.plus(new Prisma.Decimal(r.amountWaived));
     }
     return {
       contractId: c.id,
@@ -111,11 +114,12 @@ export async function generateAccountStatement(
         period: r.period,
         amountDue: r.amountDue.toString(),
         amountPaid: r.amountPaid.toString(),
+        amountWaived: r.amountWaived.toString(),
         status: r.status,
       })),
     };
   });
-  const balance = totalDue.minus(totalPaid);
+  const balance = computeBalance(totalDue, totalPaid, totalWaived);
 
   const asOfDate = new Date();
   const tokens = {
@@ -246,8 +250,7 @@ export async function generateOverdueReminder(
 
   const allRents = [rent, ...additional];
   const balance = allRents.reduce(
-    (acc, r) =>
-      acc.plus(new Prisma.Decimal(r.amountDue).minus(new Prisma.Decimal(r.amountPaid))),
+    (acc, r) => acc.plus(computeBalance(r.amountDue, r.amountPaid, r.amountWaived)),
     new Prisma.Decimal(0),
   );
 
@@ -289,6 +292,7 @@ export async function generateOverdueReminder(
         period: rent.period,
         amountDue: rent.amountDue.toString(),
         amountPaid: rent.amountPaid.toString(),
+        amountWaived: rent.amountWaived.toString(),
         daysOverdue: days(rent.dueDate),
         status: rent.status,
       }}
@@ -296,6 +300,7 @@ export async function generateOverdueReminder(
         period: r.period,
         amountDue: r.amountDue.toString(),
         amountPaid: r.amountPaid.toString(),
+        amountWaived: r.amountWaived.toString(),
         daysOverdue: days(r.dueDate),
         status: r.status,
       }))}

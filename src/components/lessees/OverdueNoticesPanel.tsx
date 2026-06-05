@@ -51,7 +51,8 @@ export function OverdueNoticesPanel({ lessee, rents }: OverdueNoticesPanelProps)
         {rents.map((r) => {
           const level = levelFromStatus(r.status);
           const badge = levelBadge(level);
-          const balance = Number(r.amountDue) - Number(r.amountPaid);
+          const balance =
+            Number(r.amountDue) - Number(r.amountPaid) - Number(r.amountWaived);
           return (
             <div
               key={r.id}

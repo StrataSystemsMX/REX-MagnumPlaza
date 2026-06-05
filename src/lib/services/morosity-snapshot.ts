@@ -1,5 +1,6 @@
 import { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/lib/prisma/client";
+import { computeBalance } from "@/lib/services/rent-status";
 import type { RentStatus } from "@/generated/prisma/enums";
 
 const OUTSTANDING_STATUSES: RentStatus[] = [
@@ -45,7 +46,7 @@ export async function recordMorosityDailySnapshot(
 
   const all = await prisma.rent.findMany({
     where: { tenantId },
-    select: { amountDue: true, amountPaid: true, status: true },
+    select: { amountDue: true, amountPaid: true, amountWaived: true, status: true },
   });
   const totalAmount = all.reduce(
     (acc, r) => acc.plus(new Prisma.Decimal(r.amountDue)),
@@ -54,10 +55,7 @@ export async function recordMorosityDailySnapshot(
   const overdueAmount = all
     .filter((r) => OUTSTANDING_STATUSES.includes(r.status))
     .reduce(
-      (acc, r) =>
-        acc.plus(
-          new Prisma.Decimal(r.amountDue).minus(new Prisma.Decimal(r.amountPaid)),
-        ),
+      (acc, r) => acc.plus(computeBalance(r.amountDue, r.amountPaid, r.amountWaived)),
       new Prisma.Decimal(0),
     );
 

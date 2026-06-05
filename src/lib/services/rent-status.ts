@@ -49,6 +49,24 @@ export function computeRentStatus(
   return "OVERDUE_3M";
 }
 
+/**
+ * Saldo pendiente de un Rent = amountDue - amountPaid - amountWaived.
+ *
+ * Es la fuente única de verdad para el saldo: úsala en avisos, PDFs, dashboard
+ * y notificaciones. Restar `amountWaived` es obligatorio — omitirlo hace que las
+ * rentas condonadas aparezcan como adeudo. Devuelve Prisma.Decimal para no
+ * perder precisión; usa `.toNumber()` en el caller si necesitas un number.
+ */
+export function computeBalance(
+  amountDue: Prisma.Decimal | number | string,
+  amountPaid: Prisma.Decimal | number | string,
+  amountWaived: Prisma.Decimal | number | string = 0,
+): Prisma.Decimal {
+  return new Prisma.Decimal(amountDue)
+    .minus(new Prisma.Decimal(amountPaid))
+    .minus(new Prisma.Decimal(amountWaived));
+}
+
 /** Días vencidos respecto a `now`. Negativo si aún no vence. */
 export function daysOverdue(dueDate: Date, now: Date = new Date()): number {
   return Math.floor((now.getTime() - dueDate.getTime()) / MS_PER_DAY);

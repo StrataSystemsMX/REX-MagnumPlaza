@@ -32,6 +32,7 @@ export interface AccountStatementContractBlock {
     period: Date;
     amountDue: string;
     amountPaid: string;
+    amountWaived: string;
     status: string;
   }>;
 }
@@ -118,7 +119,7 @@ export function AccountStatementPdf(props: AccountStatementProps) {
             </View>
             {c.rents.map((r, idx) => {
               const balance =
-                Number(r.amountDue) - Number(r.amountPaid);
+                Number(r.amountDue) - Number(r.amountPaid) - Number(r.amountWaived);
               return (
                 <View key={idx} style={sharedStyles.tableRow}>
                   <Text style={cell.period}>

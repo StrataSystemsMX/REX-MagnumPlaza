@@ -1,5 +1,6 @@
 import { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/lib/prisma/client";
+import { computeBalance } from "@/lib/services/rent-status";
 import type {
   ContractStatus,
   ContractType,
@@ -171,6 +172,7 @@ async function buildAgingReport(tenantId: string, now: Date): Promise<AgingRepor
       id: true,
       amountDue: true,
       amountPaid: true,
+      amountWaived: true,
       dueDate: true,
       contract: {
         select: {
@@ -186,7 +188,7 @@ async function buildAgingReport(tenantId: string, now: Date): Promise<AgingRepor
   const totals = { b30: ZERO, b60: ZERO, b90: ZERO, bPlus: ZERO };
 
   for (const r of rents) {
-    const balance = dec(r.amountDue).minus(dec(r.amountPaid));
+    const balance = computeBalance(r.amountDue, r.amountPaid, r.amountWaived);
     if (balance.lte(ZERO)) continue;
 
     const days = Math.max(

@@ -8,6 +8,7 @@ import {
 import { sendTemplate, WhatsAppError } from "@/lib/whatsapp/client";
 import type { ReminderLevel } from "@/lib/pdf/template-config";
 import type { NotificationLogModel } from "@/generated/prisma/models";
+import { computeBalance } from "@/lib/services/rent-status";
 import { capitalizeFirst } from "@/lib/utils";
 import { formatMXN } from "@/lib/format-currency";
 import { formatPeriodLong } from "@/lib/format-date";
@@ -364,11 +365,10 @@ export async function sendRentReminder(
       contractId: rent.contractId,
       status: { in: ["DUE", "PARTIAL", "OVERDUE_1M", "OVERDUE_2M", "OVERDUE_3M"] },
     },
-    select: { amountDue: true, amountPaid: true },
+    select: { amountDue: true, amountPaid: true, amountWaived: true },
   });
   const totalBalance = allPending.reduce(
-    (acc, r) =>
-      acc.plus(new Prisma.Decimal(r.amountDue).minus(new Prisma.Decimal(r.amountPaid))),
+    (acc, r) => acc.plus(computeBalance(r.amountDue, r.amountPaid, r.amountWaived)),
     new Prisma.Decimal(0),
   );
   const overdueCount = allPending.length;

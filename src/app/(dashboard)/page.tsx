@@ -122,7 +122,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
         status: { in: ["DUE", "PARTIAL", "OVERDUE_1M", "OVERDUE_2M", "OVERDUE_3M"] },
         ...leFilter,
       },
-      _sum: { amountDue: true, amountPaid: true },
+      _sum: { amountDue: true, amountPaid: true, amountWaived: true },
     })),
 
     // Semáforo de locales — filtrado por managerEntityId
@@ -167,6 +167,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
       select: {
         amountDue: true,
         amountPaid: true,
+        amountWaived: true,
         status: true,
         contract: { select: { lessee: { select: { id: true, legalName: true } } } },
       },
@@ -254,7 +255,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
   const egresosTotal = Number(egresos._sum.amount  ?? 0);
   const utilidad     = ventasTotal - egresosTotal;
   const rentabilidad = ventasTotal > 0 ? utilidad / ventasTotal : 0;
-  const cxc          = Number(cxcAgg._sum.amountDue ?? 0) - Number(cxcAgg._sum.amountPaid ?? 0);
+  const cxc          = Number(cxcAgg._sum.amountDue ?? 0) - Number(cxcAgg._sum.amountPaid ?? 0) - Number(cxcAgg._sum.amountWaived ?? 0);
 
   const periodLabel = mode === "anual"
     ? `Ene – Dic ${currentYear}`
@@ -342,7 +343,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
   const overdueMap = new Map<string, { legalName: string; total: number; count: number; worstStatus: string }>();
   for (const r of overdueRentsRaw) {
     const l  = r.contract.lessee;
-    const bal = Number(r.amountDue) - Number(r.amountPaid);
+    const bal = Number(r.amountDue) - Number(r.amountPaid) - Number(r.amountWaived);
     const cur = overdueMap.get(l.id);
     if (cur) {
       cur.total += bal;

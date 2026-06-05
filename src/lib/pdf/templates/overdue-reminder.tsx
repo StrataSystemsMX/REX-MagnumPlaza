@@ -25,6 +25,7 @@ export interface OverdueReminderRent {
   period: Date;
   amountDue: string;
   amountPaid: string;
+  amountWaived: string;
   daysOverdue: number;
   status: string;
 }
@@ -116,7 +117,8 @@ export function OverdueReminderPdf(props: OverdueReminderProps) {
             <Text style={cell.days}>Días</Text>
           </View>
           {allRents.map((r, idx) => {
-            const balance = Number(r.amountDue) - Number(r.amountPaid);
+            const balance =
+              Number(r.amountDue) - Number(r.amountPaid) - Number(r.amountWaived);
             return (
               <View key={idx} style={sharedStyles.tableRow}>
                 <Text style={cell.period}>

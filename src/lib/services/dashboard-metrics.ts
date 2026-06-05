@@ -134,6 +134,7 @@ const fetchDashboardMetricsImpl = async (
         id: true,
         amountDue: true,
         amountPaid: true,
+        amountWaived: true,
         status: true,
         dueDate: true,
         contract: {
@@ -236,7 +237,7 @@ const fetchDashboardMetricsImpl = async (
         status: { in: OUTSTANDING_STATUSES },
         ...rentLegalEntityFilter,
       },
-      select: { amountDue: true, amountPaid: true, status: true },
+      select: { amountDue: true, amountPaid: true, amountWaived: true, status: true },
     }),
     prisma.contract.findMany({
       where: {
@@ -343,7 +344,7 @@ const fetchDashboardMetricsImpl = async (
   >();
   for (const r of outstandingRents) {
     const l = r.contract.lessee;
-    const balance = dec(r.amountDue).minus(dec(r.amountPaid));
+    const balance = dec(r.amountDue).minus(dec(r.amountPaid)).minus(dec(r.amountWaived));
     const days = Math.floor((now.getTime() - r.dueDate.getTime()) / (1000 * 60 * 60 * 24));
     const cur = overdueByLessee.get(l.id);
     if (cur) {

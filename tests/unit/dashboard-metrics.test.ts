@@ -61,10 +61,10 @@ describe("computeSummary", () => {
       expiringContracts: 1,
       paymentsThisMonth: [{ amount: dec(10000) }, { amount: dec(5000) }],
       outstandingRents: [
-        { amountDue: dec(15000), amountPaid: dec(10000), status: "PARTIAL" },
-        { amountDue: dec(20000), amountPaid: dec(0), status: "OVERDUE_1M" },
-        { amountDue: dec(20000), amountPaid: dec(0), status: "OVERDUE_2M" },
-        { amountDue: dec(20000), amountPaid: dec(0), status: "OVERDUE_3M" },
+        { amountDue: dec(15000), amountPaid: dec(10000), amountWaived: dec(0), status: "PARTIAL" },
+        { amountDue: dec(20000), amountPaid: dec(0), amountWaived: dec(0), status: "OVERDUE_1M" },
+        { amountDue: dec(20000), amountPaid: dec(0), amountWaived: dec(0), status: "OVERDUE_2M" },
+        { amountDue: dec(20000), amountPaid: dec(0), amountWaived: dec(0), status: "OVERDUE_3M" },
       ],
     });
 
@@ -80,6 +80,24 @@ describe("computeSummary", () => {
     // 5000 + 20000 + 20000 + 20000 = 65000
     expect(r.totalOutstanding).toBe("65000");
     expect(r.overdueByLevel).toEqual({ "1M": 1, "2M": 1, "3M": 1 });
+  });
+
+  it("resta amountWaived del saldo pendiente (condonaciones)", () => {
+    const r = computeSummary({
+      totalProperties: 1,
+      totalUnits: 2,
+      occupiedUnits: 2,
+      activeContracts: [{ monthlyAmount: dec(10000) }],
+      expiringContracts: 0,
+      paymentsThisMonth: [],
+      outstandingRents: [
+        // Condonación parcial: saldo = 10000 - 2000 - 3000 = 5000
+        { amountDue: dec(10000), amountPaid: dec(2000), amountWaived: dec(3000), status: "PARTIAL" },
+        // Condonación total: saldo = 0, no debe sumar al outstanding
+        { amountDue: dec(8000), amountPaid: dec(0), amountWaived: dec(8000), status: "PARTIAL" },
+      ],
+    });
+    expect(r.totalOutstanding).toBe("5000");
   });
 
   it("devuelve 0 de ocupación cuando no hay unidades", () => {
