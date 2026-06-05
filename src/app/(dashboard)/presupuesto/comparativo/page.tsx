@@ -60,7 +60,7 @@ export default async function PresupuestoComparativoPage({
   ]);
 
   // Acumular real por mes
-  const realByMonth = MONTH_KEYS.map((_, i) => ({
+  const realByMonth = MONTH_KEYS.map(() => ({
     ingresos: 0,
     egresos: 0,
     nomina: 0,

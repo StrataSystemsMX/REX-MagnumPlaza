@@ -240,9 +240,6 @@ export function RentasView({
   );
 
   const selectedProperty = propertySummaries.find((p) => p.propertyId === selectedPropertyId);
-  const activeUnitCount = selectedProperty
-    ? selectedRows.filter((r) => r.status !== "NOT_GENERATED").length
-    : tableData.rows.filter((r) => r.status !== "NOT_GENERATED").length;
   const expected = selectedProperty?.expected ?? tableData.kpis.expected;
   const collected = selectedProperty?.collected ?? tableData.kpis.collected;
   const pendingAmount = selectedProperty
