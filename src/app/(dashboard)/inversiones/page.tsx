@@ -1,15 +1,30 @@
 import { InversionesView } from "@/components/inversiones/InversionesView";
+import { requireAuth } from "@/lib/auth/get-session";
+import { getUserRoleCodes } from "@/lib/auth/permissions";
 import {
   getInversionesKpis,
   getInvestmentProjects,
 } from "@/lib/services/inversiones-queries";
+import { getLegalEntities } from "@/lib/services/properties-queries";
+import { prisma } from "@/lib/prisma/client";
 
 export const metadata = { title: "Inversiones" };
 
 export default async function InversionesPage() {
-  const [kpis, projects] = await Promise.all([
+  const { dbUser, tenantId } = await requireAuth();
+  const roles = await getUserRoleCodes(dbUser.id);
+  const canCreate =
+    roles.includes("MASTER") || roles.includes("ADMIN") || roles.includes("ACCOUNTANT") || roles.length === 0;
+
+  const [kpis, projects, legalEntities, properties] = await Promise.all([
     getInversionesKpis(),
     getInvestmentProjects(),
+    getLegalEntities(),
+    prisma.property.findMany({
+      where: { tenantId, isActive: true },
+      select: { id: true, name: true },
+      orderBy: { name: "asc" },
+    }),
   ]);
 
   return (
@@ -20,7 +35,13 @@ export default async function InversionesPage() {
           Proyectos de inversión y avance presupuestal.
         </p>
       </div>
-      <InversionesView kpis={kpis} projects={projects} />
+      <InversionesView
+        kpis={kpis}
+        projects={projects}
+        legalEntities={legalEntities}
+        properties={properties}
+        canCreate={canCreate}
+      />
     </div>
   );
 }

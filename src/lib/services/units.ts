@@ -226,6 +226,52 @@ export async function actionUngroupUnit(childUnitId: string): Promise<void> {
   revalidatePath("/inmuebles");
 }
 
+/**
+ * Garantiza que un inmueble individual tenga al menos una unidad activa y disponible.
+ * Si ya existe, devuelve su ID sin tocar nada.
+ * Si no, la crea automáticamente — transparente para el usuario.
+ * Solo aplica a propiedades que no son PLAZA_COMERCIAL.
+ */
+export async function actionEnsureInmuebleUnit(propertyId: string): Promise<string> {
+  const { tenantId, dbUser } = await requireAuth();
+
+  const property = await prisma.property.findFirst({
+    where: { id: propertyId, tenantId, isActive: true },
+    select: { id: true, type: true, name: true },
+  });
+  if (!property) throw new Error("Inmueble no encontrado.");
+  if (property.type === "PLAZA_COMERCIAL") {
+    throw new Error("Esta acción es solo para inmuebles individuales.");
+  }
+
+  const existing = await prisma.unit.findFirst({
+    where: {
+      tenantId,
+      propertyId,
+      isActive: true,
+      status: { in: ["DISPONIBLE", "APARTADA"] },
+    },
+    select: { id: true },
+  });
+  if (existing) return existing.id;
+
+  const unit = await prisma.unit.create({
+    data: {
+      tenantId,
+      propertyId,
+      code: "U1",
+      name: property.name,
+      status: "DISPONIBLE",
+      isActive: true,
+    },
+  });
+
+  await logAudit(tenantId, dbUser.id, "CREATE", unit.id, { auto: true });
+  revalidatePath("/plazas");
+
+  return unit.id;
+}
+
 export async function actionDeleteUnit(id: string): Promise<void> {
   const { tenantId, dbUser } = await requireAuth();
   await requirePermission(dbUser.id, "unit.delete");

@@ -79,7 +79,11 @@ export function CreateBudgetForm({ legalEntities, currentYear, missingOnly = fal
         <div className="space-y-4">
           <div>
             <p className="mb-1.5 text-sm font-medium leading-none">Año</p>
-            <Select value={String(year)} onValueChange={(v) => setYear(Number(v))}>
+            <Select
+              value={String(year)}
+              onValueChange={(v) => setYear(Number(v))}
+              items={Object.fromEntries(years.map((y) => [String(y), String(y)]))}
+            >
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>

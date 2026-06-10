@@ -1,6 +1,6 @@
-import { ArrowLeft, FileDown } from "lucide-react";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
+import { ArrowLeft, FileDown } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { LegalEntityYearNav } from "@/components/legal-entity/LegalEntityYearNav";
@@ -39,23 +39,19 @@ const DATE = new Intl.DateTimeFormat("es-MX", {
 });
 
 const MONTH_NAMES = [
-  "Ene",
-  "Feb",
-  "Mar",
-  "Abr",
-  "May",
-  "Jun",
-  "Jul",
-  "Ago",
-  "Sep",
-  "Oct",
-  "Nov",
-  "Dic",
+  "Ene", "Feb", "Mar", "Abr", "May", "Jun",
+  "Jul", "Ago", "Sep", "Oct", "Nov", "Dic",
 ];
 
 interface PageProps {
   params: Promise<{ id: string }>;
   searchParams: Promise<{ year?: string }>;
+}
+
+function money(v: string | number): string {
+  const n = Number(v);
+  if (!Number.isFinite(n) || n === 0) return "—";
+  return MXN.format(n);
 }
 
 export default async function LegalEntityPage({ params, searchParams }: PageProps) {
@@ -67,15 +63,13 @@ export default async function LegalEntityPage({ params, searchParams }: PageProp
 
   // Solo MASTER y ACCOUNTANT pueden ver finanzas por LegalEntity (CLAUDE.md §2).
   const canSee =
-    roles.includes("MASTER") || roles.includes("ACCOUNTANT") || roles.length === 0;
+    roles.includes("MASTER") || roles.includes("ACCOUNTANT") || roles.includes("ADMIN") || roles.length === 0;
   if (!canSee) redirect("/");
 
   const year = yearParam && /^\d{4}$/.test(yearParam) ? Number(yearParam) : undefined;
   const data = await getLegalEntityMetrics(dbUser.tenantId, id, year);
   if (!data) notFound();
 
-  // Rango de años seleccionable: del próximo año hacia atrás 5 ejercicios,
-  // garantizando que el año visualizado esté incluido.
   const nowYear = new Date().getUTCFullYear();
   const availableYears = Array.from(
     new Set([
@@ -84,17 +78,16 @@ export default async function LegalEntityPage({ params, searchParams }: PageProp
     ]),
   ).sort((a, b) => b - a);
 
+  const occupancyPct =
+    data.totalUnits > 0 ? Math.round((data.occupiedUnits / data.totalUnits) * 100) : 0;
+
   return (
     <div className="space-y-6">
       <header className="flex items-start justify-between gap-4">
         <div>
-          <Button
-            variant="ghost"
-            size="sm"
-            render={<Link href="/" />}
-          >
+          <Button variant="ghost" size="sm" render={<Link href="/reportes" />}>
             <ArrowLeft className="size-4" />
-            Volver al dashboard
+            Volver a Reportes
           </Button>
           <h1 className="mt-2 text-2xl font-semibold tracking-tight">
             {data.code} — {data.legalName}
@@ -120,53 +113,163 @@ export default async function LegalEntityPage({ params, searchParams }: PageProp
         </div>
       </header>
 
-      {/* Resumen anual */}
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+      {/* KPIs */}
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-5">
         <Card>
-          <CardHeader>
+          <CardHeader className="pb-2">
             <CardDescription>Ingresos del año</CardDescription>
-            <CardTitle className="text-2xl">{MXN.format(Number(data.totalIncome))}</CardTitle>
+            <CardTitle className="text-xl">{MXN.format(Number(data.totalIncome))}</CardTitle>
           </CardHeader>
         </Card>
         <Card>
-          <CardHeader>
+          <CardHeader className="pb-2">
+            <CardDescription>Renta esperada / mes</CardDescription>
+            <CardTitle className="text-xl">{money(data.expectedMonthlyRent)}</CardTitle>
+          </CardHeader>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
             <CardDescription>Egresos del año</CardDescription>
-            <CardTitle className="text-2xl">{MXN.format(Number(data.totalExpenses))}</CardTitle>
+            <CardTitle className="text-xl">{MXN.format(Number(data.totalExpenses))}</CardTitle>
           </CardHeader>
         </Card>
         <Card>
-          <CardHeader>
+          <CardHeader className="pb-2">
             <CardDescription>Utilidad del año</CardDescription>
             <CardTitle
-              className={
+              className={`text-xl ${
                 Number(data.totalProfit) > 0
-                  ? "text-2xl text-emerald-600"
+                  ? "text-emerald-600"
                   : Number(data.totalProfit) < 0
-                    ? "text-2xl text-rose-600"
-                    : "text-2xl"
-              }
+                    ? "text-rose-600"
+                    : ""
+              }`}
             >
               {MXN.format(Number(data.totalProfit))}
             </CardTitle>
           </CardHeader>
         </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardDescription>Ocupación</CardDescription>
+            <CardTitle className="text-xl">
+              {occupancyPct}%
+              <span className="ml-1 text-sm font-normal text-muted-foreground">
+                ({data.occupiedUnits}/{data.totalUnits})
+              </span>
+            </CardTitle>
+          </CardHeader>
+        </Card>
       </div>
 
-      {/* Tabla mensual estilo "Cierre" */}
+      {/* Cartera vencida */}
+      {data.arRows.length > 0 && (
+        <Card className="border-rose-200">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="text-rose-700">Cartera vencida</CardTitle>
+                <CardDescription>Rentas pendientes de pago ya vencidas</CardDescription>
+              </div>
+              <Badge variant="destructive" className="text-base px-3 py-1">
+                {MXN.format(Number(data.arBalance))}
+              </Badge>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Inquilino</TableHead>
+                  <TableHead>Inmueble / Local</TableHead>
+                  <TableHead>Período</TableHead>
+                  <TableHead>Vencimiento</TableHead>
+                  <TableHead className="text-right">Cargo</TableHead>
+                  <TableHead className="text-right">Pagado</TableHead>
+                  <TableHead className="text-right">Saldo</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {data.arRows.map((r) => (
+                  <TableRow key={r.rentId}>
+                    <TableCell className="font-medium">{r.lesseeName}</TableCell>
+                    <TableCell>
+                      <span className="text-xs text-muted-foreground">{r.propertyName} · </span>
+                      {r.unitName}
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap text-sm">
+                      {capitalizeFirst(DATE.format(r.period))}
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap text-sm text-rose-600">
+                      {capitalizeFirst(DATE.format(r.dueDate))}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">{MXN.format(Number(r.amountDue))}</TableCell>
+                    <TableCell className="text-right tabular-nums">{money(r.amountPaid)}</TableCell>
+                    <TableCell className="text-right font-semibold tabular-nums text-rose-600">
+                      {MXN.format(Number(r.balance))}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Contratos próximos a vencer */}
+      {data.expiringContracts.length > 0 && (
+        <Card className="border-amber-200">
+          <CardHeader>
+            <CardTitle className="text-amber-700">Contratos por vencer</CardTitle>
+            <CardDescription>Próximos 90 días</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Inquilino</TableHead>
+                  <TableHead>Inmueble / Local</TableHead>
+                  <TableHead>Vence</TableHead>
+                  <TableHead className="text-right">Renta mensual</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {data.expiringContracts.map((c) => (
+                  <TableRow key={c.contractId}>
+                    <TableCell className="font-medium">
+                      <Link href={`/contracts/${c.contractId}`} className="hover:underline">
+                        {c.lesseeName}
+                      </Link>
+                    </TableCell>
+                    <TableCell>
+                      <span className="text-xs text-muted-foreground">{c.propertyName} · </span>
+                      {c.unitName}
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap text-sm font-medium text-amber-700">
+                      {capitalizeFirst(DATE.format(c.endDate))}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">{MXN.format(Number(c.monthlyAmount))}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Cierre mensual */}
       <Card>
         <CardHeader>
           <CardTitle>Cierre mensual</CardTitle>
-          <CardDescription>Ingresos, egresos y utilidad por mes</CardDescription>
+          <CardDescription>Ingresos, egresos y utilidad por mes — {data.year}</CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="overflow-x-auto">
           <Table className="min-w-[1100px]">
             <TableHeader>
               <TableRow>
                 <TableHead>Concepto</TableHead>
                 {MONTH_NAMES.map((n) => (
-                  <TableHead key={n} className="text-right">
-                    {n}
-                  </TableHead>
+                  <TableHead key={n} className="text-right">{n}</TableHead>
                 ))}
                 <TableHead className="text-right">Total</TableHead>
               </TableRow>
@@ -175,9 +278,7 @@ export default async function LegalEntityPage({ params, searchParams }: PageProp
               <TableRow>
                 <TableCell className="font-medium">Ingresos</TableCell>
                 {data.monthlyIncome.map((v, i) => (
-                  <TableCell key={i} className="text-right tabular-nums">
-                    {Number(v) === 0 ? "—" : MXN.format(Number(v))}
-                  </TableCell>
+                  <TableCell key={i} className="text-right tabular-nums">{money(v)}</TableCell>
                 ))}
                 <TableCell className="text-right font-semibold tabular-nums">
                   {MXN.format(Number(data.totalIncome))}
@@ -186,9 +287,7 @@ export default async function LegalEntityPage({ params, searchParams }: PageProp
               <TableRow>
                 <TableCell className="font-medium">Egresos</TableCell>
                 {data.monthlyExpenses.map((v, i) => (
-                  <TableCell key={i} className="text-right tabular-nums">
-                    {Number(v) === 0 ? "—" : MXN.format(Number(v))}
-                  </TableCell>
+                  <TableCell key={i} className="text-right tabular-nums">{money(v)}</TableCell>
                 ))}
                 <TableCell className="text-right font-semibold tabular-nums">
                   {MXN.format(Number(data.totalExpenses))}
@@ -201,11 +300,9 @@ export default async function LegalEntityPage({ params, searchParams }: PageProp
                   return (
                     <TableCell
                       key={i}
-                      className={`text-right tabular-nums ${
-                        n > 0 ? "text-emerald-600" : n < 0 ? "text-rose-600" : ""
-                      }`}
+                      className={`text-right tabular-nums ${n > 0 ? "text-emerald-600" : n < 0 ? "text-rose-600" : ""}`}
                     >
-                      {n === 0 ? "—" : MXN.format(n)}
+                      {money(v)}
                     </TableCell>
                   );
                 })}
@@ -226,8 +323,44 @@ export default async function LegalEntityPage({ params, searchParams }: PageProp
         </CardContent>
       </Card>
 
-      {/* Egresos por categoría */}
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+      {/* Ingresos por inmueble + Egresos por categoría */}
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>Ingresos por inmueble</CardTitle>
+            <CardDescription>Acumulado del año</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {data.incomeByProperty.length === 0 ? (
+              <p className="py-8 text-center text-sm text-muted-foreground">Sin ingresos registrados.</p>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Inmueble</TableHead>
+                    <TableHead className="text-right">Ingreso</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {data.incomeByProperty.map((row) => (
+                    <TableRow key={row.propertyId}>
+                      <TableCell>
+                        <Link
+                          href={`/reportes/inmueble/${row.propertyId}?year=${data.year}&from=${data.id}`}
+                          className="hover:underline"
+                        >
+                          {row.propertyName}
+                        </Link>
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">{MXN.format(Number(row.amount))}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </CardContent>
+        </Card>
+
         <Card>
           <CardHeader>
             <CardTitle>Egresos por categoría</CardTitle>
@@ -235,9 +368,7 @@ export default async function LegalEntityPage({ params, searchParams }: PageProp
           </CardHeader>
           <CardContent>
             {data.expensesByCategory.length === 0 ? (
-              <p className="py-8 text-center text-sm text-muted-foreground">
-                Aún no hay egresos registrados.
-              </p>
+              <p className="py-8 text-center text-sm text-muted-foreground">Sin egresos registrados.</p>
             ) : (
               <Table>
                 <TableHeader>
@@ -250,9 +381,7 @@ export default async function LegalEntityPage({ params, searchParams }: PageProp
                   {data.expensesByCategory.map((row) => (
                     <TableRow key={row.categoryName}>
                       <TableCell>{row.categoryName}</TableCell>
-                      <TableCell className="text-right tabular-nums">
-                        {MXN.format(Number(row.amount))}
-                      </TableCell>
+                      <TableCell className="text-right tabular-nums">{MXN.format(Number(row.amount))}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -260,53 +389,60 @@ export default async function LegalEntityPage({ params, searchParams }: PageProp
             )}
           </CardContent>
         </Card>
+      </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Inmuebles asociados</CardTitle>
-            <CardDescription>
-              Como dueño y como administrador
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
+      {/* Inmuebles */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Inmuebles</CardTitle>
+          <CardDescription>Propiedades bajo esta razón social — haz clic para ver el reporte por inmueble</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {data.properties.length === 0 ? (
+            <p className="py-8 text-center text-sm text-muted-foreground">Sin inmuebles asociados.</p>
+          ) : (
             <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead>Inmueble</TableHead>
                   <TableHead>Tipo</TableHead>
                   <TableHead>Rol</TableHead>
+                  <TableHead className="text-right">Ocupación</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {[...data.ownedProperties, ...data.managedProperties].map((p) => (
-                  <TableRow key={`${p.id}-${p.isOwner ? "o" : "m"}`}>
+                {data.properties.map((p) => (
+                  <TableRow key={p.id}>
                     <TableCell>
-                      <span className="font-medium">{p.name}</span>
+                      <Link
+                        href={`/reportes/inmueble/${p.id}?year=${data.year}&from=${data.id}`}
+                        className="font-medium hover:underline"
+                      >
+                        {p.name}
+                      </Link>
                     </TableCell>
                     <TableCell className="text-xs text-muted-foreground">
                       {propertyTypeLabel(p.type as PropertyType)}
                     </TableCell>
                     <TableCell>
-                      {p.isOwner ? (
-                        <Badge variant="default">Dueño</Badge>
-                      ) : (
-                        <Badge variant="secondary">Administrador</Badge>
-                      )}
+                      <div className="flex gap-1">
+                        {p.isOwner && <Badge variant="default">Dueño</Badge>}
+                        {p.isManager && !p.isOwner && <Badge variant="secondary">Administrador</Badge>}
+                        {p.isOwner && p.isManager && <Badge variant="secondary">Administrador</Badge>}
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {p.totalUnits > 0
+                        ? `${p.occupiedUnits}/${p.totalUnits} (${Math.round((p.occupiedUnits / p.totalUnits) * 100)}%)`
+                        : "—"}
                     </TableCell>
                   </TableRow>
                 ))}
-                {data.ownedProperties.length === 0 && data.managedProperties.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={3} className="py-8 text-center text-sm text-muted-foreground">
-                      No hay inmuebles asociados.
-                    </TableCell>
-                  </TableRow>
-                ) : null}
               </TableBody>
             </Table>
-          </CardContent>
-        </Card>
-      </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Egresos recientes */}
       <Card>
@@ -316,9 +452,7 @@ export default async function LegalEntityPage({ params, searchParams }: PageProp
         </CardHeader>
         <CardContent>
           {data.recentExpenses.length === 0 ? (
-            <p className="py-8 text-center text-sm text-muted-foreground">
-              Sin egresos registrados.
-            </p>
+            <p className="py-8 text-center text-sm text-muted-foreground">Sin egresos registrados.</p>
           ) : (
             <Table>
               <TableHeader>
@@ -334,16 +468,10 @@ export default async function LegalEntityPage({ params, searchParams }: PageProp
                 {data.recentExpenses.map((e) => (
                   <TableRow key={e.id}>
                     <TableCell className="whitespace-nowrap">{capitalizeFirst(DATE.format(e.expenseDate))}</TableCell>
-                    <TableCell>
-                      <Badge variant="outline">{e.category}</Badge>
-                    </TableCell>
+                    <TableCell><Badge variant="outline">{e.category}</Badge></TableCell>
                     <TableCell>{e.description}</TableCell>
-                    <TableCell className="text-xs text-muted-foreground">
-                      {e.vendor ?? "—"}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {MXN.format(Number(e.amount))}
-                    </TableCell>
+                    <TableCell className="text-xs text-muted-foreground">{e.vendor ?? "—"}</TableCell>
+                    <TableCell className="text-right tabular-nums">{MXN.format(Number(e.amount))}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>

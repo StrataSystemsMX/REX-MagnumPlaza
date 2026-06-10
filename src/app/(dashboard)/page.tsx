@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { AlertCircle, AlertTriangle, BarChart2, Clock, TrendingDown, TrendingUp } from "lucide-react";
+import { AlertCircle, AlertTriangle, BarChart2, TrendingDown, TrendingUp } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { FinancialHistoryChart } from "@/components/dashboard/charts";
 import { LegalEntitySummaryTable } from "@/components/dashboard/LegalEntitySummaryTable";
@@ -111,7 +111,6 @@ export default async function DashboardPage({ searchParams }: PageProps) {
   const [
     ventas,
     egresos,
-    cxcAgg,
     propertiesWithUnits,
     overdueRentsRaw,
     paymentsDetail,
@@ -124,19 +123,16 @@ export default async function DashboardPage({ searchParams }: PageProps) {
       where: { tenantId: dbUser.tenantId, paymentDate: { gte: periodStart, lt: periodEnd }, ...paymentLeFilter },
       _sum: { amount: true },
     })),
+    // Sólo egresos ya pagados: "Ventas" cuenta dinero efectivamente cobrado
+    // (Payment), así que "Costo de Operación" debe contar dinero efectivamente
+    // pagado para que Utilidad/Rentabilidad comparen periodos equivalentes.
+    // De lo contrario, en modo anual se compara el cobrado a la fecha contra
+    // el presupuesto completo de los 12 meses (incluyendo meses futuros aún
+    // no pagados), lo que arroja una rentabilidad artificialmente negativa.
     timed("dashboard:egresos.aggregate", () => prisma.expense.aggregate({
-      where: { tenantId: dbUser.tenantId, expenseDate: { gte: periodStart, lt: periodEnd }, ...leFilter },
+      where: { tenantId: dbUser.tenantId, expenseDate: { gte: periodStart, lt: periodEnd }, isPaid: true, ...leFilter },
       _sum: { amount: true },
     })),
-    timed("dashboard:cxc.aggregate", () => prisma.rent.aggregate({
-      where: {
-        tenantId: dbUser.tenantId,
-        status: { in: ["DUE", "PARTIAL", "OVERDUE_1M", "OVERDUE_2M", "OVERDUE_3M"] },
-        ...leFilter,
-      },
-      _sum: { amountDue: true, amountPaid: true },
-    })),
-
     // Semáforo de locales — filtrado por managerEntityId
     timed("dashboard:propertiesWithUnits", () => prisma.property.findMany({
       where: { tenantId: dbUser.tenantId, isActive: true, ...propLeFilter },
@@ -198,9 +194,12 @@ export default async function DashboardPage({ searchParams }: PageProps) {
       },
     })),
 
-    // Detalle de egresos para resumen por LE y egresos por tipo (sin filtro de LE)
+    // Detalle de egresos para resumen por LE y egresos por tipo (sin filtro de LE).
+    // Filtramos por isPaid para que coincida con la base "cobrado/pagado real"
+    // del KPI de rentabilidad (ver egresos.aggregate) y no mezcle el gasto ya
+    // erogado con el presupuesto de meses futuros aún no pagados.
     timed("dashboard:expensesDetail", () => prisma.expense.findMany({
-      where: { tenantId: dbUser.tenantId, expenseDate: { gte: periodStart, lt: periodEnd } },
+      where: { tenantId: dbUser.tenantId, expenseDate: { gte: periodStart, lt: periodEnd }, isPaid: true },
       select: {
         amount: true,
         legalEntityId: true,
@@ -266,8 +265,6 @@ export default async function DashboardPage({ searchParams }: PageProps) {
   const egresosTotal = Number(egresos._sum.amount  ?? 0);
   const utilidad     = ventasTotal - egresosTotal;
   const rentabilidad = ventasTotal > 0 ? utilidad / ventasTotal : 0;
-  const cxc          = Number(cxcAgg._sum.amountDue ?? 0) - Number(cxcAgg._sum.amountPaid ?? 0);
-
   const periodLabel = mode === "anual"
     ? `Ene – Dic ${currentYear}`
     : `${MONTHS[selectedMonth] ?? ""} ${currentYear}`;
@@ -421,7 +418,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
       </div>
 
       {/* ── KPI Cards ── */}
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-3">
         <MetricCard
           label="Ventas con IVA"
           value={<span className="tabular-nums">{MXN.format(ventasTotal)}</span>}
@@ -431,7 +428,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
         <MetricCard
           label="Costo de Operación"
           value={<span className="tabular-nums">{MXN.format(egresosTotal)}</span>}
-          subValue="Egresos registrados"
+          subValue="Egresos pagados"
           icon={TrendingDown}
         />
         <MetricCard
@@ -440,13 +437,6 @@ export default async function DashboardPage({ searchParams }: PageProps) {
           subValue={`Rentabilidad ${PCT.format(rentabilidad)}`}
           icon={BarChart2}
           color={utilidad >= 0 ? "success" : "danger"}
-        />
-        <MetricCard
-          label="CxC con IVA"
-          value={<span className="tabular-nums">{MXN.format(cxc)}</span>}
-          subValue="Por cobrar a inquilinos"
-          icon={Clock}
-          color={cxc > 0 ? "warning" : "success"}
         />
       </div>
 

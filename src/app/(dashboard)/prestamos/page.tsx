@@ -1,28 +1,20 @@
 import { PrestamosView } from "@/components/prestamos/PrestamosView";
-import {
-  getLoanYears,
-  getLoansYearlyMatrix,
-  getPrestamosKpis,
-} from "@/lib/services/prestamos-queries";
+import { requireAuth } from "@/lib/auth/get-session";
+import { getUserRoleCodes } from "@/lib/auth/permissions";
+import { getLoans } from "@/lib/services/prestamos-queries";
+import { getLegalEntities } from "@/lib/services/properties-queries";
 
 export const metadata = { title: "Préstamos" };
 
-interface Props {
-  searchParams: Promise<{ year?: string }>;
-}
+export default async function PrestamosPage() {
+  const { dbUser } = await requireAuth();
+  const roles = await getUserRoleCodes(dbUser.id);
+  const canCreate =
+    roles.includes("MASTER") || roles.includes("ADMIN") || roles.includes("ACCOUNTANT") || roles.length === 0;
 
-export default async function PrestamosPage({ searchParams }: Props) {
-  const { year: yearParam } = await searchParams;
-  const currentYear = new Date().getUTCFullYear();
-
-  const availableYears = await getLoanYears();
-  const year = yearParam
-    ? Math.max(2020, Math.min(2100, Number(yearParam)))
-    : (availableYears[0] ?? currentYear);
-
-  const [kpis, matrix] = await Promise.all([
-    getPrestamosKpis(year),
-    getLoansYearlyMatrix(year),
+  const [loans, legalEntities] = await Promise.all([
+    getLoans(),
+    getLegalEntities(),
   ]);
 
   return (
@@ -30,14 +22,10 @@ export default async function PrestamosPage({ searchParams }: Props) {
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Préstamos</h1>
         <p className="text-sm text-muted-foreground">
-          Financiamientos de vehículos, hipotecas y créditos corporativos.
+          Financiamientos y créditos activos de la empresa.
         </p>
       </div>
-      <PrestamosView
-        kpis={kpis}
-        matrix={matrix}
-        availableYears={availableYears}
-      />
+      <PrestamosView loans={loans} legalEntities={legalEntities} canCreate={canCreate} />
     </div>
   );
 }

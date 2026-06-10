@@ -42,6 +42,9 @@ interface Props {
 
 export function NewGuaranteeDialog({ contracts }: Props) {
   const [open, setOpen] = useState(false);
+  const contractItems = Object.fromEntries(
+    contracts.map((c) => [c.id, `${c.lessee.legalName} — ${unitWithProperty(c.unit, " ")}`]),
+  );
 
   const form = useForm<CreateGuaranteeInput>({
     resolver: zodResolver(createGuaranteeSchema) as unknown as Resolver<CreateGuaranteeInput>,
@@ -79,7 +82,7 @@ export function NewGuaranteeDialog({ contracts }: Props) {
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Contrato</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value}>
+                  <Select onValueChange={field.onChange} value={field.value} items={contractItems}>
                     <FormControl>
                       <SelectTrigger>
                         <SelectValue placeholder="Selecciona un contrato" />

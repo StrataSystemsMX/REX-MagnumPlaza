@@ -403,12 +403,12 @@ async function main(): Promise<void> {
       ],
     },
 
-    // 3. Plaza Quiroga 1
+    // 3. Plaza Quiroga 1 (owner QHS, manager CRT — mismo esquema que Quiroga 2)
     {
       name: "Plaza Magnum Quiroga 1",
       type: PropertyType.PLAZA_COMERCIAL,
       address: "Perimetral Nte y Blvd Quiroga, Hermosillo",
-      owner: "CRT",
+      owner: "QHS",
       manager: "CRT",
       units: [
         { code: "LP", name: "7-Eleven", monthlyAmount: 41088.27, lessee: { legalName: "7-Eleven Mexico S.A de C.V." }, payments: PAID_Q1 },
