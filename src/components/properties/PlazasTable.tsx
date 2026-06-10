@@ -167,15 +167,17 @@ export function PlazasTable({ plazas, legalEntities, initialView }: PlazasTableP
         </div>
       ) : view === "cards" ? (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {plazas.map((p) => (
-            <PlazaCard
-              key={p.id}
-              plaza={p}
-              isExpanded={expanded.has(p.id)}
-              onToggle={() => toggleExpanded(p.id)}
-              onDetail={() => setDetailTarget(p)}
-            />
-          ))}
+          {[...plazas]
+            .sort((a, b) => Number(expanded.has(b.id)) - Number(expanded.has(a.id)))
+            .map((p) => (
+              <PlazaCard
+                key={p.id}
+                plaza={p}
+                isExpanded={expanded.has(p.id)}
+                onToggle={() => toggleExpanded(p.id)}
+                onDetail={() => setDetailTarget(p)}
+              />
+            ))}
         </div>
       ) : (
         <PlazasTableView

@@ -11,7 +11,7 @@ import { propertyTypeLabel } from "@/lib/i18n/enums";
 import type { PropertyType } from "@/generated/prisma/enums";
 import type { LegalEntityYearMetrics } from "@/lib/services/legal-entity-queries";
 
-const MXN_INT = new Intl.NumberFormat("es-MX", {
+const MXN = new Intl.NumberFormat("es-MX", {
   style: "currency",
   currency: "MXN",
   maximumFractionDigits: 0,
@@ -22,43 +22,50 @@ const MONTHS_SHORT = [
   "Jul", "Ago", "Sep", "Oct", "Nov", "Dic",
 ];
 
+function money(v: string | number): string {
+  const n = Number(v);
+  return Number.isFinite(n) && n !== 0 ? MXN.format(n) : "—";
+}
+
 const styles = StyleSheet.create({
-  pageLandscape: {
+  page: {
     paddingTop: 28,
     paddingBottom: 50,
     paddingHorizontal: 28,
     fontFamily: "Helvetica",
     fontSize: 8,
     color: "#1a1a1a",
-    lineHeight: 1.3,
+    lineHeight: 1.35,
   },
   sectionLabel: {
-    fontSize: 8,
-    color: "#777",
+    fontSize: 7.5,
+    color: "#888",
     textTransform: "uppercase",
-    letterSpacing: 0.5,
-    marginTop: 12,
+    letterSpacing: 0.6,
+    marginTop: 14,
     marginBottom: 4,
   },
-  // Tarjetas resumen
-  summaryRow: { flexDirection: "row", gap: 8, marginTop: 4 },
-  summaryCard: {
+  // KPI cards
+  kpiRow: { flexDirection: "row", gap: 6, marginTop: 6 },
+  kpiCard: {
     flex: 1,
-    padding: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 7,
     borderWidth: 1,
-    borderColor: "#ddd",
+    borderColor: "#e2e8f0",
     borderRadius: 4,
+    backgroundColor: "#fafafa",
   },
-  summaryCardLabel: { fontSize: 7, color: "#777", marginBottom: 2 },
-  summaryCardValue: { fontSize: 13, fontFamily: "Helvetica-Bold" },
-  // Tabla mensual (cierre)
+  kpiLabel: { fontSize: 6.5, color: "#888", marginBottom: 3, textTransform: "uppercase", letterSpacing: 0.4 },
+  kpiValue: { fontSize: 12, fontFamily: "Helvetica-Bold" },
+  // Monthly table
   tableHeaderRow: {
     flexDirection: "row",
     paddingVertical: 3,
     paddingHorizontal: 3,
     borderBottomWidth: 0.5,
-    borderBottomColor: "#444",
-    backgroundColor: "#f3f3f3",
+    borderBottomColor: "#555",
+    backgroundColor: "#f3f4f6",
     fontFamily: "Helvetica-Bold",
     fontSize: 7,
   },
@@ -67,59 +74,82 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
     paddingHorizontal: 3,
     borderBottomWidth: 0.3,
-    borderBottomColor: "#ddd",
+    borderBottomColor: "#e5e7eb",
     fontSize: 7.5,
   },
   profitRow: {
     flexDirection: "row",
     paddingVertical: 3,
     paddingHorizontal: 3,
-    borderTopWidth: 1,
+    borderTopWidth: 0.8,
     borderBottomWidth: 0.5,
-    borderColor: "#444",
-    backgroundColor: "#eaeaea",
+    borderColor: "#555",
+    backgroundColor: "#eff6ff",
     fontFamily: "Helvetica-Bold",
     fontSize: 7.5,
   },
-  cellConcept: { flex: 2.4 },
-  cellMonth: { flex: 1.3, textAlign: "right" },
-  cellTotal: { flex: 1.8, textAlign: "right", fontFamily: "Helvetica-Bold" },
-  // Tabla simple a 2 columnas
-  twoCol: { flexDirection: "row", gap: 16 },
-  twoColItem: { flex: 1 },
+  cellConcept: { flex: 2.2 },
+  cellMonth: { flex: 1.25, textAlign: "right" },
+  cellTotal: { flex: 1.7, textAlign: "right", fontFamily: "Helvetica-Bold" },
+  // Two-column layout
+  twoCol: { flexDirection: "row", gap: 16, alignItems: "flex-start" },
+  twoColLeft: { flex: 1 },
+  twoColRight: { flex: 1 },
+  // Simple table rows
   simpleHeaderRow: {
     flexDirection: "row",
     paddingVertical: 3,
+    paddingBottom: 4,
     borderBottomWidth: 0.5,
-    borderBottomColor: "#444",
+    borderBottomColor: "#555",
     fontFamily: "Helvetica-Bold",
-    fontSize: 8,
+    fontSize: 7.5,
   },
   simpleRow: {
     flexDirection: "row",
-    paddingVertical: 2.5,
+    paddingVertical: 3,
     borderBottomWidth: 0.3,
-    borderBottomColor: "#ddd",
+    borderBottomColor: "#e5e7eb",
     fontSize: 8,
   },
   simpleTotalRow: {
     flexDirection: "row",
-    paddingVertical: 3,
-    borderTopWidth: 1,
-    borderTopColor: "#444",
+    paddingVertical: 4,
+    borderTopWidth: 0.8,
+    borderTopColor: "#555",
     fontFamily: "Helvetica-Bold",
     fontSize: 8,
   },
-  badge: {
-    alignSelf: "flex-start",
-    paddingHorizontal: 4,
-    paddingVertical: 1,
-    borderRadius: 2,
-    fontSize: 7,
-    color: "#ffffff",
+  // Inmuebles table (full width)
+  propHeaderRow: {
+    flexDirection: "row",
+    paddingVertical: 3,
+    paddingHorizontal: 3,
+    borderBottomWidth: 0.5,
+    borderBottomColor: "#555",
+    backgroundColor: "#f3f4f6",
     fontFamily: "Helvetica-Bold",
+    fontSize: 7,
   },
-  emptyNote: { fontSize: 8, color: "#888", fontStyle: "italic", paddingVertical: 6 },
+  propRow: {
+    flexDirection: "row",
+    paddingVertical: 3,
+    paddingHorizontal: 3,
+    borderBottomWidth: 0.3,
+    borderBottomColor: "#e5e7eb",
+    fontSize: 8,
+    alignItems: "center",
+  },
+  rolPill: {
+    fontSize: 6.5,
+    color: "#555",
+    borderWidth: 0.5,
+    borderColor: "#ccc",
+    borderRadius: 2,
+    paddingHorizontal: 4,
+    paddingVertical: 1.5,
+  },
+  emptyNote: { fontSize: 7.5, color: "#aaa", fontStyle: "italic", paddingVertical: 6 },
 });
 
 export interface LegalEntityStatementPdfProps {
@@ -133,53 +163,58 @@ export interface LegalEntityStatementPdfProps {
 export function LegalEntityStatementPdf(props: LegalEntityStatementPdfProps) {
   const { metrics } = props;
   const profit = Number(metrics.totalProfit);
-  const properties = [...metrics.ownedProperties, ...metrics.managedProperties];
+  const occupancyPct =
+    metrics.totalUnits > 0
+      ? Math.round((metrics.occupiedUnits / metrics.totalUnits) * 100)
+      : 0;
+
+  // Build a map from propertyId → income amount for the properties table
+  const incomeMap = new Map(
+    metrics.incomeByProperty.map((r) => [r.propertyId, r.amount]),
+  );
 
   return (
     <Document
       title={`Estado de Resultados ${metrics.code} ${metrics.year}`}
       author={props.billingEntity.legalName}
     >
-      <Page size="A4" orientation="landscape" style={styles.pageLandscape}>
+      <Page size="A4" orientation="landscape" style={styles.page}>
         <DocHeader tenant={props.tenant} billingEntity={props.billingEntity} />
 
-        <Text style={sharedStyles.title}>
-          Estado de Resultados — {metrics.code}
-        </Text>
+        <Text style={sharedStyles.title}>Estado de Resultados — {metrics.code}</Text>
         <Text style={sharedStyles.subtitle}>
           {metrics.legalName}
           {metrics.rfc ? ` · RFC ${metrics.rfc}` : ""} · Ejercicio {metrics.year} ·
           Generado {props.generatedAt.toLocaleDateString("es-MX", { timeZone: "UTC" })}
         </Text>
 
-        {/* Resumen anual */}
-        <View style={styles.summaryRow}>
-          <View style={styles.summaryCard}>
-            <Text style={styles.summaryCardLabel}>INGRESOS DEL AÑO</Text>
-            <Text style={styles.summaryCardValue}>
-              {MXN_INT.format(Number(metrics.totalIncome))}
+        {/* KPIs — 5 tarjetas */}
+        <View style={styles.kpiRow}>
+          <View style={styles.kpiCard}>
+            <Text style={styles.kpiLabel}>Ingresos del año</Text>
+            <Text style={styles.kpiValue}>{MXN.format(Number(metrics.totalIncome))}</Text>
+          </View>
+          <View style={styles.kpiCard}>
+            <Text style={styles.kpiLabel}>Renta esperada / mes</Text>
+            <Text style={styles.kpiValue}>{money(metrics.expectedMonthlyRent)}</Text>
+          </View>
+          <View style={styles.kpiCard}>
+            <Text style={styles.kpiLabel}>Egresos del año</Text>
+            <Text style={styles.kpiValue}>{MXN.format(Number(metrics.totalExpenses))}</Text>
+          </View>
+          <View style={[styles.kpiCard, { backgroundColor: profit >= 0 ? "#ecfdf5" : "#fef2f2", borderColor: profit >= 0 ? "#bbf7d0" : "#fecaca" }]}>
+            <Text style={styles.kpiLabel}>Utilidad del año</Text>
+            <Text style={[styles.kpiValue, { color: profit >= 0 ? "#047857" : "#b91c1c" }]}>
+              {MXN.format(profit)}
             </Text>
           </View>
-          <View style={styles.summaryCard}>
-            <Text style={styles.summaryCardLabel}>EGRESOS DEL AÑO</Text>
-            <Text style={styles.summaryCardValue}>
-              {MXN_INT.format(Number(metrics.totalExpenses))}
-            </Text>
-          </View>
-          <View
-            style={[
-              styles.summaryCard,
-              { backgroundColor: profit >= 0 ? "#ecfdf5" : "#fef2f2" },
-            ]}
-          >
-            <Text style={styles.summaryCardLabel}>UTILIDAD DEL AÑO</Text>
-            <Text
-              style={[
-                styles.summaryCardValue,
-                { color: profit >= 0 ? "#047857" : "#b91c1c" },
-              ]}
-            >
-              {MXN_INT.format(profit)}
+          <View style={styles.kpiCard}>
+            <Text style={styles.kpiLabel}>Ocupación</Text>
+            <Text style={styles.kpiValue}>
+              {occupancyPct}%{"  "}
+              <Text style={{ fontSize: 8, color: "#777", fontFamily: "Helvetica" }}>
+                {metrics.occupiedUnits}/{metrics.totalUnits}
+              </Text>
             </Text>
           </View>
         </View>
@@ -190,97 +225,118 @@ export function LegalEntityStatementPdf(props: LegalEntityStatementPdfProps) {
           <View style={styles.tableHeaderRow}>
             <Text style={styles.cellConcept}>Concepto</Text>
             {MONTHS_SHORT.map((m) => (
-              <Text key={m} style={styles.cellMonth}>
-                {m}
-              </Text>
+              <Text key={m} style={styles.cellMonth}>{m}</Text>
             ))}
             <Text style={styles.cellTotal}>Total</Text>
           </View>
-          <MonthlyRow
-            label="Ingresos"
-            monthly={metrics.monthlyIncome}
-            total={metrics.totalIncome}
-          />
-          <MonthlyRow
-            label="Egresos"
-            monthly={metrics.monthlyExpenses}
-            total={metrics.totalExpenses}
-          />
+          <MonthlyRow label="Ingresos" monthly={metrics.monthlyIncome} total={metrics.totalIncome} />
+          <MonthlyRow label="Egresos" monthly={metrics.monthlyExpenses} total={metrics.totalExpenses} />
           <View style={styles.profitRow}>
             <Text style={styles.cellConcept}>Utilidad</Text>
             {metrics.monthlyProfit.map((v, i) => (
-              <Text key={i} style={styles.cellMonth}>
-                {Number(v) === 0 ? "—" : MXN_INT.format(Number(v))}
+              <Text
+                key={i}
+                style={[styles.cellMonth, { color: Number(v) < 0 ? "#b91c1c" : Number(v) > 0 ? "#047857" : "#1a1a1a" }]}
+              >
+                {money(v)}
               </Text>
             ))}
-            <Text style={styles.cellTotal}>{MXN_INT.format(profit)}</Text>
+            <Text style={[styles.cellTotal, { color: profit >= 0 ? "#047857" : "#b91c1c" }]}>
+              {MXN.format(profit)}
+            </Text>
           </View>
         </View>
 
-        <View style={styles.twoCol}>
-          {/* Egresos por categoría */}
-          <View style={styles.twoColItem}>
-            <Text style={styles.sectionLabel}>Egresos por categoría</Text>
-            {metrics.expensesByCategory.length === 0 ? (
-              <Text style={styles.emptyNote}>Sin egresos registrados.</Text>
-            ) : (
-              <View>
-                <View style={styles.simpleHeaderRow}>
-                  <Text style={{ flex: 3 }}>Categoría</Text>
-                  <Text style={{ flex: 1, textAlign: "right" }}>Monto</Text>
-                </View>
-                {metrics.expensesByCategory.map((row) => (
-                  <View key={row.categoryName} style={styles.simpleRow}>
-                    <Text style={{ flex: 3 }}>{row.categoryName}</Text>
-                    <Text style={{ flex: 1, textAlign: "right" }}>
-                      {MXN_INT.format(Number(row.amount))}
-                    </Text>
-                  </View>
-                ))}
-                <View style={styles.simpleTotalRow}>
-                  <Text style={{ flex: 3 }}>TOTAL</Text>
-                  <Text style={{ flex: 1, textAlign: "right" }}>
-                    {MXN_INT.format(Number(metrics.totalExpenses))}
+        {/* Egresos por categoría */}
+        <Text style={styles.sectionLabel}>Egresos por categoría</Text>
+        {metrics.expensesByCategory.length === 0 ? (
+          <Text style={styles.emptyNote}>Sin egresos registrados.</Text>
+        ) : (
+          <View>
+            <View style={styles.simpleHeaderRow} fixed>
+              <Text style={{ flex: 4 }}>Categoría</Text>
+              <Text style={{ flex: 1, textAlign: "right" }}>Monto</Text>
+            </View>
+            {metrics.expensesByCategory.map((row) => (
+              <View key={row.categoryName} style={styles.simpleRow}>
+                <Text style={{ flex: 4 }}>{row.categoryName}</Text>
+                <Text style={{ flex: 1, textAlign: "right" }}>
+                  {MXN.format(Number(row.amount))}
+                </Text>
+              </View>
+            ))}
+            <View style={styles.simpleTotalRow}>
+              <Text style={{ flex: 4 }}>TOTAL</Text>
+              <Text style={{ flex: 1, textAlign: "right" }}>
+                {MXN.format(Number(metrics.totalExpenses))}
+              </Text>
+            </View>
+          </View>
+        )}
+
+        {/* Ingresos por inmueble */}
+        <Text style={styles.sectionLabel}>Ingresos por inmueble</Text>
+        {metrics.incomeByProperty.length === 0 ? (
+          <Text style={styles.emptyNote}>Sin ingresos por inmueble.</Text>
+        ) : (
+          <View wrap={false}>
+            <View style={styles.simpleHeaderRow}>
+              <Text style={{ flex: 4 }}>Inmueble</Text>
+              <Text style={{ flex: 1, textAlign: "right" }}>Ingresos</Text>
+            </View>
+            {metrics.incomeByProperty.map((row) => (
+              <View key={row.propertyId} style={styles.simpleRow}>
+                <Text style={{ flex: 4 }}>{row.propertyName}</Text>
+                <Text style={{ flex: 1, textAlign: "right" }}>
+                  {MXN.format(Number(row.amount))}
+                </Text>
+              </View>
+            ))}
+            <View style={styles.simpleTotalRow}>
+              <Text style={{ flex: 4 }}>TOTAL</Text>
+              <Text style={{ flex: 1, textAlign: "right" }}>
+                {MXN.format(Number(metrics.totalIncome))}
+              </Text>
+            </View>
+          </View>
+        )}
+
+        {/* Inmuebles — tabla completa */}
+        <Text style={styles.sectionLabel}>Inmuebles</Text>
+        {metrics.properties.length === 0 ? (
+          <Text style={styles.emptyNote}>Sin inmuebles asociados.</Text>
+        ) : (
+          <View wrap={false}>
+            <View style={styles.propHeaderRow}>
+              <Text style={{ flex: 3 }}>Inmueble</Text>
+              <Text style={{ flex: 2 }}>Tipo</Text>
+              <Text style={{ flex: 1, textAlign: "center" }}>Rol</Text>
+              <Text style={{ flex: 1, textAlign: "right" }}>Ingresos {metrics.year}</Text>
+              <Text style={{ flex: 1, textAlign: "right" }}>Ocupación</Text>
+            </View>
+            {metrics.properties.map((p) => (
+              <View key={p.id} style={styles.propRow}>
+                <Text style={{ flex: 3, fontFamily: "Helvetica-Bold" }}>{p.name}</Text>
+                <Text style={{ flex: 2, color: "#555" }}>
+                  {propertyTypeLabel(p.type as PropertyType)}
+                </Text>
+                <View style={{ flex: 1, alignItems: "center" }}>
+                  <Text style={styles.rolPill}>
+                    {p.isOwner && p.isManager ? "Dueño · Admin" : p.isOwner ? "Dueño" : "Administrador"}
                   </Text>
                 </View>
+                <Text style={{ flex: 1, textAlign: "right" }}>
+                  {money(incomeMap.get(p.id) ?? 0)}
+                </Text>
+                <Text style={{ flex: 1, textAlign: "right", color: "#555" }}>
+                  {p.totalUnits > 0
+                    ? `${p.occupiedUnits}/${p.totalUnits} (${Math.round((p.occupiedUnits / p.totalUnits) * 100)}%)`
+                    : "—"}
+                </Text>
               </View>
-            )}
+            ))}
           </View>
-
-          {/* Inmuebles asociados */}
-          <View style={styles.twoColItem}>
-            <Text style={styles.sectionLabel}>Inmuebles asociados</Text>
-            {properties.length === 0 ? (
-              <Text style={styles.emptyNote}>No hay inmuebles asociados.</Text>
-            ) : (
-              <View>
-                <View style={styles.simpleHeaderRow}>
-                  <Text style={{ flex: 3 }}>Inmueble</Text>
-                  <Text style={{ flex: 2 }}>Tipo</Text>
-                  <Text style={{ flex: 1.4, textAlign: "right" }}>Rol</Text>
-                </View>
-                {properties.map((p) => (
-                  <View key={`${p.id}-${p.isOwner ? "o" : "m"}`} style={styles.simpleRow}>
-                    <Text style={{ flex: 3 }}>{p.name}</Text>
-                    <Text style={{ flex: 2, color: "#555" }}>
-                      {propertyTypeLabel(p.type as PropertyType)}
-                    </Text>
-                    <View style={{ flex: 1.4, alignItems: "flex-end" }}>
-                      <Text
-                        style={[
-                          styles.badge,
-                          { backgroundColor: p.isOwner ? "#1f2937" : "#64748b" },
-                        ]}
-                      >
-                        {p.isOwner ? "Dueño" : "Administra"}
-                      </Text>
-                    </View>
-                  </View>
-                ))}
-              </View>
-            )}
-          </View>
-        </View>
+        )}
 
         <DocFooter contactInfo={props.contactInfo} />
       </Page>
@@ -301,11 +357,9 @@ function MonthlyRow({
     <View style={styles.tableRow}>
       <Text style={styles.cellConcept}>{label}</Text>
       {monthly.map((v, i) => (
-        <Text key={i} style={styles.cellMonth}>
-          {Number(v) === 0 ? "—" : MXN_INT.format(Number(v))}
-        </Text>
+        <Text key={i} style={styles.cellMonth}>{money(v)}</Text>
       ))}
-      <Text style={styles.cellTotal}>{MXN_INT.format(Number(total))}</Text>
+      <Text style={styles.cellTotal}>{MXN.format(Number(total))}</Text>
     </View>
   );
 }
