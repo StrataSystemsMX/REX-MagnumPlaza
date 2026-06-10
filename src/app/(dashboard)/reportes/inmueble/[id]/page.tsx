@@ -57,7 +57,7 @@ export default async function PropertyReportPage({ params, searchParams }: PageP
   const { dbUser } = await requireAuth();
   const roles = await getUserRoleCodes(dbUser.id);
   const canSee =
-    roles.includes("MASTER") || roles.includes("ACCOUNTANT") || roles.includes("ADMIN") || roles.length === 0;
+    roles.includes("MASTER") || roles.includes("ACCOUNTANT") || roles.includes("ADMIN");
   if (!canSee) redirect("/");
 
   const year = yearParam && /^\d{4}$/.test(yearParam) ? Number(yearParam) : undefined;

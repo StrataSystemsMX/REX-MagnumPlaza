@@ -33,6 +33,14 @@ export async function actionCreateInvestmentProject(input: {
   });
   if (!le) throw new Error("Razón social no encontrada.");
 
+  if (input.propertyId) {
+    const prop = await prisma.property.findFirst({
+      where: { id: input.propertyId, tenantId },
+      select: { id: true },
+    });
+    if (!prop) throw new Error("Inmueble no encontrado.");
+  }
+
   await prisma.investmentProject.create({
     data: {
       tenantId,
