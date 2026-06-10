@@ -12,7 +12,7 @@ export interface PublicVacancyData {
     name: string | null;
     area: number | null;
     estimatedRent: number | null;
-    status: "DISPONIBLE" | "APARTADA";
+    status: UnitStatus;
     features: Record<string, unknown> | null;
     depositMonths: number | null;
     minContractMonths: number | null;
@@ -128,9 +128,6 @@ export const getUnitByPromoterToken = cache(
     if (!unit) return { kind: "not_found" };
 
     const statusValue = unit.status as UnitStatus;
-    if (statusValue !== "DISPONIBLE" && statusValue !== "APARTADA") {
-      return { kind: "rented" };
-    }
 
     const [promoter, tenant] = await Promise.all([
       prisma.promoter.findFirst({

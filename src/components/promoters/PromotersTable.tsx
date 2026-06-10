@@ -128,7 +128,7 @@ function LinkDialog({ promoterId, units }: { promoterId: string; units: UnitForL
                 name="unitId"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Local o inmueble disponible</FormLabel>
+                    <FormLabel>Local o inmueble</FormLabel>
                     <Select onValueChange={field.onChange} value={field.value} items={unitLabels}>
                       <FormControl>
                         <SelectTrigger className="w-full">
