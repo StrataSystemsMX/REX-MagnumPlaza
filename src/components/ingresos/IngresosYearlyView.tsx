@@ -45,6 +45,13 @@ const PERIOD_FULL = new Intl.DateTimeFormat("es-MX", {
 
 const MONTHS_SHORT = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
 
+// Línea divisora gris superpuesta (pseudo-elemento absoluto, no afecta el
+// layout de la tabla) en el borde derecho de la columna del mes actual: separa
+// el mes en curso de los meses siguientes. Se aplica solo cuando el año
+// mostrado es el año en curso. `pointer-events-none` para no bloquear clicks.
+const CURRENT_MONTH_DIVIDER =
+  "relative after:pointer-events-none after:absolute after:inset-y-0 after:right-0 after:w-0.5 after:bg-slate-300 after:content-[''] dark:after:bg-slate-600";
+
 interface IngresosYearlyViewProps {
   data: YearlyCollections;
   availableYears: ReadonlyArray<number>;
@@ -173,6 +180,12 @@ export function IngresosYearlyView({ data, availableYears }: IngresosYearlyViewP
     url.searchParams.set("year", year);
     window.location.href = url.toString();
   }
+
+  // Índice (0-11) de la columna del mes actual para dibujar el divisor; null si
+  // el año mostrado no es el año en curso (no hay "mes actual" que marcar).
+  const now = new Date();
+  const dividerMonthIndex =
+    data.year === now.getFullYear() ? now.getMonth() : null;
 
   return (
     <div className="space-y-6">
@@ -305,6 +318,7 @@ export function IngresosYearlyView({ data, availableYears }: IngresosYearlyViewP
               onCellClick={setPaymentContext}
               collapsed={collapsedEntities.has(g.code)}
               onToggle={() => toggleEntity(g.code)}
+              dividerMonthIndex={dividerMonthIndex}
             />
           ))
         )}
@@ -470,9 +484,10 @@ interface EntitySectionProps {
   onCellClick: (ctx: RegisterPaymentDialogContext) => void;
   collapsed: boolean;
   onToggle: () => void;
+  dividerMonthIndex: number | null;
 }
 
-function EntitySection({ group, onCellClick, collapsed, onToggle }: EntitySectionProps) {
+function EntitySection({ group, onCellClick, collapsed, onToggle, dividerMonthIndex }: EntitySectionProps) {
   const theme = themeFor(group.code);
   const collected = group.expected > 0 ? Math.round((group.paid / group.expected) * 100) : 0;
 
@@ -531,7 +546,12 @@ function EntitySection({ group, onCellClick, collapsed, onToggle }: EntitySectio
       {!collapsed && (
         <div className="space-y-3">
           {group.properties.map((p) => (
-            <PropertyMatrix key={p.propertyId} group={p} onCellClick={onCellClick} />
+            <PropertyMatrix
+              key={p.propertyId}
+              group={p}
+              onCellClick={onCellClick}
+              dividerMonthIndex={dividerMonthIndex}
+            />
           ))}
         </div>
       )}
@@ -565,9 +585,10 @@ function dotColorFor(propertyId: string): string {
 interface PropertyMatrixProps {
   group: YearlyPropertyGroup;
   onCellClick: (ctx: RegisterPaymentDialogContext) => void;
+  dividerMonthIndex: number | null;
 }
 
-function PropertyMatrix({ group, onCellClick }: PropertyMatrixProps) {
+function PropertyMatrix({ group, onCellClick, dividerMonthIndex }: PropertyMatrixProps) {
   const collected =
     Number(group.expectedTotal) > 0
       ? Math.round((Number(group.paidTotal) / Number(group.expectedTotal)) * 100)
@@ -618,8 +639,14 @@ function PropertyMatrix({ group, onCellClick }: PropertyMatrixProps) {
               </th>
               <th className="px-3 py-2 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Inquilino</th>
               <th className="px-3 py-2 text-right text-xs font-medium uppercase tracking-wide text-muted-foreground">Renta</th>
-              {MONTHS_SHORT.map((m) => (
-                <th key={m} className="px-1 py-2 text-center text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              {MONTHS_SHORT.map((m, i) => (
+                <th
+                  key={m}
+                  className={cn(
+                    "px-1 py-2 text-center text-xs font-medium uppercase tracking-wide text-muted-foreground",
+                    i === dividerMonthIndex && CURRENT_MONTH_DIVIDER,
+                  )}
+                >
                   {m}
                 </th>
               ))}
@@ -633,6 +660,7 @@ function PropertyMatrix({ group, onCellClick }: PropertyMatrixProps) {
                 row={u}
                 propertyName={group.propertyName}
                 onCellClick={onCellClick}
+                dividerMonthIndex={dividerMonthIndex}
               />
             ))}
             <tr className="border-t bg-muted/20 font-medium">
@@ -657,6 +685,7 @@ function PropertyMatrix({ group, onCellClick }: PropertyMatrixProps) {
                     className={cn(
                       "px-1 py-2 text-center text-[10px] tabular-nums",
                       ok ? "text-green-700 dark:text-green-300" : "text-muted-foreground",
+                      i === dividerMonthIndex && CURRENT_MONTH_DIVIDER,
                     )}
                   >
                     {expected > 0 ? compactMxn(paid) : "—"}
@@ -693,9 +722,10 @@ interface UnitMatrixRowProps {
   row: YearlyUnitRow;
   propertyName: string;
   onCellClick: (ctx: RegisterPaymentDialogContext) => void;
+  dividerMonthIndex: number | null;
 }
 
-function UnitMatrixRow({ row, propertyName, onCellClick }: UnitMatrixRowProps) {
+function UnitMatrixRow({ row, propertyName, onCellClick, dividerMonthIndex }: UnitMatrixRowProps) {
   const monthlyRent = Number(
     row.cells.find((c) => Number(c.amountDue) > 0)?.amountDue ?? 0,
   );
@@ -715,7 +745,10 @@ function UnitMatrixRow({ row, propertyName, onCellClick }: UnitMatrixRowProps) {
         {monthlyRent > 0 ? MXN_INT.format(monthlyRent) : "—"}
       </td>
       {row.cells.map((cell, i) => (
-        <td key={i} className="px-1 py-1.5">
+        <td
+          key={i}
+          className={cn("px-1 py-1.5", i === dividerMonthIndex && CURRENT_MONTH_DIVIDER)}
+        >
           <MatrixCell
             cell={cell}
             unitCode={row.unitCode}

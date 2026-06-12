@@ -43,6 +43,13 @@ const PERIOD_FULL = new Intl.DateTimeFormat("es-MX", {
 
 const MONTHS_SHORT = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
 
+// Línea divisora gris superpuesta (pseudo-elemento absoluto, no afecta el
+// layout de la tabla) en el borde derecho de la columna del mes actual: separa
+// el mes en curso de los meses siguientes. Se aplica solo cuando el año
+// mostrado es el año en curso. `pointer-events-none` para no bloquear clicks.
+const CURRENT_MONTH_DIVIDER =
+  "relative after:pointer-events-none after:absolute after:inset-y-0 after:right-0 after:w-0.5 after:bg-slate-300 after:content-[''] dark:after:bg-slate-600";
+
 interface YearlyCollectionsMatrixProps {
   data: YearlyCollections;
   /** Lista de años con datos (o cercanos) para el selector. */
@@ -98,6 +105,12 @@ export function YearlyCollectionsMatrix({
     }
     return { expected, paid, balance: expected - paid };
   }, [visibleGroups]);
+
+  // Índice (0-11) de la columna del mes actual para dibujar el divisor; null si
+  // el año mostrado no es el año en curso (no hay "mes actual" que marcar).
+  const now = new Date();
+  const dividerMonthIndex =
+    data.year === now.getFullYear() ? now.getMonth() : null;
 
   return (
     <div className="space-y-5">
@@ -189,6 +202,7 @@ export function YearlyCollectionsMatrix({
               key={g.propertyId}
               group={g}
               onCellClick={setPaymentContext}
+              dividerMonthIndex={dividerMonthIndex}
             />
           ))
         )}
@@ -255,9 +269,10 @@ function dotColorFor(propertyId: string): string {
 interface PropertyMatrixProps {
   group: YearlyPropertyGroup;
   onCellClick: (ctx: RegisterPaymentDialogContext) => void;
+  dividerMonthIndex: number | null;
 }
 
-function PropertyMatrix({ group, onCellClick }: PropertyMatrixProps) {
+function PropertyMatrix({ group, onCellClick, dividerMonthIndex }: PropertyMatrixProps) {
   const collected =
     Number(group.expectedTotal) > 0
       ? Math.round((Number(group.paidTotal) / Number(group.expectedTotal)) * 100)
@@ -298,8 +313,14 @@ function PropertyMatrix({ group, onCellClick }: PropertyMatrixProps) {
                 Local
               </th>
               <th className="px-3 py-2 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Inquilino</th>
-              {MONTHS_SHORT.map((m) => (
-                <th key={m} className="px-1 py-2 text-center font-medium text-muted-foreground">
+              {MONTHS_SHORT.map((m, i) => (
+                <th
+                  key={m}
+                  className={cn(
+                    "px-1 py-2 text-center font-medium text-muted-foreground",
+                    i === dividerMonthIndex && CURRENT_MONTH_DIVIDER,
+                  )}
+                >
                   {m}
                 </th>
               ))}
@@ -313,6 +334,7 @@ function PropertyMatrix({ group, onCellClick }: PropertyMatrixProps) {
                 row={u}
                 propertyName={group.propertyName}
                 onCellClick={onCellClick}
+                dividerMonthIndex={dividerMonthIndex}
               />
             ))}
           </tbody>
@@ -330,9 +352,10 @@ interface UnitMatrixRowProps {
   row: YearlyUnitRow;
   propertyName: string;
   onCellClick: (ctx: RegisterPaymentDialogContext) => void;
+  dividerMonthIndex: number | null;
 }
 
-function UnitMatrixRow({ row, propertyName, onCellClick }: UnitMatrixRowProps) {
+function UnitMatrixRow({ row, propertyName, onCellClick, dividerMonthIndex }: UnitMatrixRowProps) {
   return (
     <tr className="border-b last:border-b-0 hover:bg-muted/20">
       <td className="sticky left-0 z-10 bg-card px-3 py-1.5 font-mono text-xs">
@@ -346,7 +369,10 @@ function UnitMatrixRow({ row, propertyName, onCellClick }: UnitMatrixRowProps) {
         )}
       </td>
       {row.cells.map((cell, i) => (
-        <td key={i} className="px-1 py-1.5">
+        <td
+          key={i}
+          className={cn("px-1 py-1.5", i === dividerMonthIndex && CURRENT_MONTH_DIVIDER)}
+        >
           <MatrixCell
             cell={cell}
             unitCode={row.unitCode}
