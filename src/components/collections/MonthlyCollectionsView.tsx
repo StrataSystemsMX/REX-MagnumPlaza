@@ -389,6 +389,7 @@ const ROW_BG_BY_STATUS: Record<MonthlyUnitStatus, string> = {
   PAID: "",
   PARTIAL: "bg-amber-50/50 dark:bg-amber-950/20",
   SIN_PAGO: "bg-red-50/50 dark:bg-red-950/20",
+  FUTURO: "bg-slate-50/60 dark:bg-slate-900/30",
   WAIVED: "bg-blue-50/40 dark:bg-blue-950/20",
   VACANT: "bg-muted/30",
 };
@@ -398,7 +399,7 @@ const ROW_BG_BY_STATUS: Record<MonthlyUnitStatus, string> = {
 // ----------------------------------------------------------------------------
 
 function CobradoCell({ row }: { row: MonthlyUnitRow }) {
-  if (row.status === "VACANT") {
+  if (row.status === "VACANT" || row.status === "FUTURO") {
     return <span className="text-muted-foreground">—</span>;
   }
   if (row.status === "SIN_PAGO") {
@@ -445,6 +446,12 @@ function StatusPill({ row }: { row: MonthlyUnitRow }) {
       return (
         <span className="inline-flex items-center gap-1 rounded-full border border-red-200 bg-red-50 px-2 py-0.5 text-xs font-medium text-red-800 dark:border-red-900 dark:bg-red-950 dark:text-red-200">
           × Sin pago
+        </span>
+      );
+    case "FUTURO":
+      return (
+        <span className="inline-flex items-center gap-1 rounded-full border border-border bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+          No vencido
         </span>
       );
     case "VACANT":

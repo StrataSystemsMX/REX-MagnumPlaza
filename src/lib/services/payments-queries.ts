@@ -345,34 +345,44 @@ export type OutstandingRentLite = Awaited<
  * Vista mensual agrupada por Property — pivote para la pantalla "Cobros del Mes".
  * Para cada Property activa devuelve TODAS sus Units (incluso vacías), con su
  * contrato activo del periodo (si existe), el Rent del periodo (si existe), y
- * un estado derivado: PAID / PARTIAL / SIN_PAGO / VACANT.
+ * un estado derivado: PAID / PARTIAL / SIN_PAGO / FUTURO / VACANT.
  *
  * El periodo se interpreta en UTC (matches Rent.period que es el primer día
- * del mes UTC). Estado por montos: PAID (cubierto) / PARTIAL (pago insuficiente)
- * / SIN_PAGO. Aplica igual para meses pasados, presentes o futuros.
+ * del mes UTC). El estado depende del periodo vs. la fecha actual:
+ *   - Pasado o mes actual: PAID (cubierto) / PARTIAL (pago insuficiente) / SIN_PAGO.
+ *   - Futuro (aún no vence): PAID/PARTIAL si ya hay pago adelantado, FUTURO si no.
+ * Así un mes que todavía no llega no se muestra en rojo, sino gris (FUTURO),
+ * y solo "se abre" en rojo cuando llega su mes.
  */
 export type MonthlyUnitStatus =
   | "PAID"
   | "PARTIAL"
   | "SIN_PAGO"
+  | "FUTURO"
   | "WAIVED"
   | "VACANT";
 
 /**
- * Deriva el estado de una renta a partir de los montos. Centralizado para que
- * monthly y yearly coincidan.
+ * Deriva el estado de una renta a partir de los montos y la posición del periodo
+ * respecto al mes actual. Centralizado para que monthly y yearly coincidan.
  *
  * Saldo efectivo = amountDue - amountWaived. Una renta condonada parcialmente
  * con $X y luego pagada el resto debe mostrarse como PAID, no como PARTIAL.
  */
 function deriveMonthlyStatus(
+  period: Date,
   amountPaid: Prisma.Decimal,
   amountDue: Prisma.Decimal,
+  now: Date,
   rentStatus?: RentStatus | null,
   amountWaived: Prisma.Decimal = new Prisma.Decimal(0),
 ): MonthlyUnitStatus {
   if (rentStatus === "WAIVED") return "WAIVED";
 
+  const currentMonthStart = new Date(
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1),
+  );
+  const isFuture = period.getTime() > currentMonthStart.getTime();
   const effectiveDue = amountDue.minus(amountWaived);
   const fullyPaid =
     effectiveDue.lessThanOrEqualTo(0) ||
@@ -381,7 +391,9 @@ function deriveMonthlyStatus(
 
   if (fullyPaid) return "PAID";
   if (hasPayment) return "PARTIAL";
-  return "SIN_PAGO";
+  // Sin pago: un mes futuro aún no vence → gris (FUTURO); el mes actual o
+  // pasado sin pago sí es morosidad → rojo (SIN_PAGO).
+  return isFuture ? "FUTURO" : "SIN_PAGO";
 }
 
 export interface MonthlyUnitRow {
@@ -431,6 +443,7 @@ export interface MonthlyCollections {
 export async function getMonthlyCollectionsByProperty(period: Date): Promise<MonthlyCollections> {
   const { tenantId } = await requireAuth();
 
+  const now = new Date();
   const periodStart = new Date(
     Date.UTC(period.getUTCFullYear(), period.getUTCMonth(), 1),
   );
@@ -604,8 +617,10 @@ export async function getMonthlyCollectionsByProperty(period: Date): Promise<Mon
       expected = expected.plus(amountDue);
 
       const status = deriveMonthlyStatus(
+        period,
         amountPaid,
         amountDue,
+        now,
         rent?.status,
         amountWaived,
       );
@@ -720,6 +735,7 @@ export interface YearlyCollections {
 export async function getYearlyCollectionsMatrix(year: number): Promise<YearlyCollections> {
   const { tenantId } = await requireAuth();
 
+  const now = new Date();
   const yearStart = new Date(Date.UTC(year, 0, 1));
   const yearEnd = new Date(Date.UTC(year + 1, 0, 1));
 
@@ -832,8 +848,10 @@ export async function getYearlyCollectionsMatrix(year: number): Promise<YearlyCo
         monthlyAgg[i]!.paid = monthlyAgg[i]!.paid.plus(amountPaid);
 
         const status = deriveMonthlyStatus(
+          period,
           amountPaid,
           amountDue,
+          now,
           rent?.status,
           amountWaived,
         );

@@ -214,6 +214,7 @@ function Legend() {
     { status: "PAID", label: "Pagado" },
     { status: "PARTIAL", label: "Parcial" },
     { status: "SIN_PAGO", label: "Sin pago" },
+    { status: "FUTURO", label: "No vencido" },
     { status: "VACANT", label: "Vacío" },
   ];
   return (
@@ -375,6 +376,7 @@ const CELL_BG: Record<MonthlyUnitStatus, string> = {
   PAID: "bg-green-500 hover:bg-green-600 dark:bg-green-600 dark:hover:bg-green-500",
   PARTIAL: "bg-amber-400 hover:bg-amber-500 dark:bg-amber-500",
   SIN_PAGO: "bg-red-500 hover:bg-red-600 dark:bg-red-600",
+  FUTURO: "bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600",
   WAIVED: "bg-blue-300 hover:bg-blue-400 dark:bg-blue-400 dark:hover:bg-blue-300",
   VACANT: "bg-muted hover:bg-muted-foreground/20",
 };
@@ -459,6 +461,8 @@ function buildTooltip(cell: YearlyCell, lesseeName: string | null): string {
       return `${head}\nParcial: ${MXN.format(Number(cell.amountPaid))} de ${MXN.format(Number(cell.amountDue))}`;
     case "SIN_PAGO":
       return `${head}\nSin pago — ${MXN.format(Number(cell.amountDue))}${cell.overdueLevel ? ` · Escalón ${cell.overdueLevel}` : ""}`;
+    case "FUTURO":
+      return `${head}\nNo vencido — ${MXN.format(Number(cell.amountDue))}`;
     default:
       return head;
   }
