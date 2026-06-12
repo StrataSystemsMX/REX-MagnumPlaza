@@ -345,52 +345,42 @@ export type OutstandingRentLite = Awaited<
  * Vista mensual agrupada por Property — pivote para la pantalla "Cobros del Mes".
  * Para cada Property activa devuelve TODAS sus Units (incluso vacías), con su
  * contrato activo del periodo (si existe), el Rent del periodo (si existe), y
- * un estado derivado: PAID / PARTIAL / SIN_PAGO / PRE_PAGADO / ABONO / VACANT.
+ * un estado derivado: PAID / PARTIAL / SIN_PAGO / VACANT.
  *
  * El periodo se interpreta en UTC (matches Rent.period que es el primer día
- * del mes UTC). El estado depende del periodo vs. la fecha actual:
- *   - Periodo pasado o actual: PAID (cubierto) / PARTIAL (pago insuficiente) / SIN_PAGO.
- *   - Periodo futuro:          PRE_PAGADO (cubierto) / ABONO (pago insuficiente) / SIN_PAGO.
+ * del mes UTC). Estado por montos: PAID (cubierto) / PARTIAL (pago insuficiente)
+ * / SIN_PAGO. Aplica igual para meses pasados, presentes o futuros.
  */
 export type MonthlyUnitStatus =
   | "PAID"
   | "PARTIAL"
   | "SIN_PAGO"
-  | "PRE_PAGADO"
-  | "ABONO"
   | "WAIVED"
   | "VACANT";
 
 /**
- * Deriva el estado de una renta a partir de los montos y la posición del
- * periodo respecto al mes actual. Centralizado para que monthly y yearly
- * coincidan.
+ * Deriva el estado de una renta a partir de los montos. Centralizado para que
+ * monthly y yearly coincidan.
  *
  * Saldo efectivo = amountDue - amountWaived. Una renta condonada parcialmente
  * con $X y luego pagada el resto debe mostrarse como PAID, no como PARTIAL.
  */
 function deriveMonthlyStatus(
-  period: Date,
   amountPaid: Prisma.Decimal,
   amountDue: Prisma.Decimal,
-  now: Date,
   rentStatus?: RentStatus | null,
   amountWaived: Prisma.Decimal = new Prisma.Decimal(0),
 ): MonthlyUnitStatus {
   if (rentStatus === "WAIVED") return "WAIVED";
 
-  const currentMonthStart = new Date(
-    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1),
-  );
-  const isFuture = period.getTime() > currentMonthStart.getTime();
   const effectiveDue = amountDue.minus(amountWaived);
   const fullyPaid =
     effectiveDue.lessThanOrEqualTo(0) ||
     (amountPaid.greaterThanOrEqualTo(effectiveDue) && effectiveDue.greaterThan(0));
   const hasPayment = amountPaid.greaterThan(0);
 
-  if (fullyPaid) return isFuture ? "PRE_PAGADO" : "PAID";
-  if (hasPayment) return isFuture ? "ABONO" : "PARTIAL";
+  if (fullyPaid) return "PAID";
+  if (hasPayment) return "PARTIAL";
   return "SIN_PAGO";
 }
 
@@ -410,8 +400,6 @@ export interface MonthlyUnitRow {
   amountPaid: string;
   rentStatus: RentStatus | null;
   status: MonthlyUnitStatus;
-  /** Meses pre-pagados desde el periodo consultado (sólo si PRE_PAGADO). */
-  prePaidMonths: number | null;
   /** Nivel de escalón 1/2/3 si está OVERDUE_xM, null en otro caso. */
   overdueLevel: 1 | 2 | 3 | null;
   /** Última persona asociada a la unidad si está vacía (último contrato). */
@@ -436,8 +424,6 @@ export interface MonthlyCollections {
     paid: number;
     partial: number;
     sinPago: number;
-    prePagado: number;
-    abono: number;
     vacant: number;
   };
 }
@@ -445,7 +431,6 @@ export interface MonthlyCollections {
 export async function getMonthlyCollectionsByProperty(period: Date): Promise<MonthlyCollections> {
   const { tenantId } = await requireAuth();
 
-  const now = new Date();
   const periodStart = new Date(
     Date.UTC(period.getUTCFullYear(), period.getUTCMonth(), 1),
   );
@@ -495,8 +480,6 @@ export async function getMonthlyCollectionsByProperty(period: Date): Promise<Mon
         id: true,
         unitId: true,
         monthlyAmount: true,
-        paidInAdvance: true,
-        advancePaidUntil: true,
         lessee: {
           select: {
             id: true,
@@ -582,8 +565,6 @@ export async function getMonthlyCollectionsByProperty(period: Date): Promise<Mon
     paid: 0,
     partial: 0,
     sinPago: 0,
-    prePagado: 0,
-    abono: 0,
     vacant: 0,
   };
 
@@ -611,7 +592,6 @@ export async function getMonthlyCollectionsByProperty(period: Date): Promise<Mon
           amountPaid: "0",
           rentStatus: null,
           status: "VACANT",
-          prePaidMonths: null,
           overdueLevel: null,
           lastLesseeName: lastContractsByUnit.get(u.id) ?? null,
         };
@@ -624,24 +604,11 @@ export async function getMonthlyCollectionsByProperty(period: Date): Promise<Mon
       expected = expected.plus(amountDue);
 
       const status = deriveMonthlyStatus(
-        period,
         amountPaid,
         amountDue,
-        now,
         rent?.status,
         amountWaived,
       );
-
-      // Meses pre-pagados (para tooltip): solo aplica si el contrato fue
-      // marcado con paidInAdvance/advancePaidUntil. Es metadata informativa.
-      const prePaidMonths =
-        status === "PRE_PAGADO" && contract.paidInAdvance && contract.advancePaidUntil
-          ? Math.max(
-              0,
-              (contract.advancePaidUntil.getUTCFullYear() - period.getUTCFullYear()) * 12 +
-                (contract.advancePaidUntil.getUTCMonth() - period.getUTCMonth()),
-            )
-          : null;
 
       switch (status) {
         case "PAID":
@@ -652,12 +619,6 @@ export async function getMonthlyCollectionsByProperty(period: Date): Promise<Mon
           break;
         case "SIN_PAGO":
           totals.sinPago += 1;
-          break;
-        case "PRE_PAGADO":
-          totals.prePagado += 1;
-          break;
-        case "ABONO":
-          totals.abono += 1;
           break;
       }
 
@@ -685,7 +646,6 @@ export async function getMonthlyCollectionsByProperty(period: Date): Promise<Mon
         amountPaid: amountPaid.toString(),
         rentStatus: rent?.status ?? null,
         status,
-        prePaidMonths,
         overdueLevel,
         lastLesseeName: null,
       };
@@ -720,7 +680,6 @@ export interface YearlyCell {
   amountPaid: string;
   amountWaived: string;
   status: MonthlyUnitStatus;
-  prePaidMonths: number | null;
   overdueLevel: 1 | 2 | 3 | null;
 }
 
@@ -761,7 +720,6 @@ export interface YearlyCollections {
 export async function getYearlyCollectionsMatrix(year: number): Promise<YearlyCollections> {
   const { tenantId } = await requireAuth();
 
-  const now = new Date();
   const yearStart = new Date(Date.UTC(year, 0, 1));
   const yearEnd = new Date(Date.UTC(year + 1, 0, 1));
 
@@ -855,7 +813,6 @@ export async function getYearlyCollectionsMatrix(year: number): Promise<YearlyCo
             amountPaid: "0",
             amountWaived: "0",
             status: "VACANT",
-            prePaidMonths: null,
             overdueLevel: null,
           };
         }
@@ -875,24 +832,13 @@ export async function getYearlyCollectionsMatrix(year: number): Promise<YearlyCo
         monthlyAgg[i]!.paid = monthlyAgg[i]!.paid.plus(amountPaid);
 
         const status = deriveMonthlyStatus(
-          period,
           amountPaid,
           amountDue,
-          now,
           rent?.status,
           amountWaived,
         );
 
-        const prePaidMonths =
-          status === "PRE_PAGADO" && contract.paidInAdvance && contract.advancePaidUntil
-            ? Math.max(
-                0,
-                (contract.advancePaidUntil.getUTCFullYear() - period.getUTCFullYear()) * 12 +
-                  (contract.advancePaidUntil.getUTCMonth() - period.getUTCMonth()),
-              )
-            : null;
-
-        if (status === "PAID" || status === "PRE_PAGADO") monthlyAgg[i]!.paidCount += 1;
+        if (status === "PAID") monthlyAgg[i]!.paidCount += 1;
         if (status === "SIN_PAGO") monthlyAgg[i]!.sinPagoCount += 1;
 
         const overdueLevel: 1 | 2 | 3 | null =
@@ -912,7 +858,6 @@ export async function getYearlyCollectionsMatrix(year: number): Promise<YearlyCo
           amountPaid: amountPaid.toString(),
           amountWaived: amountWaived.toString(),
           status,
-          prePaidMonths,
           overdueLevel,
         };
       });

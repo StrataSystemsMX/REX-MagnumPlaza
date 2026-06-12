@@ -439,8 +439,6 @@ function Legend() {
   const items: Array<{ status: MonthlyUnitStatus; label: string }> = [
     { status: "PAID", label: "Pagado" },
     { status: "PARTIAL", label: "Parcial" },
-    { status: "ABONO", label: "Abono" },
-    { status: "PRE_PAGADO", label: "Pre-pagado" },
     { status: "SIN_PAGO", label: "Sin pago" },
     { status: "VACANT", label: "Vacío" },
   ];
@@ -745,8 +743,6 @@ function UnitMatrixRow({ row, propertyName, onCellClick }: UnitMatrixRowProps) {
 const CELL_BG: Record<MonthlyUnitStatus, string> = {
   PAID: "bg-green-500 hover:bg-green-600 dark:bg-green-600 dark:hover:bg-green-500",
   PARTIAL: "bg-amber-400 hover:bg-amber-500 dark:bg-amber-500",
-  ABONO: "bg-sky-300 hover:bg-sky-400 dark:bg-sky-400 dark:hover:bg-sky-300",
-  PRE_PAGADO: "bg-blue-500 hover:bg-blue-600 dark:bg-blue-600",
   SIN_PAGO: "bg-red-500 hover:bg-red-600 dark:bg-red-600",
   WAIVED: "bg-blue-300 hover:bg-blue-400 dark:bg-blue-400 dark:hover:bg-blue-300",
   VACANT: "bg-muted hover:bg-muted-foreground/20",
@@ -773,7 +769,6 @@ function MatrixCell({ cell, unitCode, propertyName, lesseeName, onClick }: Matri
         className={cn(
           "relative mx-auto h-6 w-6 rounded transition-colors",
           CELL_BG[cell.status],
-          cell.status === "PRE_PAGADO" && "ring-1 ring-blue-300",
           cell.overdueLevel === 3 && "ring-2 ring-red-700",
           hasWaiver && "ring-2 ring-black",
         )}
@@ -831,10 +826,6 @@ function buildTooltip(cell: YearlyCell, lesseeName: string | null): string {
       return `${head}\nPagado ${MXN.format(Number(cell.amountPaid))}`;
     case "PARTIAL":
       return `${head}\nParcial: ${MXN.format(Number(cell.amountPaid))} de ${MXN.format(Number(cell.amountDue))}`;
-    case "ABONO":
-      return `${head}\nAbono: ${MXN.format(Number(cell.amountPaid))} (renta ${MXN.format(Number(cell.amountDue))})`;
-    case "PRE_PAGADO":
-      return `${head}\nPre-pagado${cell.prePaidMonths ? ` (+${cell.prePaidMonths} meses)` : ""}`;
     case "SIN_PAGO":
       return `${head}\nSin pago — ${MXN.format(Number(cell.amountDue))}${cell.overdueLevel ? ` · Escalón ${cell.overdueLevel}` : ""}`;
     case "WAIVED":

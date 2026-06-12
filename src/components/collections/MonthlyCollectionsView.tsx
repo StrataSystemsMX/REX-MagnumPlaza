@@ -1,11 +1,9 @@
 "use client";
 
 import {
-  ArrowUpRight,
   Building2,
   ChevronDown,
   ChevronRight,
-  CreditCard,
   Eye,
   KeyRound,
   Plus,
@@ -391,8 +389,6 @@ const ROW_BG_BY_STATUS: Record<MonthlyUnitStatus, string> = {
   PAID: "",
   PARTIAL: "bg-amber-50/50 dark:bg-amber-950/20",
   SIN_PAGO: "bg-red-50/50 dark:bg-red-950/20",
-  PRE_PAGADO: "bg-blue-50/40 dark:bg-blue-950/20",
-  ABONO: "bg-sky-50/60 dark:bg-sky-950/20",
   WAIVED: "bg-blue-50/40 dark:bg-blue-950/20",
   VACANT: "bg-muted/30",
 };
@@ -405,11 +401,6 @@ function CobradoCell({ row }: { row: MonthlyUnitRow }) {
   if (row.status === "VACANT") {
     return <span className="text-muted-foreground">—</span>;
   }
-  if (row.status === "PRE_PAGADO") {
-    return (
-      <span className="font-semibold text-blue-700 dark:text-blue-300">Pre-pagado</span>
-    );
-  }
   if (row.status === "SIN_PAGO") {
     return (
       <span className="font-semibold text-red-700 dark:text-red-300">
@@ -420,13 +411,6 @@ function CobradoCell({ row }: { row: MonthlyUnitRow }) {
   if (row.status === "PAID") {
     return (
       <span className="font-semibold text-green-700 dark:text-green-300">
-        {MXN.format(Number(row.amountPaid))}
-      </span>
-    );
-  }
-  if (row.status === "ABONO") {
-    return (
-      <span className="font-semibold text-sky-600 dark:text-sky-300">
         {MXN.format(Number(row.amountPaid))}
       </span>
     );
@@ -457,26 +441,10 @@ function StatusPill({ row }: { row: MonthlyUnitRow }) {
           Parcial
         </span>
       );
-    case "ABONO":
-      return (
-        <span className="inline-flex items-center gap-1 rounded-full border border-sky-200 bg-sky-50 px-2 py-0.5 text-xs font-medium text-sky-800 dark:border-sky-900 dark:bg-sky-950 dark:text-sky-200">
-          <ArrowUpRight className="size-3" />
-          Abono
-        </span>
-      );
     case "SIN_PAGO":
       return (
         <span className="inline-flex items-center gap-1 rounded-full border border-red-200 bg-red-50 px-2 py-0.5 text-xs font-medium text-red-800 dark:border-red-900 dark:bg-red-950 dark:text-red-200">
           × Sin pago
-        </span>
-      );
-    case "PRE_PAGADO":
-      return (
-        <span className="inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-800 dark:border-blue-900 dark:bg-blue-950 dark:text-blue-200">
-          <CreditCard className="size-3" />
-          {row.prePaidMonths && row.prePaidMonths > 0
-            ? `${row.prePaidMonths} ${row.prePaidMonths === 1 ? "mes" : "meses"}`
-            : "Pre-pagado"}
         </span>
       );
     case "VACANT":
@@ -512,17 +480,6 @@ function renderAction(
       </Link>
     );
   }
-  if (row.status === "ABONO") {
-    return row.lesseeId ? (
-      <Link
-        href={`/lessees/${row.lesseeId}`}
-        className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "h-8 gap-1.5")}
-      >
-        <ArrowUpRight className="size-3.5" />
-        Historial
-      </Link>
-    ) : null;
-  }
   if (row.rentId && (row.overdueLevel === 2 || row.overdueLevel === 3)) {
     const level = row.overdueLevel === 3 ? "3M" : "2M";
     return (
@@ -553,7 +510,7 @@ function renderAction(
     );
   }
 
-  // PAID, PARTIAL, PRE_PAGADO → "Ver" abre dialog para registrar pago si hay rent.
+  // PAID, PARTIAL → "Ver" abre dialog para registrar pago si hay rent.
   if (row.rentId) {
     return (
       <Button

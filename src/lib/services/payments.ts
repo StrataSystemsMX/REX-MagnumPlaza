@@ -144,7 +144,7 @@ async function dispatchRentPaidEvent(
  * Aplicación automática de sobrante: si el monto registrado supera el saldo de
  * la renta seleccionada, el excedente se reparte sobre las rentas futuras del
  * mismo contrato en orden cronológico hasta agotarse. Si tras cubrir todas las
- * futuras todavía sobra, el remanente queda en la renta original como ABONO.
+ * futuras todavía sobra, el remanente queda como saldo a favor en la renta original.
  */
 export interface RegisterPaymentResult {
   payment: PaymentModel;
@@ -267,8 +267,8 @@ export async function actionRegisterPayment(
       remaining = remaining.minus(apply);
     }
 
-    // 3. Si tras todas las futuras sigue sobrando, el remanente queda en la renta
-    //    original como ABONO (no había más mensualidades a cubrir).
+    // 3. Si tras todas las futuras sigue sobrando, el remanente queda como saldo
+    //    a favor en la renta original (no había más mensualidades a cubrir).
     let remainderAmount = new Prisma.Decimal(0);
     if (remaining.greaterThan(0)) {
       const remainderNote =
