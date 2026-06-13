@@ -142,9 +142,12 @@ async function dispatchRentPaidEvent(
 
 /**
  * Aplicación automática de sobrante: si el monto registrado supera el saldo de
- * la renta seleccionada, el excedente se reparte sobre las rentas futuras del
- * mismo contrato en orden cronológico hasta agotarse. Si tras cubrir todas las
- * futuras todavía sobra, el remanente queda como saldo a favor en la renta original.
+ * la renta seleccionada, el excedente se reparte sobre las demás rentas impagas
+ * del mismo contrato dentro del MISMO AÑO, en orden cronológico (de la más
+ * antigua a la más reciente). Así los meses anteriores al seleccionado que aún
+ * deben pago se liquidan primero, y solo después los meses siguientes del año.
+ * Si tras cubrir el año todavía sobra, el remanente queda como saldo a favor en
+ * la renta original.
  */
 export interface RegisterPaymentResult {
   payment: PaymentModel;
@@ -190,14 +193,20 @@ export async function actionRegisterPayment(
     ? Prisma.Decimal.max(balance, new Prisma.Decimal(0))
     : total;
 
-  // Si hay sobrante, prefetch de rentas futuras del mismo contrato (no PAID/WAIVED).
+  // Si hay sobrante, prefetch de las demás rentas impagas del MISMO AÑO del mes
+  // seleccionado (no PAID/WAIVED), en orden cronológico ascendente. Así el
+  // excedente liquida primero los meses más antiguos —incluidos los anteriores
+  // al mes seleccionado— y solo después los siguientes.
   // Incluimos amountWaived para calcular su saldo real al cascadear.
-  const futureRents = excess.greaterThan(0)
+  const yearStart = new Date(Date.UTC(rent.period.getUTCFullYear(), 0, 1));
+  const yearEnd = new Date(Date.UTC(rent.period.getUTCFullYear() + 1, 0, 1));
+  const cascadeRents = excess.greaterThan(0)
     ? await prisma.rent.findMany({
         where: {
           tenantId,
           contractId: rent.contractId,
-          period: { gt: rent.period },
+          id: { not: rent.id },
+          period: { gte: yearStart, lt: yearEnd },
           status: { notIn: ["PAID", "WAIVED"] },
         },
         orderBy: { period: "asc" },
@@ -227,7 +236,9 @@ export async function actionRegisterPayment(
     });
     const primaryRecalc = await recalcRentInTx(tx, tenantId, data.rentId, now);
 
-    // 2. Cascada del sobrante sobre rentas futuras del mismo contrato.
+    // 2. Cascada del sobrante sobre las demás rentas impagas del año, de la más
+    //    antigua a la más reciente (los meses anteriores al seleccionado se
+    //    liquidan primero).
     let remaining = excess;
     const cascade: Array<{
       paymentId: string;
@@ -237,18 +248,18 @@ export async function actionRegisterPayment(
       status: string;
     }> = [];
 
-    for (const fr of futureRents) {
+    for (const cr of cascadeRents) {
       if (remaining.lessThanOrEqualTo(0)) break;
-      const frBalance = new Prisma.Decimal(fr.amountDue)
-        .minus(new Prisma.Decimal(fr.amountPaid))
-        .minus(new Prisma.Decimal(fr.amountWaived ?? 0));
-      if (frBalance.lessThanOrEqualTo(0)) continue;
-      const apply = Prisma.Decimal.min(remaining, frBalance);
+      const crBalance = new Prisma.Decimal(cr.amountDue)
+        .minus(new Prisma.Decimal(cr.amountPaid))
+        .minus(new Prisma.Decimal(cr.amountWaived ?? 0));
+      if (crBalance.lessThanOrEqualTo(0)) continue;
+      const apply = Prisma.Decimal.min(remaining, crBalance);
       const noteSuffix = `Aplicado automáticamente desde sobrante de la renta de ${formatPeriodEs(rent.period)}.`;
       const cascadePayment = await tx.payment.create({
         data: {
           tenantId,
-          rentId: fr.id,
+          rentId: cr.id,
           amount: apply,
           paymentDate: data.paymentDate,
           method: data.method,
@@ -256,23 +267,23 @@ export async function actionRegisterPayment(
           notes: data.notes ? `${data.notes}\n${noteSuffix}` : noteSuffix,
         },
       });
-      const recalc = await recalcRentInTx(tx, tenantId, fr.id, now);
+      const recalc = await recalcRentInTx(tx, tenantId, cr.id, now);
       cascade.push({
         paymentId: cascadePayment.id,
-        rentId: fr.id,
-        period: fr.period,
+        rentId: cr.id,
+        period: cr.period,
         amount: apply,
         status: recalc.status,
       });
       remaining = remaining.minus(apply);
     }
 
-    // 3. Si tras todas las futuras sigue sobrando, el remanente queda como saldo
-    //    a favor en la renta original (no había más mensualidades a cubrir).
+    // 3. Si tras cubrir las mensualidades del año sigue sobrando, el remanente
+    //    queda como saldo a favor en la renta original.
     let remainderAmount = new Prisma.Decimal(0);
     if (remaining.greaterThan(0)) {
       const remainderNote =
-        "Sobrante a favor: no hay más mensualidades pendientes en este contrato.";
+        "Sobrante a favor: no hay más mensualidades pendientes del año en este contrato.";
       await tx.payment.create({
         data: {
           tenantId,

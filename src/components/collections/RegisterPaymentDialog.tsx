@@ -127,7 +127,6 @@ export function RegisterPaymentDialog({
   const numericAmount = Number(amount) || 0;
   const overpay = numericAmount > balance ? numericAmount - balance : 0;
   const hasNoBalance = balance <= 0;
-  const exceedsBalance = numericAmount > balance + 0.0001;
 
   // Para condonar (REPLACE semantics): el máximo es lo que NO se ha pagado.
   // El "amountWaived" actual no cuenta porque lo estás reemplazando.
@@ -293,14 +292,9 @@ export function RegisterPaymentDialog({
                     type="number"
                     step="0.01"
                     min="0"
-                    max={balance > 0 ? balance : undefined}
                     value={amount}
                     onChange={(e) => setAmount(e.target.value)}
                     disabled={hasNoBalance}
-                    className={cn(
-                      exceedsBalance &&
-                        "border-destructive focus-visible:ring-destructive/40",
-                    )}
                   />
                 </div>
                 <div className="space-y-1">
@@ -346,7 +340,7 @@ export function RegisterPaymentDialog({
               {!hasNoBalance && overpay > 0 ? (
                 <div className="rounded-md border border-amber-200 bg-amber-50 p-2 text-xs text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200">
                   <strong>Excede el saldo en {MXN.format(overpay)}.</strong> El sobrante se aplicará
-                  a las siguientes mensualidades pendientes del contrato.
+                  a las mensualidades pendientes del año, de la más antigua a la más reciente.
                 </div>
               ) : null}
             </div>
