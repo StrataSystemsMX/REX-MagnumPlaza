@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronDown, ChevronLeft, ChevronRight, TrendingUp, Wallet, AlertTriangle, Percent, Plus, X } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, Clock, Wallet, AlertTriangle, Percent, Plus, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -40,6 +40,11 @@ const MXN_INT = new Intl.NumberFormat("es-MX", {
 const PERIOD_FULL = new Intl.DateTimeFormat("es-MX", {
   month: "long",
   year: "numeric",
+  timeZone: "UTC",
+});
+
+const MONTH_LONG = new Intl.DateTimeFormat("es-MX", {
+  month: "long",
   timeZone: "UTC",
 });
 
@@ -153,20 +158,46 @@ export function IngresosYearlyView({ data, availableYears }: IngresosYearlyViewP
       .filter((g) => g.properties.length > 0);
   }, [entityGroups, entityFilter, propertyFilter]);
 
-  const filteredTotals = useMemo(() => {
-    let expected = 0;
-    let paid = 0;
-    let units = 0;
+  // Dashboard por mes (no anual): cobrado / por cobrar / % del mes en curso, más
+  // "Atrasado" = saldo pendiente acumulado de los meses ya vencidos (anteriores
+  // al mes actual). Respeta los filtros de razón social y plaza.
+  const dashboard = useMemo(() => {
+    const today = new Date();
+    const monthIndex = today.getMonth();
+    const currentMonthStart = Date.UTC(today.getFullYear(), monthIndex, 1);
+    let monthExpected = 0;
+    let monthPaid = 0;
+    let arrears = 0;
     for (const g of visibleEntityGroups) {
       for (const p of g.properties) {
-        expected += Number(p.expectedTotal);
-        paid += Number(p.paidTotal);
-        units += p.unitCount;
+        for (const u of p.units) {
+          u.cells.forEach((cell, i) => {
+            if (i === monthIndex) {
+              monthExpected += Number(cell.amountDue);
+              monthPaid += Number(cell.amountPaid);
+            }
+            // Atrasado: meses cuyo periodo ya pasó (anteriores al mes actual real)
+            // y todavía tienen saldo. Excluye condonado y el mes en curso/futuros.
+            if (Date.UTC(data.year, i, 1) < currentMonthStart) {
+              const outstanding =
+                Number(cell.amountDue) -
+                Number(cell.amountPaid) -
+                Number(cell.amountWaived);
+              if (outstanding > 0) arrears += outstanding;
+            }
+          });
+        }
       }
     }
-    const pct = expected > 0 ? Math.round((paid / expected) * 100) : 0;
-    return { expected, paid, balance: expected - paid, pct, units };
-  }, [visibleEntityGroups]);
+    const monthBalance = Math.max(0, monthExpected - monthPaid);
+    const monthPct =
+      monthExpected > 0 ? Math.round((monthPaid / monthExpected) * 100) : 0;
+    return { monthIndex, monthPaid, monthBalance, monthPct, arrears };
+  }, [visibleEntityGroups, data.year]);
+
+  const monthLabel = capitalizeFirst(
+    MONTH_LONG.format(new Date(Date.UTC(2000, dashboard.monthIndex, 1))),
+  );
 
   function navigateYear(delta: number) {
     const target = data.year + delta;
@@ -268,32 +299,32 @@ export function IngresosYearlyView({ data, availableYears }: IngresosYearlyViewP
         </div>
       </div>
 
-      {/* KPI cards */}
+      {/* KPI cards — por mes (mes en curso) + atrasado acumulado al final */}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <KpiCard
-          icon={<TrendingUp className="size-4" />}
-          label={`Esperado ${data.year}`}
-          value={MXN_INT.format(filteredTotals.expected)}
-          accent="text-foreground"
-        />
-        <KpiCard
           icon={<Wallet className="size-4" />}
-          label="Cobrado"
-          value={MXN_INT.format(filteredTotals.paid)}
+          label={`Cobrado · ${monthLabel}`}
+          value={MXN_INT.format(dashboard.monthPaid)}
           accent="text-green-700 dark:text-green-300"
         />
         <KpiCard
-          icon={<AlertTriangle className="size-4" />}
-          label="Por cobrar"
-          value={MXN_INT.format(filteredTotals.balance)}
-          accent="text-destructive"
+          icon={<Clock className="size-4" />}
+          label={`Por cobrar · ${monthLabel}`}
+          value={MXN_INT.format(dashboard.monthBalance)}
+          accent="text-amber-600 dark:text-amber-400"
         />
         <KpiCard
           icon={<Percent className="size-4" />}
-          label="% Cobranza"
-          value={`${filteredTotals.pct}%`}
+          label={`Cobranza · ${monthLabel}`}
+          value={`${dashboard.monthPct}%`}
           accent="text-foreground"
-          progress={filteredTotals.pct}
+          progress={dashboard.monthPct}
+        />
+        <KpiCard
+          icon={<AlertTriangle className="size-4" />}
+          label="Atrasado (meses anteriores)"
+          value={MXN_INT.format(dashboard.arrears)}
+          accent="text-destructive"
         />
       </div>
 
