@@ -1,8 +1,13 @@
 "use client";
 
 import { UserButton } from "@clerk/nextjs";
-import { History, Redo2, Undo2 } from "lucide-react";
+import { History, Redo2, Search, Undo2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupInput,
+} from "@/components/ui/input-group";
 import { MobileSidebar } from "./mobile-sidebar";
 
 /**
@@ -17,9 +22,16 @@ import { MobileSidebar } from "./mobile-sidebar";
 export function Topbar() {
   return (
     <header className="flex h-14 shrink-0 items-center justify-between gap-2 border-b border-sidebar-border bg-sidebar px-4 text-sidebar-foreground sm:px-6">
-      {/* Izquierda — reservada (solo menú móvil) */}
+      {/* Izquierda — menú móvil + búsqueda (aún sin funcionalidad) */}
       <div className="flex min-w-0 items-center gap-2">
         <MobileSidebar />
+        {/* TODO: conectar búsqueda */}
+        <InputGroup className="w-full max-w-xs bg-background sm:w-72">
+          <InputGroupAddon>
+            <Search />
+          </InputGroupAddon>
+          <InputGroupInput type="search" placeholder="Buscar…" aria-label="Buscar" />
+        </InputGroup>
       </div>
 
       {/* Centro — reservado para cambios posteriores */}
