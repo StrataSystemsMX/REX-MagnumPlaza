@@ -5,6 +5,7 @@ import { Prisma } from "@/generated/prisma/client";
 import { requireAuth } from "@/lib/auth/get-session";
 import { getUserRoleCodes, requirePermission } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/prisma/client";
+import { logAudit as logAuditCore } from "@/lib/services/audit";
 import { getOutstandingRentsForLessee } from "@/lib/services/payments-queries";
 import { sendPaymentConfirmation } from "@/lib/services/notifications";
 import { computeRentStatus } from "@/lib/services/rent-status";
@@ -33,16 +34,7 @@ async function logAudit(
   entityId: string,
   changes: Prisma.InputJsonValue,
 ): Promise<void> {
-  await prisma.auditLog.create({
-    data: {
-      tenantId,
-      userId,
-      action,
-      entityType: "Payment",
-      entityId,
-      changes,
-    },
-  });
+  await logAuditCore({ tenantId, userId, action, entityType: "Payment", entityId, changes });
 }
 
 /**

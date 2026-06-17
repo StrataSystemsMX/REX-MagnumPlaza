@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { requireAuth } from "@/lib/auth/get-session";
 import { requirePermission } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/prisma/client";
+import { logAudit as logAuditCore } from "@/lib/services/audit";
 import {
   createLesseeSchema,
   updateLesseeSchema,
@@ -50,16 +51,7 @@ async function logAudit(
   entityId: string,
   changes: Prisma.InputJsonValue | null = null,
 ): Promise<void> {
-  await prisma.auditLog.create({
-    data: {
-      tenantId,
-      userId,
-      action,
-      entityType: "Lessee",
-      entityId,
-      ...(changes === null ? {} : { changes }),
-    },
-  });
+  await logAuditCore({ tenantId, userId, action, entityType: "Lessee", entityId, changes });
 }
 
 export async function actionCreateLessee(

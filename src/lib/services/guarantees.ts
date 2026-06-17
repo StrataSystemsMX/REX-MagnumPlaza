@@ -5,6 +5,7 @@ import { Prisma } from "@/generated/prisma/client";
 import { requireAuth } from "@/lib/auth/get-session";
 import { requirePermission } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/prisma/client";
+import { logAudit as logAuditCore } from "@/lib/services/audit";
 import {
   createGuaranteeSchema,
   returnGuaranteeSchema,
@@ -19,16 +20,7 @@ async function logAudit(
   entityId: string,
   changes: Prisma.InputJsonValue | null = null,
 ) {
-  await prisma.auditLog.create({
-    data: {
-      tenantId,
-      userId,
-      action,
-      entityType: "Guarantee",
-      entityId,
-      ...(changes === null ? {} : { changes }),
-    },
-  });
+  await logAuditCore({ tenantId, userId, action, entityType: "Guarantee", entityId, changes });
 }
 
 export async function actionCreateGuarantee(input: CreateGuaranteeInput) {

@@ -2,6 +2,7 @@
 
 import { UserButton } from "@clerk/nextjs";
 import { History, Redo2, Search, Undo2 } from "lucide-react";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import {
   InputGroup,
@@ -19,7 +20,7 @@ import { MobileSidebar } from "./mobile-sidebar";
  * posteriores). En la izquierda solo aparece el disparador del menú en móvil
  * (`lg:hidden`), necesario para navegar cuando el sidebar está oculto.
  */
-export function Topbar() {
+export function Topbar({ canViewHistory = false }: { canViewHistory?: boolean }) {
   return (
     <header className="flex h-14 shrink-0 items-center justify-between gap-2 border-b border-sidebar-border bg-sidebar px-4 text-sidebar-foreground sm:px-6">
       {/* Izquierda — menú móvil + búsqueda (aún sin funcionalidad) */}
@@ -47,11 +48,18 @@ export function Topbar() {
           <Redo2 className="size-4" />
         </Button>
 
-        {/* TODO: conectar historial de cambios */}
-        <Button variant="ghost" size="sm" className="gap-1.5">
-          <History className="size-4" />
-          Historial de Cambios
-        </Button>
+        {/* Historial de cambios — sólo visible para MASTER/ADMIN. */}
+        {canViewHistory && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="gap-1.5"
+            render={<Link href="/historial" />}
+          >
+            <History className="size-4" />
+            Historial de Cambios
+          </Button>
+        )}
 
         <div className="mx-1 h-6 w-px bg-border" />
 
