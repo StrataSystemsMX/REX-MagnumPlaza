@@ -72,6 +72,7 @@ const VALID_INPUT = {
   paymentDay: 1,
   lateFeePercentage: 5,
   autoRenew: false,
+  friendlyReminderEnabled: false,
   paidInAdvance: false,
 };
 

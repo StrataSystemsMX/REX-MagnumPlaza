@@ -124,6 +124,7 @@ export default async function ContractDetailPage({
                     ? String(contract.lateFeePercentage)
                     : "",
                 autoRenew: contract.autoRenew,
+                friendlyReminderEnabled: contract.friendlyReminderEnabled,
                 paidInAdvance: contract.paidInAdvance,
                 advancePaidUntil: contract.advancePaidUntil
                   ? new Date(contract.advancePaidUntil).toISOString().slice(0, 10)

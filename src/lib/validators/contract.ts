@@ -59,6 +59,7 @@ export const createContractSchema = z
       .max(100, "Máximo 100%.")
       .optional(),
     autoRenew: z.boolean().default(false),
+    friendlyReminderEnabled: z.boolean().default(false),
     paidInAdvance: z.boolean().default(false),
     advancePaidUntil: optionalDateLike,
     signedDate: optionalDateLike,
@@ -105,6 +106,7 @@ export const updateContractSchema = z.object({
     .max(100)
     .optional(),
   autoRenew: z.boolean().optional(),
+  friendlyReminderEnabled: z.boolean().optional(),
   paidInAdvance: z.boolean().optional(),
   advancePaidUntil: optionalDateLike,
   signedDate: optionalDateLike,

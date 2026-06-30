@@ -54,6 +54,7 @@ export interface ContractEditInitial {
   paymentDay: string;
   lateFeePercentage: string;
   autoRenew: boolean;
+  friendlyReminderEnabled: boolean;
   paidInAdvance: boolean;
   advancePaidUntil: string; // YYYY-MM-DD o ""
 }
@@ -126,6 +127,7 @@ export function ContractActions({
           lateFeePercentage:
             form.lateFeePercentage === "" ? undefined : Number(form.lateFeePercentage),
           autoRenew: form.autoRenew,
+          friendlyReminderEnabled: form.friendlyReminderEnabled,
           paidInAdvance: form.paidInAdvance,
           advancePaidUntil:
             form.paidInAdvance && form.advancePaidUntil
@@ -463,6 +465,17 @@ export function ContractActions({
                   onChange={(e) => setField("autoRenew", e.target.checked)}
                 />
                 Auto-renovar al vencer
+              </label>
+            </div>
+            <div className="md:col-span-2 flex items-end gap-2">
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={form.friendlyReminderEnabled}
+                  onChange={(e) => setField("friendlyReminderEnabled", e.target.checked)}
+                />
+                Recordatorio amable al 1er mes de atraso (el aviso fuerte a los 2
+                meses se manda siempre)
               </label>
             </div>
 

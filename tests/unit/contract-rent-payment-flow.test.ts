@@ -136,6 +136,7 @@ describe("Fase 1 — Crear contrato", () => {
       paymentDay: 1,
       lateFeePercentage: 5,
       autoRenew: false,
+      friendlyReminderEnabled: false,
       paidInAdvance: false,
     });
 
@@ -161,6 +162,7 @@ describe("Fase 1 — Crear contrato", () => {
         paymentDay: 1,
         lateFeePercentage: 5,
         autoRenew: false,
+        friendlyReminderEnabled: false,
         paidInAdvance: false,
       }),
     ).rejects.toThrow(/ya está rentada/i);

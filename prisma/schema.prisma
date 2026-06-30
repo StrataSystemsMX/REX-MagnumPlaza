@@ -367,6 +367,10 @@ model Contract {
   paymentDay        Int      @default(1) // día del mes en que se cobra
   lateFeePercentage Decimal? @db.Decimal(5, 2) // interés moratorio
   autoRenew         Boolean  @default(false)
+  // Política de morosidad (protocolo de 2 meses): el aviso fuerte/desalojo a los
+  // 2 meses es el detonante automático. El recordatorio amable previo (1 mes) es
+  // OPCIONAL y se activa por contrato con este flag (default off).
+  friendlyReminderEnabled Boolean @default(false)
 
   // Casos especiales que detectamos en el Excel:
   paidInAdvance    Boolean   @default(false) // tipo Bluecell que pagó 6 meses

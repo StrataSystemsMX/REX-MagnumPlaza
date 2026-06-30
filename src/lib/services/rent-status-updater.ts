@@ -102,7 +102,7 @@ export async function updateRentStatuses(
       lateFeeAccrued: true,
       dueDate: true,
       status: true,
-      contract: { select: { lateFeePercentage: true } },
+      contract: { select: { lateFeePercentage: true, friendlyReminderEnabled: true } },
     },
   });
 
@@ -153,7 +153,14 @@ export async function updateRentStatuses(
     const level = OVERDUE_LEVEL[newStatus];
     if (level !== undefined) {
       overdueTransitions += 1;
-      await triggerOverdueNotification(tenantId, r.id, level);
+      // Protocolo de 2 meses: el recordatorio amable (1M) solo se manda si el
+      // contrato lo habilitó; el aviso fuerte/desalojo (2M) es el detonante
+      // automático; el 3M ya no auto-notifica (la cadencia mensual se retiró).
+      const shouldNotify =
+        (level === 1 && r.contract.friendlyReminderEnabled) || level === 2;
+      if (shouldNotify) {
+        await triggerOverdueNotification(tenantId, r.id, level);
+      }
       await prisma.auditLog.create({
         data: {
           tenantId,

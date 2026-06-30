@@ -75,6 +75,7 @@ interface DraftTerms {
   paymentDay: string;
   lateFeePercentage: string;
   autoRenew: boolean;
+  friendlyReminderEnabled: boolean;
   paidInAdvance: boolean;
   advancePaidUntil: string;
   notes: string;
@@ -89,6 +90,7 @@ const initialTerms: DraftTerms = {
   paymentDay: "1",
   lateFeePercentage: "5",
   autoRenew: false,
+  friendlyReminderEnabled: false,
   paidInAdvance: false,
   advancePaidUntil: "",
   notes: "",
@@ -188,6 +190,7 @@ export function ContractWizard({
       lateFeePercentage:
         terms.lateFeePercentage === "" ? undefined : Number(terms.lateFeePercentage),
       autoRenew: terms.autoRenew,
+      friendlyReminderEnabled: terms.friendlyReminderEnabled,
       paidInAdvance: terms.paidInAdvance,
       advancePaidUntil:
         terms.paidInAdvance && terms.advancePaidUntil ? terms.advancePaidUntil : undefined,
@@ -654,6 +657,17 @@ function StepTerms({
             onChange={(e) => set("autoRenew", e.target.checked)}
           />
           Auto-renovar al vencer
+        </label>
+      </div>
+      <div className="md:col-span-2 flex items-end gap-2">
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={terms.friendlyReminderEnabled}
+            onChange={(e) => set("friendlyReminderEnabled", e.target.checked)}
+          />
+          Enviar recordatorio amable al primer mes de atraso (el aviso fuerte a
+          los 2 meses se manda siempre)
         </label>
       </div>
 

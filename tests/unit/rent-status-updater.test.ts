@@ -34,7 +34,7 @@ interface RentRow {
   lateFeeAccrued: Prisma.Decimal;
   dueDate: Date;
   status: string;
-  contract: { lateFeePercentage: Prisma.Decimal | null };
+  contract: { lateFeePercentage: Prisma.Decimal | null; friendlyReminderEnabled: boolean };
 }
 
 function rent(
@@ -45,6 +45,7 @@ function rent(
   due = 10000,
   lateFeePct: number | null = null,
   lateFeeAccrued = 0,
+  friendlyReminderEnabled = false,
 ): RentRow {
   return {
     id,
@@ -55,7 +56,10 @@ function rent(
     lateFeeAccrued: D(lateFeeAccrued),
     dueDate,
     status,
-    contract: { lateFeePercentage: lateFeePct === null ? null : D(lateFeePct) },
+    contract: {
+      lateFeePercentage: lateFeePct === null ? null : D(lateFeePct),
+      friendlyReminderEnabled,
+    },
   };
 }
 
@@ -233,5 +237,42 @@ describe("updateRentStatuses", () => {
     expect(r.byNewStatus.PAID).toBe(1);
     expect(r.overdueTransitions).toBe(2); // sólo OVERDUE_*
     expect(auditLogMock.create).toHaveBeenCalledTimes(2);
+  });
+
+  // --- Política de 2 meses: gating del recordatorio amable (1M) ---
+
+  it("NO manda el recordatorio amable (1M) si el contrato no lo habilitó (default)", async () => {
+    rentMock.findMany.mockResolvedValue([
+      rent("r1", utc(2026, 2, 1), "DUE"), // 35d → OVERDUE_1M, friendly off
+    ]);
+    const { updateRentStatuses } = await import(
+      "@/lib/services/rent-status-updater"
+    );
+    const r = await updateRentStatuses(TENANT, { now: utc(2026, 3, 5) });
+    expect(r.byNewStatus.OVERDUE_1M).toBe(1);
+    expect(mockSendRentReminder).not.toHaveBeenCalled(); // amable no se manda
+    expect(auditLogMock.create).toHaveBeenCalledOnce(); // pero la transición sí se audita
+  });
+
+  it("SÍ manda el recordatorio amable (1M) si el contrato lo habilitó", async () => {
+    rentMock.findMany.mockResolvedValue([
+      rent("r1", utc(2026, 2, 1), "DUE", 0, 10000, null, 0, true), // friendly on
+    ]);
+    const { updateRentStatuses } = await import(
+      "@/lib/services/rent-status-updater"
+    );
+    await updateRentStatuses(TENANT, { now: utc(2026, 3, 5) });
+    expect(mockSendRentReminder).toHaveBeenCalledWith(TENANT, "r1", "1M");
+  });
+
+  it("SIEMPRE manda el aviso fuerte de 2 meses (detonante), sin importar el flag amable", async () => {
+    rentMock.findMany.mockResolvedValue([
+      rent("r1", utc(2026, 1, 1), "OVERDUE_1M"), // 63d → OVERDUE_2M, friendly off
+    ]);
+    const { updateRentStatuses } = await import(
+      "@/lib/services/rent-status-updater"
+    );
+    await updateRentStatuses(TENANT, { now: utc(2026, 3, 5) });
+    expect(mockSendRentReminder).toHaveBeenCalledWith(TENANT, "r1", "2M");
   });
 });
