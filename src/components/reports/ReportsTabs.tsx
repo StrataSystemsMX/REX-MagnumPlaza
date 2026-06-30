@@ -30,7 +30,7 @@ import type {
   UnitStatus,
 } from "@/generated/prisma/enums";
 import type { ReportsBundle } from "@/lib/services/reports-queries";
-import { formatMXN } from "@/lib/format-currency";
+import { formatMXN, formatPercent } from "@/lib/format-currency";
 import { formatDate } from "@/lib/format-date";
 
 const MONTH_NAMES = [
@@ -470,6 +470,7 @@ function ExpensesByCategoryTab({
                   </TableHead>
                 ))}
                 <TableHead className="text-right">Total</TableHead>
+                <TableHead className="text-right">% del total</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -483,6 +484,9 @@ function ExpensesByCategoryTab({
                   ))}
                   <TableCell className="text-right font-semibold tabular-nums">
                     {moneyZero(row.total)}
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums text-muted-foreground">
+                    {formatPercent(row.pct)}
                   </TableCell>
                 </TableRow>
               ))}
@@ -499,6 +503,24 @@ function ExpensesByCategoryTab({
                 <TableCell className="text-right font-bold tabular-nums">
                   {moneyZero(data.totals.total)}
                 </TableCell>
+                <TableCell className="text-right font-bold tabular-nums">
+                  {formatPercent(1)}
+                </TableCell>
+              </TableRow>
+              <TableRow className="bg-muted/10">
+                <TableCell className="text-xs text-muted-foreground">
+                  % del total
+                </TableCell>
+                {data.legalEntityCodes.map((code) => (
+                  <TableCell
+                    key={code}
+                    className="text-right text-xs tabular-nums text-muted-foreground"
+                  >
+                    {formatPercent(data.totals.pctByLegalEntity[code] ?? 0)}
+                  </TableCell>
+                ))}
+                <TableCell />
+                <TableCell />
               </TableRow>
             </TableBody>
           </Table>
