@@ -74,3 +74,30 @@ export class PermissionError extends Error {
     this.code = permissionCode;
   }
 }
+
+// ============================================================================
+// Acceso al Historial de Cambios (auditoría)
+// ----------------------------------------------------------------------------
+// Ver y deshacer cambios queda restringido a MASTER/ADMIN. Hoy el gate es por
+// rol; los códigos `audit.view` / `audit.restore` quedan reservados para cuando
+// se siembren permisos por rol (ver hasPermission).
+// ============================================================================
+
+/** ¿Puede ver y operar el historial de cambios? (MASTER o ADMIN.) */
+export async function canAccessAudit(dbUserId: string): Promise<boolean> {
+  if (await isMaster(dbUserId)) return true;
+  const codes = await getUserRoleCodes(dbUserId);
+  return codes.includes("ADMIN");
+}
+
+export async function requireAuditView(dbUserId: string): Promise<void> {
+  if (!(await canAccessAudit(dbUserId))) {
+    throw new PermissionError("audit.view");
+  }
+}
+
+export async function requireAuditRestore(dbUserId: string): Promise<void> {
+  if (!(await canAccessAudit(dbUserId))) {
+    throw new PermissionError("audit.restore");
+  }
+}

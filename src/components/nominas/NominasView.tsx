@@ -8,7 +8,6 @@ import {
   Loader2,
   MoreHorizontal,
   Pencil,
-  PiggyBank,
   Plus,
   Receipt,
   Trash2,
@@ -55,7 +54,6 @@ import type { LegalEntityOption } from "@/lib/services/properties-queries";
 import { payrollTypeLabel } from "@/lib/i18n/enums";
 import type { PayrollType } from "@/generated/prisma/enums";
 import { cn } from "@/lib/utils";
-import { formatMXN } from "@/lib/format-currency";
 
 // Clasificación contable: operativos (gente real) vs estrategia fiscal
 // (vehículos fiscales). Usado para sub-agrupar dentro de cada card.
@@ -66,6 +64,12 @@ const FISCAL_STRATEGY_TYPES: ReadonlySet<PayrollType> = new Set([
 function isFiscalStrategy(t: PayrollType): boolean {
   return FISCAL_STRATEGY_TYPES.has(t);
 }
+
+const MXN = new Intl.NumberFormat("es-MX", {
+  style: "currency",
+  currency: "MXN",
+  maximumFractionDigits: 2,
+});
 
 const MONTH_LABELS = [
   "Enero",
@@ -116,10 +120,10 @@ const TYPE_TONES: Record<PayrollType, string> = {
 // análogo a PREDIAL_GRID_COLS en PredialesTable.
 // Tipo | Concepto(+notas) | Sin IVA | IVA | Total | Acciones
 const PAYROLL_GRID_COLS =
-  "minmax(0, 0.9fr) minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) 40px";
+  "minmax(140px, 1fr) minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) 40px";
 // Con columna Mes (vista anual) antepuesta.
 const PAYROLL_GRID_COLS_WITH_MONTH =
-  "minmax(0, 0.7fr) minmax(0, 0.9fr) minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) 40px";
+  "minmax(140px, 1fr) minmax(0, 0.9fr) minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) 40px";
 
 interface Props {
   payrolls: ReadonlyArray<PayrollListItem>;
@@ -309,92 +313,86 @@ export function NominasView({
   return (
     <>
       {/* Filtros */}
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div className="flex flex-wrap items-end gap-3">
-          <FilterField label="Año">
-            <Select
-              value={String(selectedYear)}
-              onValueChange={(v) => v && pushParams({ year: v })}
-              items={yearItems}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <Select
+            value={String(selectedYear)}
+            onValueChange={(v) => v && pushParams({ year: v })}
+            items={yearItems}
+          >
+            <SelectTrigger className="w-28">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {yearsAvailable.map((y) => (
+                <SelectItem key={y} value={String(y)}>
+                  {y}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <div className="flex items-center gap-1">
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => shiftMonth(-1)}
+              disabled={selectedMonth === null}
+              aria-label="Mes anterior"
             >
-              <SelectTrigger className="w-28">
+              <ChevronLeft className="size-4" />
+            </Button>
+            <Select
+              value={String(selectedMonth ?? 0)}
+              onValueChange={(v) => v && changeMonthParam(v)}
+              items={MONTH_ITEMS}
+            >
+              <SelectTrigger className="w-44">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {yearsAvailable.map((y) => (
-                  <SelectItem key={y} value={String(y)}>
-                    {y}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </FilterField>
-
-          <FilterField label="Periodo">
-            <div className="flex items-center gap-1">
-              <Button
-                variant="outline"
-                size="icon"
-                onClick={() => shiftMonth(-1)}
-                disabled={selectedMonth === null}
-                aria-label="Mes anterior"
-              >
-                <ChevronLeft className="size-4" />
-              </Button>
-              <Select
-                value={String(selectedMonth ?? 0)}
-                onValueChange={(v) => v && changeMonthParam(v)}
-                items={MONTH_ITEMS}
-              >
-                <SelectTrigger className="w-44">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {Object.entries(MONTH_ITEMS).map(([value, label]) => (
-                    <SelectItem key={value} value={value}>
-                      {label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Button
-                variant="outline"
-                size="icon"
-                onClick={() => shiftMonth(1)}
-                disabled={selectedMonth === null}
-                aria-label="Mes siguiente"
-              >
-                <ChevronRight className="size-4" />
-              </Button>
-            </div>
-          </FilterField>
-
-          <FilterField label="Razón social">
-            <Select
-              value={selectedEntityId ?? "ALL"}
-              onValueChange={(v) =>
-                v && pushParams({ entity: v === "ALL" ? null : v })
-              }
-              items={entityItems}
-            >
-              <SelectTrigger className="w-40">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {Object.entries(entityItems).map(([value, label]) => (
+                {Object.entries(MONTH_ITEMS).map(([value, label]) => (
                   <SelectItem key={value} value={value}>
                     {label}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
-          </FilterField>
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => shiftMonth(1)}
+              disabled={selectedMonth === null}
+              aria-label="Mes siguiente"
+            >
+              <ChevronRight className="size-4" />
+            </Button>
+          </div>
+
+          <Select
+            value={selectedEntityId ?? "ALL"}
+            onValueChange={(v) =>
+              v && pushParams({ entity: v === "ALL" ? null : v })
+            }
+            items={entityItems}
+          >
+            <SelectTrigger className="w-40">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {Object.entries(entityItems).map(([value, label]) => (
+                <SelectItem key={value} value={value}>
+                  {label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
         {canCreate ? (
           <Button onClick={() => openCreate(null)}>
             <Plus className="size-4" />
-            Nuevo pago
+            Registrar nómina
           </Button>
         ) : null}
       </div>
@@ -403,17 +401,9 @@ export function NominasView({
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Stat
           icon={<Receipt className="size-4" />}
-          label={`Operativo ${periodLabel().toLowerCase()}`}
-          value={formatMXN(periodOperationalTotal, 2)}
-          subtitle="Nómina directa, comisiones, bonos"
+          label={`Nómina ${periodLabel().toLowerCase()}`}
+          value={MXN.format(periodOperationalTotal + periodFiscalTotal)}
           tone="primary"
-        />
-        <Stat
-          icon={<PiggyBank className="size-4" />}
-          label={`Estrategia fiscal ${periodLabel().toLowerCase()}`}
-          value={formatMXN(periodFiscalTotal, 2)}
-          subtitle="Nómina estratégica + facturas adm."
-          tone="warning"
         />
         <Stat
           icon={<Users2 className="size-4" />}
@@ -426,7 +416,7 @@ export function NominasView({
         <Stat
           icon={<Wallet className="size-4" />}
           label={`Total año ${selectedYear}`}
-          value={formatMXN(annualTotal, 2)}
+          value={MXN.format(annualTotal)}
           tone="positive"
         />
       </div>
@@ -502,12 +492,6 @@ export function NominasView({
                           — {group.entity.legalName}
                         </span>
                       </div>
-                      {group.fiscalTotal > 0 && group.operationalTotal > 0 ? (
-                        <p className="mt-0.5 text-xs text-muted-foreground">
-                          Operativo {formatMXN(group.operationalTotal, 2)} ·
-                          Estrategia {formatMXN(group.fiscalTotal, 2)}
-                        </p>
-                      ) : null}
                     </div>
                   </div>
                   <div className="flex items-center gap-3">
@@ -516,52 +500,22 @@ export function NominasView({
                         Total
                       </p>
                       <p className="text-lg font-semibold tabular-nums">
-                        {formatMXN(group.total, 2)}
+                        {MXN.format(group.total)}
                       </p>
                     </div>
-                    {canCreate ? (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => openCreate(group.entity.id)}
-                      >
-                        <Plus className="size-3.5" />
-                        Agregar
-                      </Button>
-                    ) : null}
                   </div>
                 </div>
 
                 {expanded ? (
-                  <>
-                    <PayrollSubsection
-                      title="Operativos"
-                      helper="Nómina directa, comisiones, bonos."
-                      tone="emerald"
-                      items={group.operationalItems}
-                      subtotal={group.operationalTotal}
-                      showMonth={selectedMonth === null}
-                      canUpdate={canUpdate}
-                      canDelete={canDelete}
-                      onEdit={openEdit}
-                      onDelete={setDeleteTarget}
-                      onSelect={setDetailTarget}
-                    />
-
-                    <PayrollSubsection
-                      title="Estrategia fiscal"
-                      helper="Nómina estratégica y facturas administrativas."
-                      tone="amber"
-                      items={group.fiscalItems}
-                      subtotal={group.fiscalTotal}
-                      showMonth={selectedMonth === null}
-                      canUpdate={canUpdate}
-                      canDelete={canDelete}
-                      onEdit={openEdit}
-                      onDelete={setDeleteTarget}
-                      onSelect={setDetailTarget}
-                    />
-                  </>
+                  <PayrollSubsection
+                    items={[...group.operationalItems, ...group.fiscalItems]}
+                    showMonth={selectedMonth === null}
+                    canUpdate={canUpdate}
+                    canDelete={canDelete}
+                    onEdit={openEdit}
+                    onDelete={setDeleteTarget}
+                    onSelect={setDetailTarget}
+                  />
                 ) : null}
               </div>
             );
@@ -608,7 +562,7 @@ export function NominasView({
             <AlertDialogTitle>¿Eliminar pago de nómina?</AlertDialogTitle>
             <AlertDialogDescription>
               {deleteTarget
-                ? `Se borrará el pago de ${formatMXN(deleteTarget.amount, 2)} de ${deleteTarget.legalEntity.code} (${MONTH_LABELS[deleteTarget.month - 1]} ${deleteTarget.year}). Esta acción no se puede deshacer.`
+                ? `Se borrará el pago de ${MXN.format(deleteTarget.amount)} de ${deleteTarget.legalEntity.code} (${MONTH_LABELS[deleteTarget.month - 1]} ${deleteTarget.year}). Esta acción no se puede deshacer.`
                 : ""}
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -628,21 +582,6 @@ export function NominasView({
         </AlertDialogContent>
       </AlertDialog>
     </>
-  );
-}
-
-function FilterField({
-  label,
-  children,
-}: {
-  label: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="flex flex-col gap-1">
-      <span className="text-xs uppercase text-muted-foreground">{label}</span>
-      {children}
-    </div>
   );
 }
 
@@ -686,11 +625,7 @@ function Stat({
 }
 
 function PayrollSubsection({
-  title,
-  helper,
-  tone,
   items,
-  subtotal,
   showMonth,
   canUpdate,
   canDelete,
@@ -698,11 +633,7 @@ function PayrollSubsection({
   onDelete,
   onSelect,
 }: {
-  title: string;
-  helper: string;
-  tone: "emerald" | "amber";
   items: PayrollListItem[];
-  subtotal: number;
   showMonth: boolean;
   canUpdate: boolean;
   canDelete: boolean;
@@ -712,37 +643,15 @@ function PayrollSubsection({
 }) {
   if (items.length === 0) return null;
 
-  const accentText =
-    tone === "emerald"
-      ? "text-emerald-700 dark:text-emerald-400"
-      : "text-amber-700 dark:text-amber-400";
-
   const gridCols = showMonth
     ? PAYROLL_GRID_COLS_WITH_MONTH
     : PAYROLL_GRID_COLS;
 
   return (
-    <div className="border-b last:border-b-0">
-      {/* Barra de subsección: label + helper + subtotal */}
-      <div className="flex items-center justify-between gap-2 bg-muted/20 px-4 py-2">
-        <div className="flex items-center gap-2">
-          <span
-            className={cn(
-              "text-[11px] font-semibold uppercase tracking-wider",
-              accentText,
-            )}
-          >
-            {title}
-          </span>
-          <span className="text-[10px] text-muted-foreground">{helper}</span>
-        </div>
-        <span className="text-xs font-medium tabular-nums text-muted-foreground">
-          {formatMXN(subtotal, 2)}
-        </span>
-      </div>
-
+    <div>
       {/* Tabla en grid (template compartido para alinear columnas) */}
-      <div role="table" aria-label={title}>
+      <div className="overflow-x-auto">
+      <div role="table" aria-label="Nóminas" className="min-w-[640px]">
         <div
           role="row"
           className="grid items-center border-b bg-muted/30 text-[11px] font-medium uppercase text-muted-foreground"
@@ -784,6 +693,7 @@ function PayrollSubsection({
           />
         ))}
       </div>
+      </div>
     </div>
   );
 }
@@ -814,7 +724,7 @@ function PayrollRow({
       className="grid cursor-pointer items-center border-b text-sm transition-colors last:border-b-0 hover:bg-muted/50"
       style={{ gridTemplateColumns: gridCols }}
     >
-      <div role="cell" className="px-3 py-2.5">
+      <div role="cell" className="overflow-hidden px-3 py-2.5">
         <Badge className={TYPE_TONES[item.type]}>
           {payrollTypeLabel(item.type)}
         </Badge>
@@ -828,7 +738,7 @@ function PayrollRow({
         </div>
       ) : null}
       <div role="cell" className="min-w-0 px-3 py-2.5">
-        <p className="truncate">{item.description ?? "—"}</p>
+        <p className="line-clamp-2">{item.description ?? "—"}</p>
         {item.notes ? (
           <p className="truncate text-xs text-muted-foreground">
             {item.notes}
@@ -840,20 +750,20 @@ function PayrollRow({
         className="px-3 py-2.5 text-right tabular-nums text-muted-foreground"
       >
         {item.amountWithoutTax !== null
-          ? formatMXN(item.amountWithoutTax, 2)
+          ? MXN.format(item.amountWithoutTax)
           : "—"}
       </div>
       <div
         role="cell"
         className="px-3 py-2.5 text-right tabular-nums text-muted-foreground"
       >
-        {item.taxAmount !== null ? formatMXN(item.taxAmount, 2) : "—"}
+        {item.taxAmount !== null ? MXN.format(item.taxAmount) : "—"}
       </div>
       <div
         role="cell"
         className="px-3 py-2.5 text-right font-semibold tabular-nums"
       >
-        {formatMXN(item.amount, 2)}
+        {MXN.format(item.amount)}
       </div>
       <div role="cell" className="flex justify-end pr-1">
         <DropdownMenu>
@@ -907,7 +817,7 @@ function EmptyState({
       {canCreate ? (
         <Button onClick={onCreate}>
           <Plus className="size-4" />
-          Registrar pago
+          Registrar nómina
         </Button>
       ) : null}
     </div>

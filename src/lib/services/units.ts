@@ -4,6 +4,8 @@ import { revalidatePath } from "next/cache";
 import { requireAuth } from "@/lib/auth/get-session";
 import { requirePermission } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/prisma/client";
+import { logAudit as logAuditCore } from "@/lib/services/audit";
+import { serializeFields } from "@/lib/audit/field-types";
 import {
   createUnitSchema,
   updateUnitSchema,
@@ -21,16 +23,7 @@ async function logAudit(
   entityId: string,
   changes: Prisma.InputJsonValue | null = null,
 ): Promise<void> {
-  await prisma.auditLog.create({
-    data: {
-      tenantId,
-      userId,
-      action,
-      entityType: "Unit",
-      entityId,
-      ...(changes === null ? {} : { changes }),
-    },
-  });
+  await logAuditCore({ tenantId, userId, action, entityType: "Unit", entityId, changes });
 }
 
 async function ensurePropertyInTenant(propertyId: string, tenantId: string): Promise<void> {
@@ -171,19 +164,26 @@ export async function actionUpdateUnit(
   const { propertyId: _ignored, ...data } = parsed;
   void _ignored;
 
-  const result = await prisma.unit.updateMany({
+  // Snapshot previo para poder revertir la edición desde el historial.
+  const prev = await prisma.unit.findFirst({ where: { id, tenantId } });
+  if (!prev) {
+    throw new Error("Unidad no encontrada o fuera de tu tenant.");
+  }
+
+  await prisma.unit.updateMany({
     where: { id, tenantId },
     data,
   });
-  if (result.count === 0) {
-    throw new Error("Unidad no encontrada o fuera de tu tenant.");
-  }
 
   const updated = await prisma.unit.findFirstOrThrow({
     where: { id, tenantId },
   });
 
   await logAudit(tenantId, dbUser.id, "UPDATE", id, {
+    before: serializeFields(
+      prev as unknown as Record<string, unknown>,
+      Object.keys(data),
+    ) as Prisma.InputJsonValue,
     after: data as unknown as Prisma.InputJsonValue,
   });
 
@@ -224,6 +224,52 @@ export async function actionUngroupUnit(childUnitId: string): Promise<void> {
   revalidatePath(`/properties/${target.propertyId}`);
   revalidatePath("/plazas");
   revalidatePath("/inmuebles");
+}
+
+/**
+ * Garantiza que un inmueble individual tenga al menos una unidad activa y disponible.
+ * Si ya existe, devuelve su ID sin tocar nada.
+ * Si no, la crea automáticamente — transparente para el usuario.
+ * Solo aplica a propiedades que no son PLAZA_COMERCIAL.
+ */
+export async function actionEnsureInmuebleUnit(propertyId: string): Promise<string> {
+  const { tenantId, dbUser } = await requireAuth();
+
+  const property = await prisma.property.findFirst({
+    where: { id: propertyId, tenantId, isActive: true },
+    select: { id: true, type: true, name: true },
+  });
+  if (!property) throw new Error("Inmueble no encontrado.");
+  if (property.type === "PLAZA_COMERCIAL") {
+    throw new Error("Esta acción es solo para inmuebles individuales.");
+  }
+
+  const existing = await prisma.unit.findFirst({
+    where: {
+      tenantId,
+      propertyId,
+      isActive: true,
+      status: { in: ["DISPONIBLE", "APARTADA"] },
+    },
+    select: { id: true },
+  });
+  if (existing) return existing.id;
+
+  const unit = await prisma.unit.create({
+    data: {
+      tenantId,
+      propertyId,
+      code: "U1",
+      name: property.name,
+      status: "DISPONIBLE",
+      isActive: true,
+    },
+  });
+
+  await logAudit(tenantId, dbUser.id, "CREATE", unit.id, { auto: true });
+  revalidatePath("/plazas");
+
+  return unit.id;
 }
 
 export async function actionDeleteUnit(id: string): Promise<void> {

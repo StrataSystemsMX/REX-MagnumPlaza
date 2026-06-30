@@ -304,7 +304,7 @@ export function GuaranteesTable({
 // owner sections. As long as every section renders rows of identical container
 // width, the columns will land at the same X position on the page.
 const GUARANTEE_GRID_COLS =
-  "minmax(0, 1.4fr) minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.1fr) 200px";
+  "minmax(130px, 1.4fr) minmax(120px, 1.4fr) minmax(80px, 1fr) minmax(90px, 1fr) minmax(90px, 1fr) minmax(80px, 1.1fr) 200px";
 
 function OwnerSection({
   group,
@@ -380,7 +380,8 @@ function OwnerSection({
       </button>
 
       {expanded ? (
-        <div role="table" aria-label={`Fianzas ${group.code}`} className="border-t">
+        <div className="overflow-x-auto">
+        <div role="table" aria-label={`Fianzas ${group.code}`} className="min-w-[790px] border-t">
           <div
             role="row"
             className="grid items-center border-b bg-muted/30 text-xs font-medium uppercase text-muted-foreground"
@@ -412,6 +413,7 @@ function OwnerSection({
           {group.items.map((g) => (
             <GuaranteeRow key={g.id} guarantee={g} canManage={canManage} />
           ))}
+        </div>
         </div>
       ) : null}
     </div>
@@ -482,7 +484,7 @@ function GuaranteeRow({
           <span className="text-muted-foreground">—</span>
         )}
       </div>
-      <div role="cell" className="flex justify-center px-3 py-2.5">
+      <div role="cell" className="overflow-hidden flex justify-center px-3 py-2.5">
         {statusBadge(guarantee.status)}
       </div>
       <div role="cell" className="flex items-center justify-end gap-1.5 pr-2">

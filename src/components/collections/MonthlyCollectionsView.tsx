@@ -1,11 +1,9 @@
 "use client";
 
 import {
-  ArrowUpRight,
   Building2,
   ChevronDown,
   ChevronRight,
-  CreditCard,
   Eye,
   KeyRound,
   Plus,
@@ -32,13 +30,24 @@ import {
 import { SendNotificationDialog } from "@/components/collections/SendNotificationDialog";
 import { INMUEBLES_TAB_VALUE } from "@/components/shared/property-filter-constants";
 import { cn } from "@/lib/utils";
-import { formatMXN } from "@/lib/format-currency";
 import type {
   MonthlyCollections,
   MonthlyPropertyGroup,
   MonthlyUnitRow,
   MonthlyUnitStatus,
 } from "@/lib/services/payments-queries";
+
+const MXN = new Intl.NumberFormat("es-MX", {
+  style: "currency",
+  currency: "MXN",
+  maximumFractionDigits: 2,
+});
+
+const MXN_INT = new Intl.NumberFormat("es-MX", {
+  style: "currency",
+  currency: "MXN",
+  maximumFractionDigits: 0,
+});
 
 const TABLE_COLUMN_COUNT = 6;
 
@@ -128,24 +137,10 @@ export function MonthlyCollectionsView({
         </div>
       </div>
 
-      {/* Usamos una <table> cruda (no el componente Table de shadcn) porque ese
-          envuelve la tabla en un div con overflow, y cualquier overflow-auto/hidden
-          ancestro rompe el sticky relativo al scroll de la página (<main>).
-          overflow-clip recorta las esquinas redondeadas SIN crear contenedor de
-          scroll, así que conserva el sticky de página. */}
-      <div className="overflow-clip rounded-lg border bg-card">
+      <div className="overflow-x-auto rounded-lg border bg-card">
         <table className="w-full min-w-[760px] caption-bottom text-sm">
-          {/* Encabezados una sola vez al tope, sticky para que persigan el
-              scroll de la página; los grupos solo muestran el nombre del inmueble
-              como separador, sin repetir las columnas. */}
           {visibleGroups.length > 0 ? (
-            // El scroll vive en <main>, que tiene padding superior (p-4/6/8). El
-            // offset de `sticky` se mide desde el borde de contenido (después del
-            // padding), así que `top-0` fijaría el encabezado ~32px abajo y dejaría
-            // una franja donde se asoman las filas al hacer scroll. Compensamos con
-            // un top negativo que iguala ese padding para anclar el encabezado al
-            // borde superior real. (Acoplado al padding de (dashboard)/layout.tsx.)
-            <TableHeader className="sticky -top-4 z-20 sm:-top-6 lg:-top-8">
+            <TableHeader>
               <TableRow className="hover:bg-transparent">
                 {!hideLocalColumn ? (
                   <TableHead className="w-16 bg-card shadow-[inset_0_-1px_0_0_var(--border)] text-xs font-medium uppercase tracking-wide text-muted-foreground">
@@ -288,7 +283,7 @@ function PropertyGroupRows({
                 : ""}
             </span>
             <span className="ml-auto text-xs tabular-nums text-muted-foreground">
-              {formatMXN(group.expectedTotal)} esperado
+              {MXN_INT.format(Number(group.expectedTotal))} esperado
             </span>
           </div>
         </TableCell>
@@ -376,7 +371,7 @@ function UnitRow({
         {row.status === "VACANT" ? (
           <span className="text-muted-foreground">—</span>
         ) : (
-          formatMXN(row.amountDue, 2)
+          MXN.format(Number(row.amountDue))
         )}
       </TableCell>
       <TableCell className="text-right tabular-nums">
@@ -394,8 +389,7 @@ const ROW_BG_BY_STATUS: Record<MonthlyUnitStatus, string> = {
   PAID: "",
   PARTIAL: "bg-amber-50/50 dark:bg-amber-950/20",
   SIN_PAGO: "bg-red-50/50 dark:bg-red-950/20",
-  PRE_PAGADO: "bg-blue-50/40 dark:bg-blue-950/20",
-  ABONO: "bg-sky-50/60 dark:bg-sky-950/20",
+  FUTURO: "bg-slate-50/60 dark:bg-slate-900/30",
   WAIVED: "bg-blue-50/40 dark:bg-blue-950/20",
   VACANT: "bg-muted/30",
 };
@@ -405,39 +399,27 @@ const ROW_BG_BY_STATUS: Record<MonthlyUnitStatus, string> = {
 // ----------------------------------------------------------------------------
 
 function CobradoCell({ row }: { row: MonthlyUnitRow }) {
-  if (row.status === "VACANT") {
+  if (row.status === "VACANT" || row.status === "FUTURO") {
     return <span className="text-muted-foreground">—</span>;
-  }
-  if (row.status === "PRE_PAGADO") {
-    return (
-      <span className="font-semibold text-blue-700 dark:text-blue-300">Pre-pagado</span>
-    );
   }
   if (row.status === "SIN_PAGO") {
     return (
       <span className="font-semibold text-red-700 dark:text-red-300">
-        {formatMXN(0, 2)}
+        {MXN.format(0)}
       </span>
     );
   }
   if (row.status === "PAID") {
     return (
       <span className="font-semibold text-green-700 dark:text-green-300">
-        {formatMXN(row.amountPaid, 2)}
-      </span>
-    );
-  }
-  if (row.status === "ABONO") {
-    return (
-      <span className="font-semibold text-sky-600 dark:text-sky-300">
-        {formatMXN(row.amountPaid, 2)}
+        {MXN.format(Number(row.amountPaid))}
       </span>
     );
   }
   // PARTIAL
   return (
     <span className="font-semibold text-amber-700 dark:text-amber-300">
-      {formatMXN(row.amountPaid, 2)}
+      {MXN.format(Number(row.amountPaid))}
     </span>
   );
 }
@@ -460,26 +442,16 @@ function StatusPill({ row }: { row: MonthlyUnitRow }) {
           Parcial
         </span>
       );
-    case "ABONO":
-      return (
-        <span className="inline-flex items-center gap-1 rounded-full border border-sky-200 bg-sky-50 px-2 py-0.5 text-xs font-medium text-sky-800 dark:border-sky-900 dark:bg-sky-950 dark:text-sky-200">
-          <ArrowUpRight className="size-3" />
-          Abono
-        </span>
-      );
     case "SIN_PAGO":
       return (
         <span className="inline-flex items-center gap-1 rounded-full border border-red-200 bg-red-50 px-2 py-0.5 text-xs font-medium text-red-800 dark:border-red-900 dark:bg-red-950 dark:text-red-200">
           × Sin pago
         </span>
       );
-    case "PRE_PAGADO":
+    case "FUTURO":
       return (
-        <span className="inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-800 dark:border-blue-900 dark:bg-blue-950 dark:text-blue-200">
-          <CreditCard className="size-3" />
-          {row.prePaidMonths && row.prePaidMonths > 0
-            ? `${row.prePaidMonths} ${row.prePaidMonths === 1 ? "mes" : "meses"}`
-            : "Pre-pagado"}
+        <span className="inline-flex items-center gap-1 rounded-full border border-border bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+          No vencido
         </span>
       );
     case "VACANT":
@@ -515,17 +487,6 @@ function renderAction(
       </Link>
     );
   }
-  if (row.status === "ABONO") {
-    return row.lesseeId ? (
-      <Link
-        href={`/lessees/${row.lesseeId}`}
-        className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "h-8 gap-1.5")}
-      >
-        <ArrowUpRight className="size-3.5" />
-        Historial
-      </Link>
-    ) : null;
-  }
   if (row.rentId && (row.overdueLevel === 2 || row.overdueLevel === 3)) {
     const level = row.overdueLevel === 3 ? "3M" : "2M";
     return (
@@ -556,7 +517,7 @@ function renderAction(
     );
   }
 
-  // PAID, PARTIAL, PRE_PAGADO → "Ver" abre dialog para registrar pago si hay rent.
+  // PAID, PARTIAL → "Ver" abre dialog para registrar pago si hay rent.
   if (row.rentId) {
     return (
       <Button

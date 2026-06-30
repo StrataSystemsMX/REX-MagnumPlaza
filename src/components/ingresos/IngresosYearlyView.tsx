@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronDown, ChevronLeft, ChevronRight, TrendingUp, Wallet, AlertTriangle, Percent, X } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, Clock, Wallet, AlertTriangle, Percent, Plus, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -11,13 +11,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { BulkPaymentDialog } from "@/components/collections/BulkPaymentDialog";
 import {
   RegisterPaymentDialog,
   type RegisterPaymentDialogContext,
 } from "@/components/collections/RegisterPaymentDialog";
-import { cn } from "@/lib/utils";
-import { formatMXN } from "@/lib/format-currency";
-import { formatPeriodLong } from "@/lib/format-date";
+import { capitalizeFirst, cn } from "@/lib/utils";
 import type {
   MonthlyUnitStatus,
   YearlyCell,
@@ -26,7 +25,37 @@ import type {
   YearlyUnitRow,
 } from "@/lib/services/payments-queries";
 
+const MXN = new Intl.NumberFormat("es-MX", {
+  style: "currency",
+  currency: "MXN",
+  maximumFractionDigits: 2,
+});
+
+const MXN_INT = new Intl.NumberFormat("es-MX", {
+  style: "currency",
+  currency: "MXN",
+  maximumFractionDigits: 0,
+});
+
+const PERIOD_FULL = new Intl.DateTimeFormat("es-MX", {
+  month: "long",
+  year: "numeric",
+  timeZone: "UTC",
+});
+
+const MONTH_LONG = new Intl.DateTimeFormat("es-MX", {
+  month: "long",
+  timeZone: "UTC",
+});
+
 const MONTHS_SHORT = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
+
+// Línea divisora gris superpuesta (pseudo-elemento absoluto, no afecta el
+// layout de la tabla) en el borde derecho de la columna del mes actual: separa
+// el mes en curso de los meses siguientes. Se aplica solo cuando el año
+// mostrado es el año en curso. `pointer-events-none` para no bloquear clicks.
+const CURRENT_MONTH_DIVIDER =
+  "relative after:pointer-events-none after:absolute after:inset-y-0 after:right-0 after:w-0.5 after:bg-slate-300 after:content-[''] dark:after:bg-slate-600";
 
 interface IngresosYearlyViewProps {
   data: YearlyCollections;
@@ -59,6 +88,7 @@ export function IngresosYearlyView({ data, availableYears }: IngresosYearlyViewP
   const [entityFilter, setEntityFilter] = useState<string>("ALL");
   const [paymentContext, setPaymentContext] =
     useState<RegisterPaymentDialogContext | null>(null);
+  const [bulkOpen, setBulkOpen] = useState(false);
   const [collapsedEntities, setCollapsedEntities] = useState<Set<string>>(new Set());
 
   function toggleEntity(code: string) {
@@ -128,20 +158,46 @@ export function IngresosYearlyView({ data, availableYears }: IngresosYearlyViewP
       .filter((g) => g.properties.length > 0);
   }, [entityGroups, entityFilter, propertyFilter]);
 
-  const filteredTotals = useMemo(() => {
-    let expected = 0;
-    let paid = 0;
-    let units = 0;
+  // Dashboard por mes (no anual): cobrado / por cobrar / % del mes en curso, más
+  // "Atrasado" = saldo pendiente acumulado de los meses ya vencidos (anteriores
+  // al mes actual). Respeta los filtros de razón social y plaza.
+  const dashboard = useMemo(() => {
+    const today = new Date();
+    const monthIndex = today.getMonth();
+    const currentMonthStart = Date.UTC(today.getFullYear(), monthIndex, 1);
+    let monthExpected = 0;
+    let monthPaid = 0;
+    let arrears = 0;
     for (const g of visibleEntityGroups) {
       for (const p of g.properties) {
-        expected += Number(p.expectedTotal);
-        paid += Number(p.paidTotal);
-        units += p.unitCount;
+        for (const u of p.units) {
+          u.cells.forEach((cell, i) => {
+            if (i === monthIndex) {
+              monthExpected += Number(cell.amountDue);
+              monthPaid += Number(cell.amountPaid);
+            }
+            // Atrasado: meses cuyo periodo ya pasó (anteriores al mes actual real)
+            // y todavía tienen saldo. Excluye condonado y el mes en curso/futuros.
+            if (Date.UTC(data.year, i, 1) < currentMonthStart) {
+              const outstanding =
+                Number(cell.amountDue) -
+                Number(cell.amountPaid) -
+                Number(cell.amountWaived);
+              if (outstanding > 0) arrears += outstanding;
+            }
+          });
+        }
       }
     }
-    const pct = expected > 0 ? Math.round((paid / expected) * 100) : 0;
-    return { expected, paid, balance: expected - paid, pct, units };
-  }, [visibleEntityGroups]);
+    const monthBalance = Math.max(0, monthExpected - monthPaid);
+    const monthPct =
+      monthExpected > 0 ? Math.round((monthPaid / monthExpected) * 100) : 0;
+    return { monthIndex, monthPaid, monthBalance, monthPct, arrears };
+  }, [visibleEntityGroups, data.year]);
+
+  const monthLabel = capitalizeFirst(
+    MONTH_LONG.format(new Date(Date.UTC(2000, dashboard.monthIndex, 1))),
+  );
 
   function navigateYear(delta: number) {
     const target = data.year + delta;
@@ -155,6 +211,12 @@ export function IngresosYearlyView({ data, availableYears }: IngresosYearlyViewP
     url.searchParams.set("year", year);
     window.location.href = url.toString();
   }
+
+  // Índice (0-11) de la columna del mes actual para dibujar el divisor; null si
+  // el año mostrado no es el año en curso (no hay "mes actual" que marcar).
+  const now = new Date();
+  const dividerMonthIndex =
+    data.year === now.getFullYear() ? now.getMonth() : null;
 
   return (
     <div className="space-y-6">
@@ -229,35 +291,40 @@ export function IngresosYearlyView({ data, availableYears }: IngresosYearlyViewP
               ))}
             </SelectContent>
           </Select>
+
+          <Button onClick={() => setBulkOpen(true)} className="w-full sm:w-auto">
+            <Plus className="size-4" />
+            Registrar ingreso
+          </Button>
         </div>
       </div>
 
-      {/* KPI cards */}
+      {/* KPI cards — por mes (mes en curso) + atrasado acumulado al final */}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <KpiCard
-          icon={<TrendingUp className="size-4" />}
-          label={`Esperado ${data.year}`}
-          value={formatMXN(filteredTotals.expected)}
-          accent="text-foreground"
-        />
-        <KpiCard
           icon={<Wallet className="size-4" />}
-          label="Cobrado"
-          value={formatMXN(filteredTotals.paid)}
+          label={`Cobrado · ${monthLabel}`}
+          value={MXN_INT.format(dashboard.monthPaid)}
           accent="text-green-700 dark:text-green-300"
         />
         <KpiCard
-          icon={<AlertTriangle className="size-4" />}
-          label="Por cobrar"
-          value={formatMXN(filteredTotals.balance)}
-          accent="text-destructive"
+          icon={<Clock className="size-4" />}
+          label={`Por cobrar · ${monthLabel}`}
+          value={MXN_INT.format(dashboard.monthBalance)}
+          accent="text-amber-600 dark:text-amber-400"
         />
         <KpiCard
           icon={<Percent className="size-4" />}
-          label="% Cobranza"
-          value={`${filteredTotals.pct}%`}
+          label={`Cobranza · ${monthLabel}`}
+          value={`${dashboard.monthPct}%`}
           accent="text-foreground"
-          progress={filteredTotals.pct}
+          progress={dashboard.monthPct}
+        />
+        <KpiCard
+          icon={<AlertTriangle className="size-4" />}
+          label="Atrasado (meses anteriores)"
+          value={MXN_INT.format(dashboard.arrears)}
+          accent="text-destructive"
         />
       </div>
 
@@ -282,6 +349,7 @@ export function IngresosYearlyView({ data, availableYears }: IngresosYearlyViewP
               onCellClick={setPaymentContext}
               collapsed={collapsedEntities.has(g.code)}
               onToggle={() => toggleEntity(g.code)}
+              dividerMonthIndex={dividerMonthIndex}
             />
           ))
         )}
@@ -294,6 +362,7 @@ export function IngresosYearlyView({ data, availableYears }: IngresosYearlyViewP
         open={paymentContext !== null}
         onOpenChange={(o) => !o && setPaymentContext(null)}
       />
+      <BulkPaymentDialog open={bulkOpen} onOpenChange={setBulkOpen} />
     </div>
   );
 }
@@ -361,7 +430,7 @@ function EntityBreakdown({
             Desglose por razón social
           </p>
           <p className="text-xs text-muted-foreground">
-            Total: <span className="font-semibold tabular-nums text-foreground">{formatMXN(totalExpected)}</span>
+            Total: <span className="font-semibold tabular-nums text-foreground">{MXN_INT.format(totalExpected)}</span>
           </p>
         </div>
         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
@@ -384,7 +453,7 @@ function EntityBreakdown({
                   </span>
                 </div>
                 <p className="mt-2 text-lg font-semibold tabular-nums">
-                  {formatMXN(g.expected)}
+                  {MXN_INT.format(g.expected)}
                 </p>
                 <div className="mt-1 flex items-center justify-between text-[11px] text-muted-foreground">
                   <span>{sharePct}% del total</span>
@@ -415,9 +484,8 @@ function Legend() {
   const items: Array<{ status: MonthlyUnitStatus; label: string }> = [
     { status: "PAID", label: "Pagado" },
     { status: "PARTIAL", label: "Parcial" },
-    { status: "ABONO", label: "Abono" },
-    { status: "PRE_PAGADO", label: "Pre-pagado" },
     { status: "SIN_PAGO", label: "Sin pago" },
+    { status: "FUTURO", label: "No vencido" },
     { status: "VACANT", label: "Vacío" },
   ];
   return (
@@ -447,9 +515,10 @@ interface EntitySectionProps {
   onCellClick: (ctx: RegisterPaymentDialogContext) => void;
   collapsed: boolean;
   onToggle: () => void;
+  dividerMonthIndex: number | null;
 }
 
-function EntitySection({ group, onCellClick, collapsed, onToggle }: EntitySectionProps) {
+function EntitySection({ group, onCellClick, collapsed, onToggle, dividerMonthIndex }: EntitySectionProps) {
   const theme = themeFor(group.code);
   const collected = group.expected > 0 ? Math.round((group.paid / group.expected) * 100) : 0;
 
@@ -487,19 +556,19 @@ function EntitySection({ group, onCellClick, collapsed, onToggle }: EntitySectio
         <div className="flex items-center gap-6 text-xs">
           <div className="text-right">
             <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Esperado</p>
-            <p className="font-semibold tabular-nums">{formatMXN(group.expected)}</p>
+            <p className="font-semibold tabular-nums">{MXN_INT.format(group.expected)}</p>
           </div>
           <div className="text-right">
             <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Cobrado</p>
             <p className="font-semibold tabular-nums text-green-700 dark:text-green-300">
-              {formatMXN(group.paid)}
+              {MXN_INT.format(group.paid)}
               <span className="ml-1 text-muted-foreground">({collected}%)</span>
             </p>
           </div>
           <div className="text-right">
             <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Por cobrar</p>
             <p className="font-semibold tabular-nums text-destructive">
-              {formatMXN(group.expected - group.paid)}
+              {MXN_INT.format(group.expected - group.paid)}
             </p>
           </div>
         </div>
@@ -508,7 +577,12 @@ function EntitySection({ group, onCellClick, collapsed, onToggle }: EntitySectio
       {!collapsed && (
         <div className="space-y-3">
           {group.properties.map((p) => (
-            <PropertyMatrix key={p.propertyId} group={p} onCellClick={onCellClick} />
+            <PropertyMatrix
+              key={p.propertyId}
+              group={p}
+              onCellClick={onCellClick}
+              dividerMonthIndex={dividerMonthIndex}
+            />
           ))}
         </div>
       )}
@@ -542,9 +616,10 @@ function dotColorFor(propertyId: string): string {
 interface PropertyMatrixProps {
   group: YearlyPropertyGroup;
   onCellClick: (ctx: RegisterPaymentDialogContext) => void;
+  dividerMonthIndex: number | null;
 }
 
-function PropertyMatrix({ group, onCellClick }: PropertyMatrixProps) {
+function PropertyMatrix({ group, onCellClick, dividerMonthIndex }: PropertyMatrixProps) {
   const collected =
     Number(group.expectedTotal) > 0
       ? Math.round((Number(group.paidTotal) / Number(group.expectedTotal)) * 100)
@@ -564,13 +639,13 @@ function PropertyMatrix({ group, onCellClick }: PropertyMatrixProps) {
           <div>
             <span className="text-muted-foreground">Esperado: </span>
             <span className="font-semibold tabular-nums">
-              {formatMXN(Number(group.expectedTotal))}
+              {MXN_INT.format(Number(group.expectedTotal))}
             </span>
           </div>
           <div>
             <span className="text-muted-foreground">Cobrado: </span>
             <span className="font-semibold tabular-nums text-green-700 dark:text-green-300">
-              {formatMXN(Number(group.paidTotal))}
+              {MXN_INT.format(Number(group.paidTotal))}
             </span>
             <span className="ml-1 text-muted-foreground">({collected}%)</span>
           </div>
@@ -590,17 +665,23 @@ function PropertyMatrix({ group, onCellClick }: PropertyMatrixProps) {
           </colgroup>
           <thead>
             <tr className="border-b bg-muted/10">
-              <th className="sticky left-0 z-20 border-r border-border bg-card px-3 py-2 text-left font-medium">
+              <th className="sticky left-0 z-20 border-r border-border bg-card px-3 py-2 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
                 Local
               </th>
-              <th className="px-3 py-2 text-left font-medium">Inquilino</th>
-              <th className="px-3 py-2 text-right font-medium text-muted-foreground">Renta</th>
-              {MONTHS_SHORT.map((m) => (
-                <th key={m} className="px-1 py-2 text-center font-medium text-muted-foreground">
+              <th className="px-3 py-2 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Inquilino</th>
+              <th className="px-3 py-2 text-right text-xs font-medium uppercase tracking-wide text-muted-foreground">Renta</th>
+              {MONTHS_SHORT.map((m, i) => (
+                <th
+                  key={m}
+                  className={cn(
+                    "px-1 py-2 text-center text-xs font-medium uppercase tracking-wide text-muted-foreground",
+                    i === dividerMonthIndex && CURRENT_MONTH_DIVIDER,
+                  )}
+                >
                   {m}
                 </th>
               ))}
-              <th className="px-3 py-2 text-right font-medium">Total</th>
+              <th className="px-3 py-2 text-right text-xs font-medium uppercase tracking-wide text-muted-foreground">Total</th>
             </tr>
           </thead>
           <tbody>
@@ -610,6 +691,7 @@ function PropertyMatrix({ group, onCellClick }: PropertyMatrixProps) {
                 row={u}
                 propertyName={group.propertyName}
                 onCellClick={onCellClick}
+                dividerMonthIndex={dividerMonthIndex}
               />
             ))}
             <tr className="border-t bg-muted/20 font-medium">
@@ -634,6 +716,7 @@ function PropertyMatrix({ group, onCellClick }: PropertyMatrixProps) {
                     className={cn(
                       "px-1 py-2 text-center text-[10px] tabular-nums",
                       ok ? "text-green-700 dark:text-green-300" : "text-muted-foreground",
+                      i === dividerMonthIndex && CURRENT_MONTH_DIVIDER,
                     )}
                   >
                     {expected > 0 ? compactMxn(paid) : "—"}
@@ -642,10 +725,10 @@ function PropertyMatrix({ group, onCellClick }: PropertyMatrixProps) {
               })}
               <td className="px-3 py-2 text-right text-xs tabular-nums">
                 <div className="font-semibold text-green-700 dark:text-green-300">
-                  {formatMXN(Number(group.paidTotal))}
+                  {MXN_INT.format(Number(group.paidTotal))}
                 </div>
                 <div className="text-muted-foreground">
-                  de {formatMXN(Number(group.expectedTotal))}
+                  de {MXN_INT.format(Number(group.expectedTotal))}
                 </div>
               </td>
             </tr>
@@ -670,9 +753,10 @@ interface UnitMatrixRowProps {
   row: YearlyUnitRow;
   propertyName: string;
   onCellClick: (ctx: RegisterPaymentDialogContext) => void;
+  dividerMonthIndex: number | null;
 }
 
-function UnitMatrixRow({ row, propertyName, onCellClick }: UnitMatrixRowProps) {
+function UnitMatrixRow({ row, propertyName, onCellClick, dividerMonthIndex }: UnitMatrixRowProps) {
   const monthlyRent = Number(
     row.cells.find((c) => Number(c.amountDue) > 0)?.amountDue ?? 0,
   );
@@ -689,10 +773,13 @@ function UnitMatrixRow({ row, propertyName, onCellClick }: UnitMatrixRowProps) {
         )}
       </td>
       <td className="px-3 py-1.5 text-right text-xs tabular-nums text-muted-foreground">
-        {monthlyRent > 0 ? formatMXN(monthlyRent) : "—"}
+        {monthlyRent > 0 ? MXN_INT.format(monthlyRent) : "—"}
       </td>
       {row.cells.map((cell, i) => (
-        <td key={i} className="px-1 py-1.5">
+        <td
+          key={i}
+          className={cn("px-1 py-1.5", i === dividerMonthIndex && CURRENT_MONTH_DIVIDER)}
+        >
           <MatrixCell
             cell={cell}
             unitCode={row.unitCode}
@@ -704,10 +791,10 @@ function UnitMatrixRow({ row, propertyName, onCellClick }: UnitMatrixRowProps) {
       ))}
       <td className="px-3 py-1.5 text-right text-xs tabular-nums">
         <div className="font-medium text-green-700 dark:text-green-300">
-          {formatMXN(Number(row.paidTotal))}
+          {MXN_INT.format(Number(row.paidTotal))}
         </div>
         <div className="text-muted-foreground">
-          de {formatMXN(Number(row.expectedTotal))}
+          de {MXN_INT.format(Number(row.expectedTotal))}
         </div>
       </td>
     </tr>
@@ -721,9 +808,8 @@ function UnitMatrixRow({ row, propertyName, onCellClick }: UnitMatrixRowProps) {
 const CELL_BG: Record<MonthlyUnitStatus, string> = {
   PAID: "bg-green-500 hover:bg-green-600 dark:bg-green-600 dark:hover:bg-green-500",
   PARTIAL: "bg-amber-400 hover:bg-amber-500 dark:bg-amber-500",
-  ABONO: "bg-sky-300 hover:bg-sky-400 dark:bg-sky-400 dark:hover:bg-sky-300",
-  PRE_PAGADO: "bg-blue-500 hover:bg-blue-600 dark:bg-blue-600",
   SIN_PAGO: "bg-red-500 hover:bg-red-600 dark:bg-red-600",
+  FUTURO: "bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600",
   WAIVED: "bg-blue-300 hover:bg-blue-400 dark:bg-blue-400 dark:hover:bg-blue-300",
   VACANT: "bg-muted hover:bg-muted-foreground/20",
 };
@@ -749,7 +835,6 @@ function MatrixCell({ cell, unitCode, propertyName, lesseeName, onClick }: Matri
         className={cn(
           "relative mx-auto h-6 w-6 rounded transition-colors",
           CELL_BG[cell.status],
-          cell.status === "PRE_PAGADO" && "ring-1 ring-blue-300",
           cell.overdueLevel === 3 && "ring-2 ring-red-700",
           hasWaiver && "ring-2 ring-black",
         )}
@@ -797,24 +882,22 @@ function MatrixCell({ cell, unitCode, propertyName, lesseeName, onClick }: Matri
 }
 
 function buildTooltip(cell: YearlyCell, lesseeName: string | null): string {
-  const period = formatPeriodLong(cell.period);
+  const period = capitalizeFirst(PERIOD_FULL.format(cell.period));
   if (cell.status === "VACANT") {
     return `${period} — Vacío`;
   }
   const head = lesseeName ? `${lesseeName} — ${period}` : period;
   switch (cell.status) {
     case "PAID":
-      return `${head}\nPagado ${formatMXN(Number(cell.amountPaid), 2)}`;
+      return `${head}\nPagado ${MXN.format(Number(cell.amountPaid))}`;
     case "PARTIAL":
-      return `${head}\nParcial: ${formatMXN(Number(cell.amountPaid), 2)} de ${formatMXN(Number(cell.amountDue), 2)}`;
-    case "ABONO":
-      return `${head}\nAbono: ${formatMXN(Number(cell.amountPaid), 2)} (renta ${formatMXN(Number(cell.amountDue), 2)})`;
-    case "PRE_PAGADO":
-      return `${head}\nPre-pagado${cell.prePaidMonths ? ` (+${cell.prePaidMonths} meses)` : ""}`;
+      return `${head}\nParcial: ${MXN.format(Number(cell.amountPaid))} de ${MXN.format(Number(cell.amountDue))}`;
     case "SIN_PAGO":
-      return `${head}\nSin pago — ${formatMXN(Number(cell.amountDue), 2)}${cell.overdueLevel ? ` · Escalón ${cell.overdueLevel}` : ""}`;
+      return `${head}\nSin pago — ${MXN.format(Number(cell.amountDue))}${cell.overdueLevel ? ` · Escalón ${cell.overdueLevel}` : ""}`;
+    case "FUTURO":
+      return `${head}\nNo vencido — ${MXN.format(Number(cell.amountDue))}`;
     case "WAIVED":
-      return `${head}\nCondonado ${formatMXN(Number(cell.amountWaived), 2)}`;
+      return `${head}\nCondonado ${MXN.format(Number(cell.amountWaived))}`;
     default:
       return head;
   }
@@ -841,13 +924,13 @@ function MonthlyTotalsBar({
       <div className="overflow-x-auto">
         <table className="w-full text-xs">
           <thead>
-            <tr className="border-b bg-muted/10 text-muted-foreground">
-              <th className="px-3 py-2 text-left font-medium">Mes</th>
-              <th className="px-3 py-2 text-right font-medium">Esperado</th>
-              <th className="px-3 py-2 text-right font-medium">Cobrado</th>
-              <th className="px-3 py-2 text-left font-medium">% Cobrado</th>
-              <th className="px-3 py-2 text-right font-medium">Pagados</th>
-              <th className="px-3 py-2 text-right font-medium">Sin pago</th>
+            <tr className="border-b bg-muted/10">
+              <th className="px-3 py-2 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Mes</th>
+              <th className="px-3 py-2 text-right text-xs font-medium uppercase tracking-wide text-muted-foreground">Esperado</th>
+              <th className="px-3 py-2 text-right text-xs font-medium uppercase tracking-wide text-muted-foreground">Cobrado</th>
+              <th className="px-3 py-2 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">% Cobrado</th>
+              <th className="px-3 py-2 text-right text-xs font-medium uppercase tracking-wide text-muted-foreground">Pagados</th>
+              <th className="px-3 py-2 text-right text-xs font-medium uppercase tracking-wide text-muted-foreground">Sin pago</th>
             </tr>
           </thead>
           <tbody>
@@ -859,12 +942,12 @@ function MonthlyTotalsBar({
               const fillWidth = expected > 0 ? (paid / expected) * 100 : 0;
               return (
                 <tr key={i} className="border-b last:border-b-0">
-                  <td className="px-3 py-1.5">{formatPeriodLong(t.period)}</td>
+                  <td className="px-3 py-1.5">{capitalizeFirst(PERIOD_FULL.format(t.period))}</td>
                   <td className="px-3 py-1.5 text-right tabular-nums">
-                    {formatMXN(expected)}
+                    {MXN_INT.format(expected)}
                   </td>
                   <td className="px-3 py-1.5 text-right tabular-nums text-green-700 dark:text-green-300">
-                    {formatMXN(paid)}
+                    {MXN_INT.format(paid)}
                   </td>
                   <td className="px-3 py-1.5">
                     <div className="flex items-center gap-2">

@@ -262,12 +262,12 @@ function BudgetLinesSection({
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b text-[10px] uppercase tracking-wider text-muted-foreground">
-              <th className="px-3 py-2 text-left font-medium">Concepto</th>
+              <th className="px-3 py-2 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Concepto</th>
               {showMonths &&
                 MONTH_SHORT.map((m) => (
                   <th key={m} className="px-2 py-2 text-right font-medium">{m}</th>
                 ))}
-              <th className="px-3 py-2 text-right font-medium">Anual</th>
+              <th className="px-3 py-2 text-right text-xs font-medium uppercase tracking-wide text-muted-foreground">Anual</th>
             </tr>
           </thead>
           <tbody>

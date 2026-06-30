@@ -155,6 +155,7 @@ export interface YearlyExpenseRow {
   cells: YearlyExpenseCell[]; // 12
   expectedTotal: number;
   paidTotal: number;
+  isPayroll: boolean;
 }
 
 export interface YearlyExpenseEntityGroup {
@@ -197,10 +198,10 @@ export async function getYearlyExpensesMatrix(
     (_, i) => new Date(Date.UTC(year, i, 1)),
   );
 
-  // Cargamos en paralelo: expenses planos (sólo IDs de FK) + entidades + categorías.
+  // Cargamos en paralelo: expenses planos (sólo IDs de FK) + entidades + categorías + nóminas.
   // Evita el `include` que dispara `IN ($1..$N)` con N = nº de expenses, aunque
   // sólo existan ~4 entidades y ~17 categorías. Resolvemos por map en memoria.
-  const [rows, legalEntities, categories] = await Promise.all([
+  const [rows, legalEntities, categories, payrollRows] = await Promise.all([
     prisma.expense.findMany({
       where: {
         tenantId,
@@ -227,6 +228,17 @@ export async function getYearlyExpensesMatrix(
     prisma.expenseCategory.findMany({
       where: { tenantId, type: { not: "PAYROLL" } },
       select: { id: true, code: true, name: true },
+    }),
+    prisma.payroll.findMany({
+      where: { tenantId, period: { gte: yearStart, lt: yearEnd } },
+      select: {
+        id: true,
+        legalEntityId: true,
+        period: true,
+        type: true,
+        amount: true,
+        description: true,
+      },
     }),
   ]);
   const entityMap = new Map(legalEntities.map((e) => [e.id, e]));
@@ -278,6 +290,7 @@ export async function getYearlyExpensesMatrix(
         })),
         expectedTotal: 0,
         paidTotal: 0,
+        isPayroll: false,
       };
       entity.rows.set(conceptKey, row);
     }
@@ -301,6 +314,67 @@ export async function getYearlyExpensesMatrix(
     cell.amount += amount;
   }
 
+  // Agregar filas de nómina (Payroll) como filas sintéticas con isPayroll=true.
+  // Las celdas con registro muestran PAID; celdas sin registro quedan EMPTY.
+  const PAYROLL_LABELS: Record<string, string> = {
+    DIRECT_PAYROLL: "Nómina directa",
+    STRATEGY_NOMINA: "Nómina estratégica",
+    ADMIN_SERVICE_INVOICE: "Fact. Serv. Adm.",
+    COMMISSION: "Comisión",
+    BONUS: "Bono",
+  };
+
+  for (const p of payrollRows) {
+    const entity_ = entityMap.get(p.legalEntityId);
+    if (!entity_) continue;
+
+    let entity = byEntity.get(entity_.id);
+    if (!entity) {
+      entity = {
+        entityId: entity_.id,
+        entityCode: entity_.code,
+        entityLegalName: entity_.legalName,
+        rows: new Map(),
+      };
+      byEntity.set(entity_.id, entity);
+    }
+
+    const label = PAYROLL_LABELS[p.type] ?? p.type;
+    const desc = p.description ?? label;
+    const conceptKey = `payroll::${p.type}::${desc}`;
+
+    let row = entity.rows.get(conceptKey);
+    if (!row) {
+      row = {
+        conceptKey,
+        description: desc,
+        categoryId: `payroll::${p.type}`,
+        categoryCode: p.type,
+        categoryName: label,
+        cells: periods.map((period) => ({
+          expenseId: null,
+          amount: 0,
+          isPaid: false,
+          isNotRequired: false,
+          status: "EMPTY" as MonthlyExpenseStatus,
+          period,
+        })),
+        expectedTotal: 0,
+        paidTotal: 0,
+        isPayroll: true,
+      };
+      entity.rows.set(conceptKey, row);
+    }
+
+    const monthIdx = p.period.getUTCMonth();
+    const cell = row.cells[monthIdx]!;
+    const amount = p.amount.toNumber();
+    cell.amount += amount;
+    cell.status = "PAID";
+    row.expectedTotal += amount;
+    row.paidTotal += amount;
+  }
+
   // Pasar a calcular el status final de cada celda usando la fecha de hoy
   // (UTC) como cutoff: meses futuros → VACIO, mes actual o pasado → PENDING.
   // Los totales se computan aquí también: NOT_REQUIRED no suma a expected.
@@ -311,6 +385,7 @@ export async function getYearlyExpensesMatrix(
 
   for (const entity of byEntity.values()) {
     for (const row of entity.rows.values()) {
+      if (row.isPayroll) continue; // status y totales ya se calcularon al construir la fila
       for (const cell of row.cells) {
         if (cell.expenseId === null) {
           cell.status = "EMPTY";
@@ -339,6 +414,7 @@ export async function getYearlyExpensesMatrix(
   const entities: YearlyExpenseEntityGroup[] = Array.from(byEntity.values())
     .map((e) => {
       const rowList = Array.from(e.rows.values()).sort((a, b) => {
+        if (a.isPayroll !== b.isPayroll) return a.isPayroll ? 1 : -1;
         if (a.categoryName !== b.categoryName) {
           return a.categoryName.localeCompare(b.categoryName);
         }

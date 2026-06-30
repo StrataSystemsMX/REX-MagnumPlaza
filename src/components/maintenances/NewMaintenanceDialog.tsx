@@ -1,5 +1,6 @@
 "use client";
 
+import { Plus } from "lucide-react";
 import { useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm, type Resolver } from "react-hook-form";
@@ -30,6 +31,7 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { actionCreateMaintenance } from "@/lib/services/maintenances";
+import { CharacterCount } from "@/components/ui/character-count";
 import { createMaintenanceSchema, type CreateMaintenanceInput } from "@/lib/validators/maintenance";
 import type { PropertyForMaintenance } from "@/lib/services/maintenances-queries";
 import { isPlaza } from "@/lib/i18n/unit-label";
@@ -91,7 +93,8 @@ export function NewMaintenanceDialog({ properties }: Props) {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger render={<Button />}>
-        Nuevo mantenimiento
+        <Plus className="size-4" />
+        Registrar mantenimiento
       </DialogTrigger>
       <DialogContent className="max-w-lg">
         <DialogHeader>
@@ -106,8 +109,9 @@ export function NewMaintenanceDialog({ properties }: Props) {
                 <FormItem>
                   <FormLabel>Descripción del trabajo</FormLabel>
                   <FormControl>
-                    <Input placeholder="Ej. Reparación de techo — local L3" {...field} />
+                    <Input placeholder="Ej. Reparación de techo — local L3" {...field} maxLength={80} />
                   </FormControl>
+                  <CharacterCount current={field.value?.length ?? 0} max={80} />
                   <FormMessage />
                 </FormItem>
               )}
@@ -288,8 +292,9 @@ export function NewMaintenanceDialog({ properties }: Props) {
                 <FormItem>
                   <FormLabel>Proveedor / Contratista (opcional)</FormLabel>
                   <FormControl>
-                    <Input placeholder="Nombre del proveedor" {...field} value={field.value ?? ""} />
+                    <Input placeholder="Nombre del proveedor" {...field} value={field.value ?? ""} maxLength={100} />
                   </FormControl>
+                  <CharacterCount current={(field.value ?? "").length} max={100} />
                   <FormMessage />
                 </FormItem>
               )}
@@ -302,8 +307,9 @@ export function NewMaintenanceDialog({ properties }: Props) {
                 <FormItem>
                   <FormLabel>Notas adicionales</FormLabel>
                   <FormControl>
-                    <Textarea rows={2} placeholder="Detalles, observaciones..." {...field} value={field.value ?? ""} />
+                    <Textarea rows={2} placeholder="Detalles, observaciones..." {...field} value={field.value ?? ""} maxLength={300} />
                   </FormControl>
+                  <CharacterCount current={(field.value ?? "").length} max={300} />
                   <FormMessage />
                 </FormItem>
               )}

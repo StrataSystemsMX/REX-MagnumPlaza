@@ -33,6 +33,7 @@ import {
 } from "@/lib/services/properties";
 import type { LegalEntityOption } from "@/lib/services/properties-queries";
 import type { PropertyStatus, PropertyType } from "@/generated/prisma/enums";
+import { CharacterCount } from "@/components/ui/character-count";
 
 const PROPERTY_TYPES: ReadonlyArray<PropertyType> = [
   "PLAZA_COMERCIAL",
@@ -162,8 +163,9 @@ export function PropertyForm({
               <FormItem className="md:col-span-2">
                 <FormLabel>Nombre</FormLabel>
                 <FormControl>
-                  <Input {...field} />
+                  <Input {...field} maxLength={50} />
                 </FormControl>
+                <CharacterCount current={field.value?.length ?? 0} max={50} />
                 <FormMessage />
               </FormItem>
             )}
@@ -204,8 +206,9 @@ export function PropertyForm({
               <FormItem>
                 <FormLabel>Clave catastral</FormLabel>
                 <FormControl>
-                  <Input {...field} value={field.value ?? ""} />
+                  <Input {...field} value={field.value ?? ""} maxLength={30} />
                 </FormControl>
+                <CharacterCount current={(field.value ?? "").length} max={30} />
                 <FormMessage />
               </FormItem>
             )}
@@ -217,8 +220,9 @@ export function PropertyForm({
               <FormItem className="md:col-span-2">
                 <FormLabel>Dirección</FormLabel>
                 <FormControl>
-                  <Input {...field} />
+                  <Input {...field} maxLength={120} />
                 </FormControl>
+                <CharacterCount current={field.value?.length ?? 0} max={120} />
                 <FormMessage />
               </FormItem>
             )}
@@ -422,8 +426,9 @@ export function PropertyForm({
               <FormItem className="md:col-span-2">
                 <FormLabel>Notas</FormLabel>
                 <FormControl>
-                  <Textarea rows={3} {...field} value={field.value ?? ""} />
+                  <Textarea rows={3} {...field} value={field.value ?? ""} maxLength={1000} />
                 </FormControl>
+                <CharacterCount current={(field.value ?? "").length} max={1000} />
                 <FormMessage />
               </FormItem>
             )}

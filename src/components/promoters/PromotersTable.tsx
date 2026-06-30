@@ -116,7 +116,7 @@ function LinkDialog({ promoterId, units }: { promoterId: string; units: UnitForL
                 name="unitId"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Local o inmueble disponible</FormLabel>
+                    <FormLabel>Local o inmueble</FormLabel>
                     <Select onValueChange={field.onChange} value={field.value} items={unitLabels}>
                       <FormControl>
                         <SelectTrigger className="w-full">
@@ -223,7 +223,7 @@ export function PromotersTable({ promoters, units, canManage }: Props) {
           <p className="text-muted-foreground">No hay promotores registrados.</p>
           {canManage && (
             <p className="text-sm text-muted-foreground">
-              Usa el botón &ldquo;Nuevo promotor&rdquo; para agregar el primero.
+              Usa el botón &ldquo;Registrar promotor&rdquo; para agregar el primero.
             </p>
           )}
         </CardContent>

@@ -12,12 +12,11 @@ import {
   Receipt,
   Sparkles,
   Trash2,
-  User,
 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { toast } from "sonner";
 import {
   AlertDialog,
@@ -40,35 +39,26 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { PropertyForm } from "@/components/forms/PropertyForm";
 import { PropertyPhotoGallery } from "@/components/properties/PropertyPhotoGallery";
 import { usePropertiesViewMode } from "@/hooks/use-properties-view-mode";
 import { propertyTypeLabel } from "@/lib/i18n/enums";
 import type { PropertiesViewMode } from "@/lib/properties-view-mode";
 import { actionDeleteProperty } from "@/lib/services/properties";
+import { actionCountSubjectDependents } from "@/lib/services/audit-actions";
+import { DependentsWarning } from "@/components/historial/DangerConfirmDialog";
+import type { DependentCounts } from "@/lib/services/audit-undo";
+import { actionEnsureInmuebleUnit } from "@/lib/services/units";
 import type {
   LegalEntityOption,
   PropertyListItem,
 } from "@/lib/services/properties-queries";
-import type { PropertyType } from "@/generated/prisma/enums";
-import { formatMXN } from "@/lib/format-currency";
 
-const INMUEBLE_TYPES: ReadonlyArray<PropertyType> = [
-  "TERRENO_RENTADO",
-  "EDIFICIO",
-  "OFICINA",
-  "CASA",
-  "BODEGA",
-  "ESPECTACULAR",
-  "OTRO",
-];
+const MXN = new Intl.NumberFormat("es-MX", {
+  style: "currency",
+  currency: "MXN",
+  maximumFractionDigits: 0,
+});
 
 interface InmueblesTableProps {
   inmuebles: ReadonlyArray<PropertyListItem>;
@@ -87,8 +77,8 @@ export function InmueblesTable({
   const [editTarget, setEditTarget] = useState<PropertyListItem | null>(null);
   const [photosTarget, setPhotosTarget] = useState<PropertyListItem | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<PropertyListItem | null>(null);
+  const [deleteDeps, setDeleteDeps] = useState<DependentCounts | null>(null);
   const [view, setView] = usePropertiesViewMode(initialView);
-  const [typeFilter, setTypeFilter] = useState<string>("all");
   const [pending, startTransition] = useTransition();
 
   // Re-sincronizar los targets abiertos cuando llega data fresca del servidor
@@ -104,31 +94,26 @@ export function InmueblesTable({
     }
   }, [inmuebles, photosTarget, detailTarget]);
 
-  const presentTypes = useMemo(() => {
-    const set = new Set<PropertyType>();
-    for (const p of inmuebles) set.add(p.type);
-    return set;
-  }, [inmuebles]);
+  // Al abrir el diálogo de borrado, cuenta los dependientes para el aviso.
+  useEffect(() => {
+    if (!deleteTarget) {
+      setDeleteDeps(null);
+      return;
+    }
+    let active = true;
+    actionCountSubjectDependents("Property", deleteTarget.id)
+      .then((d) => {
+        if (active) setDeleteDeps(d);
+      })
+      .catch(() => {
+        if (active) setDeleteDeps(null);
+      });
+    return () => {
+      active = false;
+    };
+  }, [deleteTarget]);
 
-  const typeItems = useMemo<Record<string, string>>(
-    () => ({
-      all: "Todos los tipos",
-      ...Object.fromEntries(
-        INMUEBLE_TYPES.filter((t) => presentTypes.has(t)).map((t) => [
-          t,
-          propertyTypeLabel(t),
-        ]),
-      ),
-    }),
-    [presentTypes],
-  );
-
-  const filtered = useMemo(() => {
-    return inmuebles.filter((p) => {
-      if (typeFilter !== "all" && p.type !== typeFilter) return false;
-      return true;
-    });
-  }, [inmuebles, typeFilter]);
+  const filtered = inmuebles;
 
   function confirmDelete() {
     if (!deleteTarget) return;
@@ -150,23 +135,6 @@ export function InmueblesTable({
     <>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-2">
-          <Select
-            value={typeFilter}
-            onValueChange={(v) => setTypeFilter(v ?? "all")}
-            items={typeItems}
-          >
-            <SelectTrigger className="w-48">
-              <SelectValue placeholder="Tipo" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todos los tipos</SelectItem>
-              {INMUEBLE_TYPES.filter((t) => presentTypes.has(t)).map((t) => (
-                <SelectItem key={t} value={t}>
-                  {propertyTypeLabel(t)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
           <div className="flex items-center rounded-lg border bg-background p-0.5">
             <Button
               variant={view === "cards" ? "secondary" : "ghost"}
@@ -192,11 +160,11 @@ export function InmueblesTable({
         <Dialog open={createOpen} onOpenChange={setCreateOpen}>
           <DialogTrigger render={<Button />}>
             <Plus className="size-4" />
-            Nuevo Inmueble
+            Registrar inmueble
           </DialogTrigger>
           <DialogContent className="max-w-2xl">
             <DialogHeader>
-              <DialogTitle>Nuevo inmueble</DialogTitle>
+              <DialogTitle>Registrar inmueble</DialogTitle>
               <DialogDescription>
                 Captura los datos del inmueble. Si tiene un local rentable, lo agregas después en el detalle.
               </DialogDescription>
@@ -348,6 +316,7 @@ export function InmueblesTable({
               históricos se conservan; podrás restaurarlo después.
             </AlertDialogDescription>
           </AlertDialogHeader>
+          {deleteDeps && <DependentsWarning dependents={deleteDeps} />}
           <AlertDialogFooter>
             <AlertDialogCancel disabled={pending}>Cancelar</AlertDialogCancel>
             <AlertDialogAction
@@ -367,6 +336,7 @@ export function InmueblesTable({
 }
 
 interface InmuebleSnapshot {
+  unitId: string | null;
   contractId: string | null;
   lesseeId: string | null;
   lesseeName: string | null;
@@ -379,6 +349,7 @@ function inmuebleSnapshot(p: PropertyListItem): InmuebleSnapshot {
   const unit = p.units.find((u) => u.isActive && u.contracts[0]) ?? p.units.find((u) => u.isActive);
   const contract = unit?.contracts[0] ?? null;
   return {
+    unitId: unit?.id ?? null,
     contractId: contract?.id ?? null,
     lesseeId: contract?.lessee.id ?? null,
     lesseeName: contract?.lessee.legalName ?? null,
@@ -394,11 +365,24 @@ function InmuebleCard({
   inmueble: PropertyListItem;
   onDetail: () => void;
 }) {
+  const router = useRouter();
+  const [assigning, startAssign] = useTransition();
   const { coverPhotoUrl, name, address, type, ownerEntity, managerEntity, status } =
     inmueble;
   const isBlocked = status === "BLOQUEADO";
   const snap = inmuebleSnapshot(inmueble);
   const isAvailable = !isBlocked && snap.lesseeName === null;
+
+  function handleAsignarContrato() {
+    startAssign(async () => {
+      try {
+        const unitId = await actionEnsureInmuebleUnit(inmueble.id);
+        router.push(`/contracts?nuevo=1&unitId=${unitId}`);
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "Error al preparar el contrato.");
+      }
+    });
+  }
 
   return (
     <Card
@@ -503,19 +487,19 @@ function InmuebleCard({
               <p className="truncate font-medium">{snap.lesseeName}</p>
               {snap.monthly !== null ? (
                 <p className="tabular-nums text-sm">
-                  {formatMXN(snap.monthly)}
+                  {MXN.format(snap.monthly)}
                   <span className="text-xs text-muted-foreground"> / mes</span>
                 </p>
               ) : null}
-              {snap.lesseeId ? (
+              {snap.contractId ? (
                 <Button
                   variant="outline"
                   size="sm"
                   className="w-full"
-                  render={<Link href={`/lessees/${snap.lesseeId}`} />}
+                  render={<Link href={`/contracts/${snap.contractId}`} />}
                 >
-                  <User className="size-4" />
-                  Ver inquilino
+                  <FileText className="size-4" />
+                  Ver contrato
                 </Button>
               ) : null}
             </>
@@ -532,7 +516,7 @@ function InmuebleCard({
               </div>
               {snap.estimatedRent !== null ? (
                 <p className="tabular-nums text-sm">
-                  {formatMXN(snap.estimatedRent)}
+                  {MXN.format(snap.estimatedRent)}
                   <span className="text-xs text-muted-foreground"> / mes estimado</span>
                 </p>
               ) : (
@@ -543,11 +527,12 @@ function InmuebleCard({
               <Button
                 variant="outline"
                 size="sm"
-                onClick={onDetail}
+                disabled={assigning}
+                onClick={handleAsignarContrato}
                 className="w-full border-emerald-200 text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800 dark:border-emerald-900 dark:text-emerald-400 dark:hover:bg-emerald-950/40"
               >
                 <Plus className="size-4" />
-                Asignar inquilino
+                {assigning ? "Preparando..." : "Asignar contrato"}
               </Button>
             </>
           )}
@@ -559,7 +544,7 @@ function InmuebleCard({
 }
 
 const INMUEBLE_GRID_COLS =
-  "minmax(0, 2fr) minmax(0, 0.9fr) minmax(0, 0.8fr) minmax(0, 0.8fr) minmax(0, 1.3fr) minmax(0, 1fr)";
+  "minmax(150px, 2fr) minmax(100px, 0.9fr) minmax(55px, 0.8fr) minmax(55px, 0.8fr) minmax(120px, 1.3fr) minmax(80px, 1fr)";
 
 function InmueblesTableView({
   inmuebles,
@@ -570,7 +555,8 @@ function InmueblesTableView({
 }) {
   return (
     <div className="overflow-hidden rounded-lg border bg-card shadow-sm">
-      <div role="table" aria-label="Inmuebles">
+      <div className="overflow-x-auto">
+      <div role="table" aria-label="Inmuebles" className="min-w-[560px]">
         <div
           role="row"
           className="grid items-center border-b bg-muted/30 text-xs font-medium uppercase text-muted-foreground"
@@ -622,7 +608,7 @@ function InmueblesTableView({
                   </p>
                 ) : null}
               </div>
-              <div role="cell" className="flex justify-center px-3 py-2.5">
+              <div role="cell" className="overflow-hidden flex justify-center px-3 py-2.5">
                 <Badge variant="secondary">{propertyTypeLabel(p.type)}</Badge>
               </div>
               <div role="cell" className="truncate px-3 py-2.5">
@@ -635,9 +621,9 @@ function InmueblesTableView({
                 {isBlocked ? (
                   <span className="text-muted-foreground">—</span>
                 ) : snap.lesseeName ? (
-                  snap.lesseeId ? (
+                  snap.contractId ? (
                     <Link
-                      href={`/lessees/${snap.lesseeId}`}
+                      href={`/contracts/${snap.contractId}`}
                       onClick={(e) => e.stopPropagation()}
                       className="hover:underline"
                     >
@@ -647,13 +633,14 @@ function InmueblesTableView({
                     snap.lesseeName
                   )
                 ) : (
-                  <Badge
-                    variant="outline"
-                    className="border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-400"
+                  <Link
+                    href={`/contracts?nuevo=1${snap.unitId ? `&unitId=${snap.unitId}` : ""}`}
+                    onClick={(e) => e.stopPropagation()}
+                    className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700 hover:underline dark:text-emerald-400"
                   >
-                    <CircleDot className="size-3" />
-                    Disponible
-                  </Badge>
+                    <Plus className="size-3" />
+                    Asignar contrato
+                  </Link>
                 )}
               </div>
               <div
@@ -663,10 +650,10 @@ function InmueblesTableView({
                 {isBlocked ? (
                   <span className="text-muted-foreground">—</span>
                 ) : snap.monthly !== null ? (
-                  formatMXN(snap.monthly)
+                  MXN.format(snap.monthly)
                 ) : snap.estimatedRent !== null ? (
                   <span className="text-muted-foreground">
-                    ~{formatMXN(snap.estimatedRent)}
+                    ~{MXN.format(snap.estimatedRent)}
                   </span>
                 ) : (
                   "—"
@@ -675,6 +662,7 @@ function InmueblesTableView({
             </div>
           );
         })}
+      </div>
       </div>
     </div>
   );
@@ -806,13 +794,13 @@ function InmuebleDetailDialog({
                 {!isBlocked && snap.monthly !== null ? (
                   <InmuebleDetailField
                     label="Renta mensual"
-                    value={formatMXN(snap.monthly)}
+                    value={MXN.format(snap.monthly)}
                     emphasis
                   />
                 ) : !isBlocked && snap.estimatedRent !== null ? (
                   <InmuebleDetailField
                     label="Renta estimada"
-                    value={formatMXN(snap.estimatedRent)}
+                    value={MXN.format(snap.estimatedRent)}
                   />
                 ) : null}
               </div>
@@ -826,9 +814,9 @@ function InmuebleDetailDialog({
                     {snap.lesseeName ? (
                       <div className="flex items-center justify-between gap-2">
                         <span className="text-muted-foreground">Nombre</span>
-                        {snap.lesseeId ? (
+                        {snap.contractId ? (
                           <Link
-                            href={`/lessees/${snap.lesseeId}`}
+                            href={`/contracts/${snap.contractId}`}
                             className="font-medium hover:underline"
                           >
                             {snap.lesseeName}
@@ -878,17 +866,6 @@ function InmuebleDetailDialog({
                     Ver contrato
                   </Button>
                 ) : null}
-                {snap.lesseeId ? (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="w-full"
-                    render={<Link href={`/lessees/${snap.lesseeId}`} />}
-                  >
-                    <User className="size-4" />
-                    Ver inquilino
-                  </Button>
-                ) : null}
                 <Button
                   variant="outline"
                   size="sm"
@@ -903,6 +880,7 @@ function InmuebleDetailDialog({
           </>
         ) : null}
       </DialogContent>
+
     </Dialog>
   );
 }

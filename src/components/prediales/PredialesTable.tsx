@@ -311,62 +311,56 @@ export function PredialesTable({
   return (
     <>
       {/* Filters + create */}
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div className="flex flex-wrap items-end gap-3">
-          <FilterField label="Año">
-            <Select
-              value={String(selectedYear)}
-              onValueChange={(v) => v && setYearParam(v)}
-              items={yearItems}
-            >
-              <SelectTrigger className="w-28">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {yearsAvailable.map((y) => (
-                  <SelectItem key={y} value={String(y)}>
-                    {y}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </FilterField>
-          <FilterField label="Dueña">
-            <Select
-              value={ownerFilter}
-              onValueChange={(v) => v && setOwnerFilter(v)}
-              items={ownerItems}
-            >
-              <SelectTrigger className="w-40">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {Object.entries(ownerItems).map(([value, label]) => (
-                  <SelectItem key={value} value={value}>
-                    {label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </FilterField>
-          <FilterField label="Estado">
-            <Select
-              value={statusFilter}
-              onValueChange={(v) => v && setStatusFilter(v as StatusFilter)}
-              items={STATUS_FILTER_ITEMS}
-            >
-              <SelectTrigger className="w-44">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {Object.entries(STATUS_FILTER_ITEMS).map(([value, label]) => (
-                  <SelectItem key={value} value={value}>
-                    {label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </FilterField>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <Select
+            value={String(selectedYear)}
+            onValueChange={(v) => v && setYearParam(v)}
+            items={yearItems}
+          >
+            <SelectTrigger className="w-28">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {yearsAvailable.map((y) => (
+                <SelectItem key={y} value={String(y)}>
+                  {y}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select
+            value={ownerFilter}
+            onValueChange={(v) => v && setOwnerFilter(v)}
+            items={ownerItems}
+          >
+            <SelectTrigger className="w-40">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {Object.entries(ownerItems).map(([value, label]) => (
+                <SelectItem key={value} value={value}>
+                  {label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select
+            value={statusFilter}
+            onValueChange={(v) => v && setStatusFilter(v as StatusFilter)}
+            items={STATUS_FILTER_ITEMS}
+          >
+            <SelectTrigger className="w-44">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {Object.entries(STATUS_FILTER_ITEMS).map(([value, label]) => (
+                <SelectItem key={value} value={value}>
+                  {label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
         {canCreate ? (
           <Button
@@ -376,7 +370,7 @@ export function PredialesTable({
             }}
           >
             <Plus className="size-4" />
-            Nuevo predial
+            Registrar predial
           </Button>
         ) : null}
       </div>
@@ -533,7 +527,7 @@ export function PredialesTable({
 // owner sections. As long as every section renders rows of identical container
 // width, the columns will land at the same X position on the page.
 const PREDIAL_GRID_COLS =
-  "minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.15fr) minmax(0, 0.85fr) 40px";
+  "minmax(140px, 2fr) minmax(90px, 1fr) minmax(70px, 1fr) minmax(80px, 1fr) minmax(100px, 1.15fr) minmax(80px, 0.85fr) 40px";
 
 interface RowHandlers {
   canUpdate: boolean;
@@ -619,10 +613,11 @@ function OwnerSection({
       </button>
 
       {expanded ? (
+        <div className="overflow-x-auto">
         <div
           role="table"
           aria-label={`Prediales ${group.code}`}
-          className="border-t"
+          className="min-w-[600px] border-t"
         >
           <div
             role="row"
@@ -655,6 +650,7 @@ function OwnerSection({
           {group.items.map((p) => (
             <PredialRow key={p.id} payment={p} {...handlers} />
           ))}
+        </div>
         </div>
       ) : null}
     </div>
@@ -699,7 +695,7 @@ function PredialRow({
       >
         {payment.paymentDate ? formatDate(payment.paymentDate) : "—"}
       </div>
-      <div role="cell" className="flex justify-center px-3 py-2.5">
+      <div role="cell" className="overflow-hidden flex justify-center px-3 py-2.5">
         {statusBadge(payment.status)}
       </div>
       <div role="cell" className="flex justify-end pr-1">
@@ -740,21 +736,6 @@ function PredialRow({
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
-    </div>
-  );
-}
-
-function FilterField({
-  label,
-  children,
-}: {
-  label: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="flex flex-col gap-1">
-      <span className="text-xs uppercase text-muted-foreground">{label}</span>
-      {children}
     </div>
   );
 }

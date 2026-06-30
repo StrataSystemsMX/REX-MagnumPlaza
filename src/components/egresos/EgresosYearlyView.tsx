@@ -255,7 +255,7 @@ export function EgresosYearlyView({
           {canCreate ? (
             <Button onClick={() => setFormMode("create")} className="w-full sm:w-auto">
               <Plus className="size-4" />
-              Nuevo egreso
+              Registrar egreso
             </Button>
           ) : null}
         </div>
@@ -626,21 +626,21 @@ function ConceptMatrix({ group, canUpdate, onCellClick }: ConceptMatrixProps) {
           </colgroup>
           <thead>
             <tr className="border-b bg-muted/10">
-              <th className="sticky left-0 z-20 border-r border-border bg-card px-3 py-2 text-left font-medium">
+              <th className="sticky left-0 z-20 border-r border-border bg-card px-3 py-2 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
                 Concepto
               </th>
-              <th className="px-3 py-2 text-left font-medium text-muted-foreground">
+              <th className="px-3 py-2 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
                 Categoría
               </th>
               {MONTHS_SHORT.map((m) => (
                 <th
                   key={m}
-                  className="px-1 py-2 text-center font-medium text-muted-foreground"
+                  className="px-1 py-2 text-center text-xs font-medium uppercase tracking-wide text-muted-foreground"
                 >
                   {m}
                 </th>
               ))}
-              <th className="px-3 py-2 text-right font-medium">Total</th>
+              <th className="px-3 py-2 text-right text-xs font-medium uppercase tracking-wide text-muted-foreground">Total</th>
             </tr>
           </thead>
           <tbody>
@@ -727,7 +727,14 @@ function ConceptRow({ entity, row, canUpdate, onCellClick }: ConceptRowProps) {
         </div>
       </td>
       <td className="px-3 py-1.5 text-xs text-muted-foreground">
-        {row.categoryName}
+        <span className="flex items-center gap-1.5">
+          {row.categoryName}
+          {row.isPayroll && (
+            <span className="rounded bg-violet-100 px-1 py-0.5 text-[9px] font-semibold text-violet-700 dark:bg-violet-900/40 dark:text-violet-300">
+              Nómina
+            </span>
+          )}
+        </span>
       </td>
       {row.cells.map((cell, i) => (
         <td key={i} className="px-1 py-1.5">
@@ -870,13 +877,13 @@ function MonthlyTotalsBar({
       <div className="overflow-x-auto">
         <table className="w-full text-xs">
           <thead>
-            <tr className="border-b bg-muted/10 text-muted-foreground">
-              <th className="px-3 py-2 text-left font-medium">Mes</th>
-              <th className="px-3 py-2 text-right font-medium">Estimado</th>
-              <th className="px-3 py-2 text-right font-medium">Pagado</th>
-              <th className="px-3 py-2 text-left font-medium">% Pagado</th>
-              <th className="px-3 py-2 text-right font-medium">Pagados</th>
-              <th className="px-3 py-2 text-right font-medium">Pendientes</th>
+            <tr className="border-b bg-muted/10">
+              <th className="px-3 py-2 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Mes</th>
+              <th className="px-3 py-2 text-right text-xs font-medium uppercase tracking-wide text-muted-foreground">Estimado</th>
+              <th className="px-3 py-2 text-right text-xs font-medium uppercase tracking-wide text-muted-foreground">Pagado</th>
+              <th className="px-3 py-2 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">% Pagado</th>
+              <th className="px-3 py-2 text-right text-xs font-medium uppercase tracking-wide text-muted-foreground">Pagados</th>
+              <th className="px-3 py-2 text-right text-xs font-medium uppercase tracking-wide text-muted-foreground">Pendientes</th>
             </tr>
           </thead>
           <tbody>

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { AlertCircle, AlertTriangle, BarChart2, Clock, TrendingDown, TrendingUp } from "lucide-react";
+import { AlertCircle, AlertTriangle, BarChart2, TrendingDown, TrendingUp } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { FinancialHistoryChart } from "@/components/dashboard/charts";
 import { LegalEntitySummaryTable } from "@/components/dashboard/LegalEntitySummaryTable";
@@ -10,7 +10,19 @@ import { requireAuth } from "@/lib/auth/get-session";
 import { getUserRoleCodes } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/prisma/client";
 import { timed } from "@/lib/perf/timed";
-import { formatMXN, formatPercent } from "@/lib/format-currency";
+
+// ─── Formatters ──────────────────────────────────────────────────────────────
+
+const MXN = new Intl.NumberFormat("es-MX", {
+  style: "currency",
+  currency: "MXN",
+  maximumFractionDigits: 0,
+});
+const PCT = new Intl.NumberFormat("es-MX", {
+  style: "percent",
+  minimumFractionDigits: 1,
+  maximumFractionDigits: 1,
+});
 
 // ─── Constantes ──────────────────────────────────────────────────────────────
 
@@ -99,7 +111,6 @@ export default async function DashboardPage({ searchParams }: PageProps) {
   const [
     ventas,
     egresos,
-    cxcAgg,
     propertiesWithUnits,
     overdueRentsRaw,
     paymentsDetail,
@@ -112,19 +123,16 @@ export default async function DashboardPage({ searchParams }: PageProps) {
       where: { tenantId: dbUser.tenantId, paymentDate: { gte: periodStart, lt: periodEnd }, ...paymentLeFilter },
       _sum: { amount: true },
     })),
+    // Sólo egresos ya pagados: "Ventas" cuenta dinero efectivamente cobrado
+    // (Payment), así que "Costo de Operación" debe contar dinero efectivamente
+    // pagado para que Utilidad/Rentabilidad comparen periodos equivalentes.
+    // De lo contrario, en modo anual se compara el cobrado a la fecha contra
+    // el presupuesto completo de los 12 meses (incluyendo meses futuros aún
+    // no pagados), lo que arroja una rentabilidad artificialmente negativa.
     timed("dashboard:egresos.aggregate", () => prisma.expense.aggregate({
-      where: { tenantId: dbUser.tenantId, expenseDate: { gte: periodStart, lt: periodEnd }, ...leFilter },
+      where: { tenantId: dbUser.tenantId, expenseDate: { gte: periodStart, lt: periodEnd }, isPaid: true, ...leFilter },
       _sum: { amount: true },
     })),
-    timed("dashboard:cxc.aggregate", () => prisma.rent.aggregate({
-      where: {
-        tenantId: dbUser.tenantId,
-        status: { in: ["DUE", "PARTIAL", "OVERDUE_1M", "OVERDUE_2M", "OVERDUE_3M"] },
-        ...leFilter,
-      },
-      _sum: { amountDue: true, amountPaid: true, amountWaived: true },
-    })),
-
     // Semáforo de locales — filtrado por managerEntityId
     timed("dashboard:propertiesWithUnits", () => prisma.property.findMany({
       where: { tenantId: dbUser.tenantId, isActive: true, ...propLeFilter },
@@ -167,7 +175,6 @@ export default async function DashboardPage({ searchParams }: PageProps) {
       select: {
         amountDue: true,
         amountPaid: true,
-        amountWaived: true,
         status: true,
         contract: { select: { lessee: { select: { id: true, legalName: true } } } },
       },
@@ -187,9 +194,12 @@ export default async function DashboardPage({ searchParams }: PageProps) {
       },
     })),
 
-    // Detalle de egresos para resumen por LE y egresos por tipo (sin filtro de LE)
+    // Detalle de egresos para resumen por LE y egresos por tipo (sin filtro de LE).
+    // Filtramos por isPaid para que coincida con la base "cobrado/pagado real"
+    // del KPI de rentabilidad (ver egresos.aggregate) y no mezcle el gasto ya
+    // erogado con el presupuesto de meses futuros aún no pagados.
     timed("dashboard:expensesDetail", () => prisma.expense.findMany({
-      where: { tenantId: dbUser.tenantId, expenseDate: { gte: periodStart, lt: periodEnd } },
+      where: { tenantId: dbUser.tenantId, expenseDate: { gte: periodStart, lt: periodEnd }, isPaid: true },
       select: {
         amount: true,
         legalEntityId: true,
@@ -255,8 +265,6 @@ export default async function DashboardPage({ searchParams }: PageProps) {
   const egresosTotal = Number(egresos._sum.amount  ?? 0);
   const utilidad     = ventasTotal - egresosTotal;
   const rentabilidad = ventasTotal > 0 ? utilidad / ventasTotal : 0;
-  const cxc          = Number(cxcAgg._sum.amountDue ?? 0) - Number(cxcAgg._sum.amountPaid ?? 0) - Number(cxcAgg._sum.amountWaived ?? 0);
-
   const periodLabel = mode === "anual"
     ? `Ene – Dic ${currentYear}`
     : `${MONTHS[selectedMonth] ?? ""} ${currentYear}`;
@@ -343,7 +351,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
   const overdueMap = new Map<string, { legalName: string; total: number; count: number; worstStatus: string }>();
   for (const r of overdueRentsRaw) {
     const l  = r.contract.lessee;
-    const bal = Number(r.amountDue) - Number(r.amountPaid) - Number(r.amountWaived);
+    const bal = Number(r.amountDue) - Number(r.amountPaid);
     const cur = overdueMap.get(l.id);
     if (cur) {
       cur.total += bal;
@@ -410,32 +418,25 @@ export default async function DashboardPage({ searchParams }: PageProps) {
       </div>
 
       {/* ── KPI Cards ── */}
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-3">
         <MetricCard
           label="Ventas con IVA"
-          value={<span className="tabular-nums">{formatMXN(ventasTotal)}</span>}
+          value={<span className="tabular-nums">{MXN.format(ventasTotal)}</span>}
           subValue="Ingresos cobrados"
           icon={TrendingUp}
         />
         <MetricCard
           label="Costo de Operación"
-          value={<span className="tabular-nums">{formatMXN(egresosTotal)}</span>}
-          subValue="Egresos registrados"
+          value={<span className="tabular-nums">{MXN.format(egresosTotal)}</span>}
+          subValue="Egresos pagados"
           icon={TrendingDown}
         />
         <MetricCard
           label="Utilidad Bruta"
-          value={<span className="tabular-nums">{formatMXN(utilidad)}</span>}
-          subValue={`Rentabilidad ${formatPercent(rentabilidad)}`}
+          value={<span className="tabular-nums">{MXN.format(utilidad)}</span>}
+          subValue={`Rentabilidad ${PCT.format(rentabilidad)}`}
           icon={BarChart2}
           color={utilidad >= 0 ? "success" : "danger"}
-        />
-        <MetricCard
-          label="CxC con IVA"
-          value={<span className="tabular-nums">{formatMXN(cxc)}</span>}
-          subValue="Por cobrar a inquilinos"
-          icon={Clock}
-          color={cxc > 0 ? "warning" : "success"}
         />
       </div>
 
@@ -463,7 +464,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
         <CardContent>
           <div className="flex items-center justify-between gap-3">
             <p className="text-xs text-muted-foreground">
-              {formatMXN(cobranzaCollected)} cobrados de {formatMXN(cobranzaExpected)} esperados
+              {MXN.format(cobranzaCollected)} cobrados de {MXN.format(cobranzaExpected)} esperados
             </p>
             <p className={`text-4xl font-bold tabular-nums ${cobranzaToneText[cobranzaTone]}`}>
               {cobranzaPct}%
@@ -550,7 +551,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
                     >
                       <span className="min-w-0 flex-1 truncate font-medium">{row.legalName}</span>
                       <div className="flex items-center justify-between gap-3 sm:justify-end">
-                        <span className="shrink-0 tabular-nums font-semibold text-rose-600">{formatMXN(row.total)}</span>
+                        <span className="shrink-0 tabular-nums font-semibold text-rose-600">{MXN.format(row.total)}</span>
                         <span className="shrink-0 text-right text-xs text-muted-foreground sm:w-16">
                           {row.count} {row.count === 1 ? "renta" : "rentas"}
                         </span>
@@ -582,7 +583,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
                   <div className="mb-1 flex items-center justify-between text-sm">
                     <span className="truncate font-medium">{p.name}</span>
                     <span className="ml-2 shrink-0 tabular-nums text-xs text-muted-foreground">
-                      {formatMXN(p.expectedMonthly)}
+                      {MXN.format(p.expectedMonthly)}
                     </span>
                   </div>
                   <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
@@ -614,7 +615,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
                   <div key={item.type}>
                     <div className="mb-1 flex items-center justify-between text-sm">
                       <span>{item.label}</span>
-                      <span className="tabular-nums text-xs text-muted-foreground">{formatMXN(item.total)}</span>
+                      <span className="tabular-nums text-xs text-muted-foreground">{MXN.format(item.total)}</span>
                     </div>
                     <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
                       <div

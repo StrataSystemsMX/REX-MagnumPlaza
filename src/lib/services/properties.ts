@@ -4,6 +4,8 @@ import { revalidatePath } from "next/cache";
 import { requireAuth } from "@/lib/auth/get-session";
 import { requirePermission } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/prisma/client";
+import { logAudit as logAuditCore } from "@/lib/services/audit";
+import { serializeFields } from "@/lib/audit/field-types";
 import {
   createPropertySchema,
   updatePropertySchema,
@@ -20,16 +22,7 @@ async function logAudit(
   entityId: string,
   changes: Prisma.InputJsonValue | null = null,
 ): Promise<void> {
-  await prisma.auditLog.create({
-    data: {
-      tenantId,
-      userId,
-      action,
-      entityType: "Property",
-      entityId,
-      ...(changes === null ? {} : { changes }),
-    },
-  });
+  await logAuditCore({ tenantId, userId, action, entityType: "Property", entityId, changes });
 }
 
 export async function actionCreateProperty(
@@ -86,19 +79,26 @@ export async function actionUpdateProperty(
 
   const data = updatePropertySchema.parse(input);
 
-  const result = await prisma.property.updateMany({
+  // Snapshot previo para poder revertir la edición desde el historial.
+  const prev = await prisma.property.findFirst({ where: { id, tenantId } });
+  if (!prev) {
+    throw new Error("Inmueble no encontrado o fuera de tu tenant.");
+  }
+
+  await prisma.property.updateMany({
     where: { id, tenantId },
     data,
   });
-  if (result.count === 0) {
-    throw new Error("Inmueble no encontrado o fuera de tu tenant.");
-  }
 
   const updated = await prisma.property.findFirstOrThrow({
     where: { id, tenantId },
   });
 
   await logAudit(tenantId, dbUser.id, "UPDATE", id, {
+    before: serializeFields(
+      prev as unknown as Record<string, unknown>,
+      Object.keys(data),
+    ) as Prisma.InputJsonValue,
     after: data as unknown as Prisma.InputJsonValue,
   });
 

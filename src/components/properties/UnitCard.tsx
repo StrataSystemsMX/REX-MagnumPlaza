@@ -11,7 +11,7 @@ import {
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { toast } from "sonner";
 import {
   AlertDialog,
@@ -37,6 +37,9 @@ import { UnitForm } from "@/components/forms/UnitForm";
 import { UnitPhotoGallery } from "@/components/properties/UnitPhotoGallery";
 import { unitStatusLabel, unitStatusVariant } from "@/lib/i18n/enums";
 import { actionDeleteUnit } from "@/lib/services/units";
+import { actionCountSubjectDependents } from "@/lib/services/audit-actions";
+import { DependentsWarning } from "@/components/historial/DangerConfirmDialog";
+import type { DependentCounts } from "@/lib/services/audit-undo";
 import type { UnitStatus } from "@/generated/prisma/enums";
 import { formatMXN } from "@/lib/format-currency";
 import { formatDate } from "@/lib/format-date";
@@ -86,7 +89,27 @@ function useUnitDialogControls(unit: UnitCardData) {
   const [editOpen, setEditOpen] = useState(false);
   const [photosOpen, setPhotosOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteDeps, setDeleteDeps] = useState<DependentCounts | null>(null);
   const [pending, startTransition] = useTransition();
+
+  // Cuenta dependientes al abrir el borrado, para el aviso destacado.
+  useEffect(() => {
+    if (!deleteOpen) {
+      setDeleteDeps(null);
+      return;
+    }
+    let active = true;
+    actionCountSubjectDependents("Unit", unit.id)
+      .then((d) => {
+        if (active) setDeleteDeps(d);
+      })
+      .catch(() => {
+        if (active) setDeleteDeps(null);
+      });
+    return () => {
+      active = false;
+    };
+  }, [deleteOpen, unit.id]);
 
   function openDetail() {
     setDetailOpen(true);
@@ -135,6 +158,7 @@ function useUnitDialogControls(unit: UnitCardData) {
     deleteOpen,
     setDeleteOpen,
     handleDeleteOpenChange,
+    deleteDeps,
     pending,
     openDetail,
     confirmDelete,
@@ -256,6 +280,7 @@ function UnitDialogs({
               conservan.
             </AlertDialogDescription>
           </AlertDialogHeader>
+          {controls.deleteDeps && <DependentsWarning dependents={controls.deleteDeps} />}
           <AlertDialogFooter>
             <AlertDialogCancel disabled={controls.pending}>Cancelar</AlertDialogCancel>
             <AlertDialogAction
@@ -411,7 +436,7 @@ export function UnitCard({ unit, propertyId, siblings }: UnitCardProps) {
 }
 
 export const UNIT_GRID_COLS =
-  "minmax(0, 0.7fr) minmax(0, 0.9fr) minmax(0, 2fr) minmax(0, 1fr)";
+  "minmax(60px, 0.7fr) minmax(90px, 0.9fr) minmax(120px, 2fr) minmax(80px, 1fr)";
 
 interface UnitRowProps {
   unit: UnitCardData;
@@ -467,7 +492,7 @@ export function UnitRow({ unit, propertyId, siblings }: UnitRowProps) {
             </span>
           ) : null}
         </div>
-        <div role="cell" className="px-3 py-2.5">
+        <div role="cell" className="overflow-hidden px-3 py-2.5">
           <Badge variant={unitStatusVariant(unit.status)}>
             {unitStatusLabel(unit.status)}
           </Badge>

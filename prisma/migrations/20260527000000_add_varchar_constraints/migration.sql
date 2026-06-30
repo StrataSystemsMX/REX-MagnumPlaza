@@ -1,0 +1,111 @@
+-- Add VARCHAR constraints to structured string fields
+-- All fields with bounded values get explicit length limits.
+-- Free-text fields (notes, description larga, body) remain TEXT.
+
+-- Tenant
+ALTER TABLE "tenants" ALTER COLUMN "slug" SET DATA TYPE VARCHAR(50);
+ALTER TABLE "tenants" ALTER COLUMN "name" SET DATA TYPE VARCHAR(120);
+ALTER TABLE "tenants" ALTER COLUMN "brandPrimaryColor" SET DATA TYPE VARCHAR(6);
+ALTER TABLE "tenants" ALTER COLUMN "brandLogoUrl" SET DATA TYPE VARCHAR(512);
+ALTER TABLE "tenants" ALTER COLUMN "contactPhone" SET DATA TYPE VARCHAR(20);
+ALTER TABLE "tenants" ALTER COLUMN "timezone" SET DATA TYPE VARCHAR(50);
+ALTER TABLE "tenants" ALTER COLUMN "currency" SET DATA TYPE VARCHAR(3);
+
+-- User
+ALTER TABLE "users" ALTER COLUMN "email" SET DATA TYPE VARCHAR(254);
+ALTER TABLE "users" ALTER COLUMN "name" SET DATA TYPE VARCHAR(120);
+ALTER TABLE "users" ALTER COLUMN "phone" SET DATA TYPE VARCHAR(20);
+ALTER TABLE "users" ALTER COLUMN "clerkId" SET DATA TYPE VARCHAR(50);
+
+-- Role
+ALTER TABLE "roles" ALTER COLUMN "name" SET DATA TYPE VARCHAR(80);
+ALTER TABLE "roles" ALTER COLUMN "description" SET DATA TYPE VARCHAR(255);
+
+-- Permission
+ALTER TABLE "permissions" ALTER COLUMN "code" SET DATA TYPE VARCHAR(80);
+ALTER TABLE "permissions" ALTER COLUMN "name" SET DATA TYPE VARCHAR(120);
+
+-- LegalEntity
+ALTER TABLE "legal_entities" ALTER COLUMN "code" SET DATA TYPE VARCHAR(10);
+ALTER TABLE "legal_entities" ALTER COLUMN "legalName" SET DATA TYPE VARCHAR(200);
+ALTER TABLE "legal_entities" ALTER COLUMN "rfc" SET DATA TYPE VARCHAR(13);
+ALTER TABLE "legal_entities" ALTER COLUMN "address" SET DATA TYPE VARCHAR(255);
+
+-- Property
+ALTER TABLE "properties" ALTER COLUMN "name" SET DATA TYPE VARCHAR(50);
+ALTER TABLE "properties" ALTER COLUMN "address" SET DATA TYPE VARCHAR(120);
+ALTER TABLE "properties" ALTER COLUMN "cadastralKey" SET DATA TYPE VARCHAR(30);
+
+-- Unit
+ALTER TABLE "units" ALTER COLUMN "code" SET DATA TYPE VARCHAR(20);
+ALTER TABLE "units" ALTER COLUMN "name" SET DATA TYPE VARCHAR(50);
+
+-- Lessee
+ALTER TABLE "lessees" ALTER COLUMN "legalName" SET DATA TYPE VARCHAR(100);
+ALTER TABLE "lessees" ALTER COLUMN "contactName" SET DATA TYPE VARCHAR(50);
+ALTER TABLE "lessees" ALTER COLUMN "rfc" SET DATA TYPE VARCHAR(13);
+ALTER TABLE "lessees" ALTER COLUMN "email" SET DATA TYPE VARCHAR(254);
+ALTER TABLE "lessees" ALTER COLUMN "phone" SET DATA TYPE VARCHAR(15);
+ALTER TABLE "lessees" ALTER COLUMN "whatsapp" SET DATA TYPE VARCHAR(15);
+
+-- Payment
+ALTER TABLE "payments" ALTER COLUMN "reference" SET DATA TYPE VARCHAR(120);
+
+-- ExpenseCategory
+ALTER TABLE "expense_categories" ALTER COLUMN "code" SET DATA TYPE VARCHAR(60);
+ALTER TABLE "expense_categories" ALTER COLUMN "name" SET DATA TYPE VARCHAR(120);
+
+-- Expense
+ALTER TABLE "expenses" ALTER COLUMN "description" SET DATA TYPE VARCHAR(200);
+ALTER TABLE "expenses" ALTER COLUMN "vendor" SET DATA TYPE VARCHAR(120);
+ALTER TABLE "expenses" ALTER COLUMN "invoiceNumber" SET DATA TYPE VARCHAR(80);
+
+-- CadastralPayment
+ALTER TABLE "cadastral_payments" ALTER COLUMN "paidByThirdPartyName" SET DATA TYPE VARCHAR(80);
+
+-- Payroll
+ALTER TABLE "payrolls" ALTER COLUMN "description" SET DATA TYPE VARCHAR(120);
+
+-- Maintenance
+ALTER TABLE "maintenances" ALTER COLUMN "title" SET DATA TYPE VARCHAR(80);
+ALTER TABLE "maintenances" ALTER COLUMN "vendor" SET DATA TYPE VARCHAR(100);
+ALTER TABLE "maintenances" ALTER COLUMN "recurrencePattern" SET DATA TYPE VARCHAR(100);
+
+-- Promoter
+ALTER TABLE "promoters" ALTER COLUMN "fullName" SET DATA TYPE VARCHAR(50);
+ALTER TABLE "promoters" ALTER COLUMN "phone" SET DATA TYPE VARCHAR(15);
+ALTER TABLE "promoters" ALTER COLUMN "email" SET DATA TYPE VARCHAR(100);
+ALTER TABLE "promoters" ALTER COLUMN "agency" SET DATA TYPE VARCHAR(60);
+
+-- PromoterLink
+ALTER TABLE "promoter_links" ALTER COLUMN "publicToken" SET DATA TYPE VARCHAR(100);
+
+-- BudgetLine
+ALTER TABLE "budget_lines" ALTER COLUMN "conceptLabel" SET DATA TYPE VARCHAR(120);
+
+-- Document
+ALTER TABLE "documents" ALTER COLUMN "filename" SET DATA TYPE VARCHAR(255);
+ALTER TABLE "documents" ALTER COLUMN "url" SET DATA TYPE VARCHAR(512);
+ALTER TABLE "documents" ALTER COLUMN "mimeType" SET DATA TYPE VARCHAR(100);
+
+-- NotificationLog
+ALTER TABLE "notification_logs" ALTER COLUMN "recipientId" SET DATA TYPE VARCHAR(50);
+ALTER TABLE "notification_logs" ALTER COLUMN "templateCode" SET DATA TYPE VARCHAR(80);
+ALTER TABLE "notification_logs" ALTER COLUMN "subject" SET DATA TYPE VARCHAR(255);
+ALTER TABLE "notification_logs" ALTER COLUMN "failureReason" SET DATA TYPE VARCHAR(500);
+ALTER TABLE "notification_logs" ALTER COLUMN "externalId" SET DATA TYPE VARCHAR(100);
+
+-- AuditLog
+ALTER TABLE "audit_logs" ALTER COLUMN "entityType" SET DATA TYPE VARCHAR(50);
+ALTER TABLE "audit_logs" ALTER COLUMN "entityId" SET DATA TYPE VARCHAR(50);
+ALTER TABLE "audit_logs" ALTER COLUMN "ipAddress" SET DATA TYPE VARCHAR(45);
+
+-- Loan
+ALTER TABLE "loans" ALTER COLUMN "name" SET DATA TYPE VARCHAR(120);
+ALTER TABLE "loans" ALTER COLUMN "lender" SET DATA TYPE VARCHAR(120);
+
+-- InvestmentProject
+ALTER TABLE "investment_projects" ALTER COLUMN "name" SET DATA TYPE VARCHAR(120);
+
+-- InvestmentPayment
+ALTER TABLE "investment_payments" ALTER COLUMN "description" SET DATA TYPE VARCHAR(255);

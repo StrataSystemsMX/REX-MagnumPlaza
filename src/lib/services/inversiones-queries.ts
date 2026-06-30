@@ -1,3 +1,4 @@
+import { getActiveLegalEntityId } from "@/lib/auth/active-legal-entity";
 import { requireAuth } from "@/lib/auth/get-session";
 import { prisma } from "@/lib/prisma/client";
 
@@ -14,9 +15,14 @@ export interface InversionesKpis {
 
 export async function getInversionesKpis(): Promise<InversionesKpis> {
   const { tenantId } = await requireAuth();
+  const activeLegalEntityId = await getActiveLegalEntityId();
 
   const projects = await prisma.investmentProject.findMany({
-    where: { tenantId, status: { not: "CANCELLED" } },
+    where: {
+      tenantId,
+      status: { not: "CANCELLED" },
+      ...(activeLegalEntityId ? { legalEntityId: activeLegalEntityId } : {}),
+    },
     select: { budgetAmount: true, executedAmount: true, status: true },
   });
 
@@ -38,8 +44,13 @@ export async function getInversionesKpis(): Promise<InversionesKpis> {
 
 export async function getInvestmentProjects() {
   const { tenantId } = await requireAuth();
+  const activeLegalEntityId = await getActiveLegalEntityId();
   const projects = await prisma.investmentProject.findMany({
-    where: { tenantId, status: { not: "CANCELLED" } },
+    where: {
+      tenantId,
+      status: { not: "CANCELLED" },
+      ...(activeLegalEntityId ? { legalEntityId: activeLegalEntityId } : {}),
+    },
     orderBy: [{ status: "asc" }, { startDate: "desc" }],
     include: {
       legalEntity: { select: { id: true, code: true, legalName: true } },

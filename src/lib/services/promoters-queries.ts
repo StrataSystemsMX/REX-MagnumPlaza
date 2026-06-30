@@ -37,7 +37,6 @@ export async function getAvailableUnitsForPromoterLink() {
     where: {
       tenantId,
       isActive: true,
-      status: { in: ["DISPONIBLE", "APARTADA"] },
       parentUnitId: null, // excluir locales agrupados bajo otro
     },
     orderBy: [{ property: { name: "asc" } }, { code: "asc" }],
