@@ -427,6 +427,8 @@ export function notificationRecipientTypeLabel(t: NotificationRecipientType): st
       return "Usuario interno";
     case "EXTERNAL":
       return "Externo";
+    case "OFFICE":
+      return "Oficina";
     default:
       return exhaustive(t);
   }

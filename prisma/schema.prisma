@@ -36,6 +36,10 @@ model Tenant {
   brandPrimaryColor String? @db.VarChar(6) // hex sin #
   brandLogoUrl      String? @db.VarChar(512)
   contactPhone      String? @db.VarChar(20) // teléfono para CTA WhatsApp en links públicos de promotores (E.164 sin "+")
+  // Contacto de la oficina (Eli): recibe COPIA de los avisos de cobranza
+  // (inquilino + oficina). officeWhatsapp en E.164 sin "+".
+  officeEmail       String? @db.VarChar(254)
+  officeWhatsapp    String? @db.VarChar(20)
   timezone          String  @default("America/Hermosillo") @db.VarChar(50)
   currency          String  @default("MXN") @db.VarChar(3)
 
@@ -950,6 +954,7 @@ enum NotificationRecipientType {
   PROMOTER
   USER
   EXTERNAL
+  OFFICE // copia interna a la oficina (Eli)
 }
 
 enum NotificationStatus {

@@ -8,6 +8,7 @@ import {
 import { sendTemplate, WhatsAppError } from "@/lib/whatsapp/client";
 import type { ReminderLevel } from "@/lib/pdf/template-config";
 import type { NotificationLogModel } from "@/generated/prisma/models";
+import type { NotificationRecipientType } from "@/generated/prisma/enums";
 import { computeBalance } from "@/lib/services/rent-status";
 import { capitalizeFirst } from "@/lib/utils";
 import { formatMXN } from "@/lib/format-currency";
@@ -43,7 +44,7 @@ export interface NotificationDispatchResult {
 interface SendContext {
   tenantId: string;
   recipientId: string;
-  recipientType: "LESSEE";
+  recipientType: NotificationRecipientType;
   templateCode: string;
   templateName: string;
   parameters: ReadonlyArray<string>;
@@ -145,7 +146,7 @@ async function dispatchWhatsApp(ctx: SendContext): Promise<NotificationDispatchR
 interface EmailDispatchContext {
   tenantId: string;
   recipientId: string;
-  recipientType: "LESSEE";
+  recipientType: NotificationRecipientType;
   templateCode: string;
   to: string | null;
   subject: string;
@@ -313,6 +314,72 @@ export type SendRentReminderResult = NotificationDispatchResult & {
 };
 
 /**
+ * Envía una COPIA del aviso a la oficina (Eli) por correo y/o WhatsApp.
+ * Best-effort: cualquier fallo se loguea pero NUNCA aborta el aviso al inquilino,
+ * que es la notificación primaria. Solo corre si el tenant configuró contacto de
+ * oficina. Registra NotificationLog con recipientType OFFICE.
+ */
+async function notifyOfficeCopy(params: {
+  tenantId: string;
+  office: { officeEmail: string | null; officeWhatsapp: string | null };
+  level: ReminderLevel;
+  propertyName: string;
+  lesseeName: string;
+  summary: string;
+  pdf: { buffer: Buffer | null; filename: string; mimeType: string };
+  whatsapp?: { templateName: string; templateCode: string; parameters: string[] };
+}): Promise<void> {
+  const { tenantId, office, level } = params;
+  const subject = `[Copia oficina] Aviso ${level} — ${params.propertyName} · ${params.lesseeName}`;
+  if (office.officeEmail) {
+    try {
+      await dispatchEmail({
+        tenantId,
+        recipientId: tenantId,
+        recipientType: "OFFICE",
+        templateCode: `OFFICE_COPY_${level}`,
+        to: office.officeEmail,
+        subject,
+        bodyText: params.summary,
+        attachment: params.pdf.buffer
+          ? {
+              filename: params.pdf.filename,
+              content: params.pdf.buffer,
+              contentType: params.pdf.mimeType,
+            }
+          : undefined,
+      });
+    } catch (e) {
+      console.error(
+        "[notifications] copia a oficina (email) falló:",
+        e instanceof Error ? e.message : e,
+      );
+    }
+  }
+  if (office.officeWhatsapp && params.whatsapp) {
+    try {
+      await dispatchWhatsApp({
+        tenantId,
+        recipientId: tenantId,
+        recipientType: "OFFICE",
+        templateCode: params.whatsapp.templateCode,
+        templateName: params.whatsapp.templateName,
+        parameters: params.whatsapp.parameters,
+        to: office.officeWhatsapp,
+        bodyPreview: params.summary,
+        subject,
+        send: true,
+      });
+    } catch (e) {
+      console.error(
+        "[notifications] copia a oficina (WhatsApp) falló:",
+        e instanceof Error ? e.message : e,
+      );
+    }
+  }
+}
+
+/**
  * Genera el PDF correspondiente al nivel, lo persiste en R2 y manda el
  * mensaje por WhatsApp con la plantilla apropiada.
  *
@@ -328,7 +395,11 @@ export async function sendRentReminder(
 ): Promise<SendRentReminderResult> {
   const tenant = await prisma.tenant.findUniqueOrThrow({
     where: { id: tenantId },
-    select: { autoSendOverdueNotifications: true },
+    select: {
+      autoSendOverdueNotifications: true,
+      officeEmail: true,
+      officeWhatsapp: true,
+    },
   });
 
   // 3M nunca se manda solo aunque autoSend esté en true.
@@ -418,6 +489,18 @@ export async function sendRentReminder(
   // === Override manual: el operador eligió canal y destino explícitos. ===
   if (options.manualChannel) {
     const subject = `Aviso ${level} — ${rent.contract.unit.property.name}`;
+    // El operador está enviando: la oficina recibe copia también.
+    const officeCopy = () =>
+      notifyOfficeCopy({
+        tenantId,
+        office: { officeEmail: tenant.officeEmail, officeWhatsapp: tenant.officeWhatsapp },
+        level,
+        propertyName: rent.contract.unit.property.name,
+        lesseeName: lessee.legalName,
+        summary: bodyPreview,
+        pdf,
+        whatsapp: { templateName, templateCode, parameters },
+      });
     if (options.manualChannel.channel === "EMAIL") {
       const result = await dispatchEmail({
         tenantId,
@@ -435,8 +518,10 @@ export async function sendRentReminder(
             }
           : undefined,
       });
+      await officeCopy();
       return result;
     }
+    await officeCopy();
     // WHATSAPP manual → wa.me click-to-chat, sin Meta API.
     const logId = await recordWhatsAppManualLog(
       tenantId,
@@ -466,6 +551,21 @@ export async function sendRentReminder(
     subject: `Aviso ${level}`,
     send,
   });
+
+  // Copia a la oficina (Eli) solo cuando el aviso al inquilino se envía de verdad
+  // (no cuando queda PENDING/manual ni en el 3M automático).
+  if (send) {
+    await notifyOfficeCopy({
+      tenantId,
+      office: { officeEmail: tenant.officeEmail, officeWhatsapp: tenant.officeWhatsapp },
+      level,
+      propertyName: rent.contract.unit.property.name,
+      lesseeName: lessee.legalName,
+      summary: bodyPreview,
+      pdf,
+      whatsapp: { templateName, templateCode, parameters },
+    });
+  }
 
   if (!send && level === "3M" && isAutoCaller) {
     // Dejar evidencia visible en consola: el cron NO mandó solo el 3M.

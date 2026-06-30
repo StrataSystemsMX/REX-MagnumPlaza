@@ -16,11 +16,15 @@ interface Props {
 export function NotificationSettingsForm({ initial }: Props) {
   const [overdue, setOverdue] = useState(initial.autoSendOverdueNotifications);
   const [payment, setPayment] = useState(initial.autoSendPaymentConfirmations);
+  const [officeEmail, setOfficeEmail] = useState(initial.officeEmail ?? "");
+  const [officeWhatsapp, setOfficeWhatsapp] = useState(initial.officeWhatsapp ?? "");
   const [pending, startTransition] = useTransition();
 
   const dirty =
     overdue !== initial.autoSendOverdueNotifications ||
-    payment !== initial.autoSendPaymentConfirmations;
+    payment !== initial.autoSendPaymentConfirmations ||
+    officeEmail !== (initial.officeEmail ?? "") ||
+    officeWhatsapp !== (initial.officeWhatsapp ?? "");
 
   function save() {
     startTransition(async () => {
@@ -28,6 +32,8 @@ export function NotificationSettingsForm({ initial }: Props) {
         await actionUpdateTenantNotificationSettings({
           autoSendOverdueNotifications: overdue,
           autoSendPaymentConfirmations: payment,
+          officeEmail,
+          officeWhatsapp,
         });
         toast.success("Configuración guardada.");
       } catch (e) {
@@ -48,8 +54,8 @@ export function NotificationSettingsForm({ initial }: Props) {
       ) : null}
 
       <SwitchRow
-        title="Avisos de morosidad automáticos (1M y 2M)"
-        description="Cuando un Rent transicione a OVERDUE_1M u OVERDUE_2M se envía la plantilla por WhatsApp inmediatamente. Si está apagado, el sistema deja el aviso en PENDING y un humano lo manda manualmente."
+        title="Automatizar el aviso fuerte de 2 meses"
+        description="Protocolo de 2 meses: al cumplir 2 meses de atraso se envía el aviso fuerte (detonante) automáticamente. Si está apagado, queda en PENDING y se manda manual. El recordatorio amable del 1er mes se activa por contrato; el de 3 meses siempre es manual."
         checked={overdue}
         onChange={setOverdue}
       />
@@ -66,6 +72,40 @@ export function NotificationSettingsForm({ initial }: Props) {
         checked={payment}
         onChange={setPayment}
       />
+
+      <div className="space-y-3 rounded-md border bg-card p-4">
+        <div className="space-y-1">
+          <p className="font-medium">Copia a la oficina (Eli)</p>
+          <p className="text-xs text-muted-foreground">
+            Cuando se envía un aviso de cobranza al inquilino, la oficina recibe
+            una copia (con el PDF adjunto). Deja en blanco para no enviar copia.
+          </p>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="space-y-1 text-sm">
+            <span className="text-xs text-muted-foreground">Correo de la oficina</span>
+            <input
+              type="email"
+              className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+              placeholder="oficina@ejemplo.com"
+              value={officeEmail}
+              onChange={(e) => setOfficeEmail(e.target.value)}
+            />
+          </label>
+          <label className="space-y-1 text-sm">
+            <span className="text-xs text-muted-foreground">
+              WhatsApp de la oficina (E.164 sin +)
+            </span>
+            <input
+              type="tel"
+              className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+              placeholder="5216621234567"
+              value={officeWhatsapp}
+              onChange={(e) => setOfficeWhatsapp(e.target.value)}
+            />
+          </label>
+        </div>
+      </div>
 
       <div className="flex justify-end">
         <Button onClick={save} disabled={!dirty || pending}>
