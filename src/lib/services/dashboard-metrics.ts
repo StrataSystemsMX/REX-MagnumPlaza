@@ -75,6 +75,7 @@ const fetchDashboardMetricsImpl = async (
     units,
     activeContracts,
     expiringContracts,
+    expiringInsurance,
     paymentsThisMonth,
     outstandingRents,
     legalEntities,
@@ -104,6 +105,15 @@ const fetchDashboardMetricsImpl = async (
         tenantId,
         status: "ACTIVE" satisfies ContractStatus,
         endDate: { gte: now, lte: expiringEnd },
+      },
+    }),
+    // Pólizas de seguro vencidas o por vencer dentro de la misma ventana de 60d.
+    // (lte excluye nulls, así que solo cuenta inmuebles con fecha de seguro.)
+    prisma.property.count({
+      where: {
+        tenantId,
+        isActive: true,
+        insuranceExpiresAt: { lte: expiringEnd },
       },
     }),
     prisma.payment.findMany({
@@ -225,6 +235,7 @@ const fetchDashboardMetricsImpl = async (
     occupiedUnits,
     activeContracts,
     expiringContracts,
+    expiringInsurance,
     paymentsThisMonth: paymentsThisMonth.map((p) => ({ amount: p.amount })),
     outstandingRents,
   });
@@ -255,6 +266,7 @@ const fetchDashboardMetricsImpl = async (
     occupiedUnits,
     activeContracts: prevContracts,
     expiringContracts: 0,
+    expiringInsurance: 0,
     paymentsThisMonth: [],
     outstandingRents: prevOutstanding,
   });

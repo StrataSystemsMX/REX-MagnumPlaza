@@ -30,6 +30,9 @@ export interface PropertyReport {
   totalUnits: number;
   occupiedUnits: number;
   units: UnitReportRow[];
+  insuranceProvider: string | null;
+  insurancePolicyNumber: string | null;
+  insuranceExpiresAt: Date | null;
 }
 
 export async function getPropertyReport(
@@ -48,6 +51,9 @@ export async function getPropertyReport(
       id: true,
       name: true,
       type: true,
+      insuranceProvider: true,
+      insurancePolicyNumber: true,
+      insuranceExpiresAt: true,
       ownerEntity: { select: { code: true } },
       managerEntity: { select: { code: true } },
     },
@@ -156,5 +162,8 @@ export async function getPropertyReport(
     totalUnits: units.length,
     occupiedUnits,
     units: unitRows,
+    insuranceProvider: property.insuranceProvider,
+    insurancePolicyNumber: property.insurancePolicyNumber,
+    insuranceExpiresAt: property.insuranceExpiresAt,
   };
 }

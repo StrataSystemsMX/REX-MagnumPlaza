@@ -1,6 +1,19 @@
 import { z } from "zod";
 import { ADDRESS_TEXT, CADASTRAL_KEY, SPANISH_TEXT } from "./patterns";
 
+/** Acepta Date (input nativo), string ISO o vacío. Coerciona a Date u undefined. */
+const optionalDateLike = z
+  .preprocess(
+    (v) => {
+      if (v === null || v === "" || v === undefined) return undefined;
+      if (v instanceof Date) return v;
+      if (typeof v === "string") return new Date(v);
+      return v;
+    },
+    z.date({ message: "Fecha inválida." }),
+  )
+  .optional();
+
 const PROPERTY_TYPE_VALUES = [
   "PLAZA_COMERCIAL",
   "TERRENO_RENTADO",
@@ -50,6 +63,19 @@ export const createPropertySchema = z.object({
     .max(1000, "Máximo 1000 caracteres.")
     .optional()
     .or(z.literal("").transform(() => undefined)),
+  insuranceProvider: z
+    .string()
+    .trim()
+    .max(80, "Máximo 80 caracteres.")
+    .optional()
+    .or(z.literal("").transform(() => undefined)),
+  insurancePolicyNumber: z
+    .string()
+    .trim()
+    .max(50, "Máximo 50 caracteres.")
+    .optional()
+    .or(z.literal("").transform(() => undefined)),
+  insuranceExpiresAt: optionalDateLike,
 });
 
 export type CreatePropertyInput = z.infer<typeof createPropertySchema>;

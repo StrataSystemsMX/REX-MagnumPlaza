@@ -69,6 +69,12 @@ export default async function PropertyReportPage({ params, searchParams }: PageP
   const occupancyPct =
     data.totalUnits > 0 ? Math.round((data.occupiedUnits / data.totalUnits) * 100) : 0;
 
+  // Estado del seguro: días para vencer (negativo = ya vencido). La ventana de
+  // 60 días empata con la alerta del dashboard.
+  const insuranceDaysLeft = data.insuranceExpiresAt
+    ? Math.floor((data.insuranceExpiresAt.getTime() - Date.now()) / 86_400_000)
+    : null;
+
   return (
     <div className="space-y-6">
       <header className="flex items-start justify-between gap-4">
@@ -124,6 +130,56 @@ export default async function PropertyReportPage({ params, searchParams }: PageP
           </CardHeader>
         </Card>
       </div>
+
+      {/* Seguro del inmueble */}
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between gap-2">
+            <div>
+              <CardTitle className="text-base">Seguro</CardTitle>
+              <CardDescription>Póliza y vencimiento del inmueble</CardDescription>
+            </div>
+            {insuranceDaysLeft === null ? (
+              <Badge variant="outline">Sin registrar</Badge>
+            ) : insuranceDaysLeft < 0 ? (
+              <Badge variant="destructive">Vencido</Badge>
+            ) : insuranceDaysLeft <= 60 ? (
+              <Badge className="border-amber-300 bg-amber-100 text-amber-900">
+                Por vencer · {insuranceDaysLeft}d
+              </Badge>
+            ) : (
+              <Badge variant="secondary">Vigente</Badge>
+            )}
+          </div>
+        </CardHeader>
+        <CardContent>
+          {insuranceDaysLeft === null ? (
+            <p className="text-sm text-muted-foreground">
+              No se ha registrado el seguro de este inmueble. Agrégalo desde la
+              edición del inmueble para recibir avisos de vencimiento.
+            </p>
+          ) : (
+            <div className="grid grid-cols-1 gap-x-8 gap-y-2 text-sm sm:grid-cols-3">
+              <div>
+                <p className="text-xs text-muted-foreground">Aseguradora</p>
+                <p className="font-medium">{data.insuranceProvider || "—"}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Póliza</p>
+                <p className="font-medium">{data.insurancePolicyNumber || "—"}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Vence</p>
+                <p className="font-medium">
+                  {data.insuranceExpiresAt
+                    ? capitalizeFirst(DATE.format(data.insuranceExpiresAt))
+                    : "—"}
+                </p>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Tabla mensual */}
       <Card>

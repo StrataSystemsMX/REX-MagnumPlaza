@@ -22,6 +22,7 @@ export interface DashboardSummary {
   occupancyRate: number;
   activeContracts: number;
   contractsExpiringIn60Days: number;
+  insurancePoliciesExpiringSoon: number;
   totalMonthlyExpectedIncome: string;
   totalCollectedThisMonth: string;
   totalOutstanding: string;
@@ -181,6 +182,7 @@ export interface SummaryInputs {
   occupiedUnits: number;
   activeContracts: Array<{ monthlyAmount: Prisma.Decimal | number | string }>;
   expiringContracts: number;
+  expiringInsurance: number;
   paymentsThisMonth: Array<{ amount: Prisma.Decimal | number | string }>;
   outstandingRents: Array<{
     amountDue: Prisma.Decimal | number | string;
@@ -226,6 +228,7 @@ export function computeSummary(input: SummaryInputs): DashboardSummary {
     occupancyRate,
     activeContracts: input.activeContracts.length,
     contractsExpiringIn60Days: input.expiringContracts,
+    insurancePoliciesExpiringSoon: input.expiringInsurance,
     totalMonthlyExpectedIncome: totalMonthlyExpectedIncome.toString(),
     totalCollectedThisMonth: totalCollectedThisMonth.toString(),
     totalOutstanding: totalOutstanding.toString(),
@@ -262,6 +265,13 @@ export function detectAlerts(
     alerts.push({
       level: "critical",
       message: `Hay ${current.overdueByLevel["3M"]} renta(s) con 3 meses vencidos. Requieren intervención humana.`,
+    });
+  }
+  if (current.insurancePoliciesExpiringSoon > 0) {
+    const n = current.insurancePoliciesExpiringSoon;
+    alerts.push({
+      level: "warning",
+      message: `Hay ${n} póliza(s) de seguro vencida(s) o por vencer en los próximos 60 días.`,
     });
   }
   return alerts;

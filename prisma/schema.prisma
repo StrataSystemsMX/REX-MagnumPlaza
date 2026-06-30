@@ -221,6 +221,11 @@ model Property {
   longitude       Float?
   totalArea       Float? // m²
   notes           String?
+  // Seguro del inmueble (opcional). insuranceExpiresAt alimenta las alertas de
+  // vencimiento (dashboard + vista del inmueble).
+  insuranceProvider     String?   @db.VarChar(80) // aseguradora
+  insurancePolicyNumber String?   @db.VarChar(50) // número de póliza
+  insuranceExpiresAt    DateTime? // vencimiento de la póliza
   isActive        Boolean      @default(true)
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
@@ -238,6 +243,7 @@ model Property {
   @@index([tenantId])
   @@index([ownerEntityId])
   @@index([managerEntityId])
+  @@index([insuranceExpiresAt])
   @@map("properties")
 }
 

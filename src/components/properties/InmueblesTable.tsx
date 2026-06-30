@@ -271,6 +271,9 @@ export function InmueblesTable({
                   longitude: editTarget.longitude,
                   totalArea: editTarget.totalArea,
                   notes: editTarget.notes,
+                  insuranceProvider: editTarget.insuranceProvider,
+                  insurancePolicyNumber: editTarget.insurancePolicyNumber,
+                  insuranceExpiresAt: editTarget.insuranceExpiresAt,
                 }}
                 onSuccess={() => {
                   const target = editTarget;

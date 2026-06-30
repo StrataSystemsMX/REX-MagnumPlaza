@@ -1,7 +1,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useForm } from "react-hook-form";
+import { useForm, type Resolver } from "react-hook-form";
 import { useMemo, useTransition } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -65,6 +65,9 @@ export interface PropertyFormInitial {
   longitude?: number | null;
   totalArea?: number | null;
   notes?: string | null;
+  insuranceProvider?: string | null;
+  insurancePolicyNumber?: string | null;
+  insuranceExpiresAt?: Date | string | null;
 }
 
 interface PropertyFormProps {
@@ -120,7 +123,9 @@ export function PropertyForm({
   );
 
   const form = useForm<CreatePropertyInput>({
-    resolver: zodResolver(createPropertySchema),
+    // El cast evita el mismatch input/output que introduce el z.preprocess de
+    // insuranceExpiresAt (mismo patrón que EditMaintenanceDialog).
+    resolver: zodResolver(createPropertySchema) as unknown as Resolver<CreatePropertyInput>,
     defaultValues: {
       name: initial?.name ?? "",
       type: initialType,
@@ -133,6 +138,11 @@ export function PropertyForm({
       longitude: initial?.longitude ?? undefined,
       totalArea: initial?.totalArea ?? undefined,
       notes: initial?.notes ?? "",
+      insuranceProvider: initial?.insuranceProvider ?? "",
+      insurancePolicyNumber: initial?.insurancePolicyNumber ?? "",
+      insuranceExpiresAt: initial?.insuranceExpiresAt
+        ? new Date(initial.insuranceExpiresAt)
+        : undefined,
     },
   });
 
@@ -413,6 +423,84 @@ export function PropertyForm({
                           field.onChange(
                             e.target.value === "" ? undefined : Number(e.target.value),
                           )
+                        }
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+          </details>
+
+          <details className="group md:col-span-2">
+            <summary className="flex cursor-pointer list-none items-start justify-between gap-3 rounded-md border bg-muted/30 px-3 py-2.5 hover:bg-muted/50">
+              <div>
+                <h3 className="text-sm font-semibold">Seguro del inmueble</h3>
+                <p className="text-xs text-muted-foreground">
+                  Aseguradora, póliza y vencimiento. El sistema avisa cuando el seguro
+                  está por vencer.
+                </p>
+              </div>
+              <span
+                aria-hidden
+                className="mt-1 inline-flex size-5 shrink-0 items-center justify-center rounded-full bg-background text-muted-foreground transition-transform group-open:rotate-180"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="size-3"
+                >
+                  <polyline points="6 9 12 15 18 9" />
+                </svg>
+              </span>
+            </summary>
+            <div className="grid grid-cols-1 gap-4 pt-4 md:grid-cols-2">
+              <FormField
+                control={form.control}
+                name="insuranceProvider"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Aseguradora</FormLabel>
+                    <FormControl>
+                      <Input {...field} value={field.value ?? ""} maxLength={80} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="insurancePolicyNumber"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Número de póliza</FormLabel>
+                    <FormControl>
+                      <Input {...field} value={field.value ?? ""} maxLength={50} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="insuranceExpiresAt"
+                render={({ field }) => (
+                  <FormItem className="md:col-span-2">
+                    <FormLabel>Vence el seguro</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="date"
+                        {...field}
+                        value={
+                          field.value instanceof Date
+                            ? field.value.toISOString().slice(0, 10)
+                            : (field.value as string | undefined) ?? ""
                         }
                       />
                     </FormControl>
