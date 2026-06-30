@@ -79,7 +79,7 @@ export async function getOutstandingRents(filters: OutstandingFilters = {}) {
 
   const now = Date.now();
   return rents.map((r) => {
-    const balance = computeBalance(r.amountDue, r.amountPaid, r.amountWaived ?? 0);
+    const balance = computeBalance(r.amountDue, r.amountPaid, r.amountWaived ?? 0, r.lateFeeAccrued);
     const daysOverdue = Math.floor((now - r.dueDate.getTime()) / (1000 * 60 * 60 * 24));
     return serializeDecimals({ ...r, balance: balance.toString(), daysOverdue });
   });
@@ -211,6 +211,7 @@ export async function getOutstandingByLessee(lesseeId: string): Promise<{
       amountDue: true,
       amountPaid: true,
       amountWaived: true,
+      lateFeeAccrued: true,
       status: true,
       dueDate: true,
     },
@@ -218,7 +219,8 @@ export async function getOutstandingByLessee(lesseeId: string): Promise<{
   });
 
   const total = rents.reduce(
-    (acc, r) => acc.plus(computeBalance(r.amountDue, r.amountPaid, r.amountWaived ?? 0)),
+    (acc, r) =>
+      acc.plus(computeBalance(r.amountDue, r.amountPaid, r.amountWaived ?? 0, r.lateFeeAccrued)),
     new Prisma.Decimal(0),
   );
   const overdueCount = rents.filter((r) =>
@@ -318,7 +320,7 @@ export async function getOutstandingRentsForLessee(lesseeId: string) {
     amountDue: r.amountDue.toString(),
     amountPaid: r.amountPaid.toString(),
     amountWaived: r.amountWaived.toString(),
-    balance: computeBalance(r.amountDue, r.amountPaid, r.amountWaived ?? 0).toString(),
+    balance: computeBalance(r.amountDue, r.amountPaid, r.amountWaived ?? 0, r.lateFeeAccrued).toString(),
     status: r.status,
     unitCode: r.contract.unit.code,
     propertyName: r.contract.unit.property.name,

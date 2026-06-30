@@ -186,6 +186,7 @@ export interface SummaryInputs {
     amountDue: Prisma.Decimal | number | string;
     amountPaid: Prisma.Decimal | number | string;
     amountWaived: Prisma.Decimal | number | string;
+    lateFeeAccrued?: Prisma.Decimal | number | string;
     status: RentStatus;
   }>;
 }
@@ -205,7 +206,10 @@ export function computeSummary(input: SummaryInputs): DashboardSummary {
   );
   const totalOutstanding = sumDec(
     input.outstandingRents.map((r) =>
-      dec(r.amountDue).minus(dec(r.amountPaid)).minus(dec(r.amountWaived)),
+      dec(r.amountDue)
+        .plus(dec(r.lateFeeAccrued ?? 0))
+        .minus(dec(r.amountPaid))
+        .minus(dec(r.amountWaived)),
     ),
   );
   const overdueByLevel = {

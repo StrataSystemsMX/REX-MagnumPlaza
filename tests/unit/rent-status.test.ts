@@ -33,6 +33,20 @@ describe("computeBalance", () => {
   it("puede devolver saldo negativo (sobrepago)", () => {
     expect(computeBalance(D(5000), D(6000), D(0)).toString()).toBe("-1000");
   });
+
+  it("suma el interés moratorio acumulado al adeudo", () => {
+    // 10000 de cargo + 500 de interés - 0 pagado = 10500
+    expect(computeBalance(D(10000), D(0), D(0), D(500)).toString()).toBe("10500");
+  });
+
+  it("interés moratorio por defecto es 0 (no altera el saldo de principal)", () => {
+    expect(computeBalance(D(10000), D(3000), D(2000)).toString()).toBe("5000");
+  });
+
+  it("interés + pago parcial: due + fee - paid - waived", () => {
+    // 10000 + 750 - 4000 - 1000 = 5750
+    expect(computeBalance(D(10000), D(4000), D(1000), D(750)).toString()).toBe("5750");
+  });
 });
 
 describe("computeRentStatus", () => {

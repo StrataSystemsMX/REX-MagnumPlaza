@@ -425,6 +425,10 @@ model Rent {
   amountDue     Decimal    @db.Decimal(12, 2)
   amountPaid    Decimal    @default(0) @db.Decimal(12, 2)
   amountWaived  Decimal    @default(0) @db.Decimal(12, 2) // monto condonado (parcial o total)
+  // Interés moratorio acumulado (snapshot). Lo recalcula el cron diario y cada
+  // pago vía recalcRentInTx, con calculateLateFee sobre el saldo de principal.
+  // Se suma al adeudo total (computeBalance) — política CRT: 5% mensual prorrateado.
+  lateFeeAccrued Decimal   @default(0) @db.Decimal(12, 2)
   status        RentStatus @default(PENDING)
   dueDate       DateTime
   notes         String?

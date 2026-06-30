@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma/client";
 import { computeRentStatus } from "@/lib/services/rent-status";
+import { calculateLateFee } from "@/lib/services/late-fees";
 import { sendRentReminder } from "@/lib/services/notifications";
 import type { RentStatus } from "@/generated/prisma/enums";
 import type { ReminderLevel } from "@/lib/pdf/template-config";
@@ -27,7 +28,18 @@ export interface UpdateRentStatusesResult {
   rentsUpdated: number;
   byNewStatus: Partial<Record<RentStatus, number>>;
   overdueTransitions: number;
+  lateFeesUpdated: number;
 }
+
+/** Rentas vivas (no saldadas/condonadas) sobre las que se acumula interés moratorio. */
+const FEE_ACCRUABLE_STATUSES: RentStatus[] = [
+  "PENDING",
+  "DUE",
+  "PARTIAL",
+  "OVERDUE_1M",
+  "OVERDUE_2M",
+  "OVERDUE_3M",
+];
 
 const LEVEL_TO_REMINDER: Record<1 | 2 | 3, ReminderLevel> = {
   1: "1M",
@@ -80,36 +92,61 @@ export async function updateRentStatuses(
   const now = options.now ?? new Date();
 
   const rents = await prisma.rent.findMany({
-    where: { tenantId, status: { in: ADVANCEABLE_STATUSES } },
+    where: { tenantId, status: { in: FEE_ACCRUABLE_STATUSES } },
     select: {
       id: true,
       contractId: true,
       amountDue: true,
       amountPaid: true,
       amountWaived: true,
+      lateFeeAccrued: true,
       dueDate: true,
       status: true,
+      contract: { select: { lateFeePercentage: true } },
     },
   });
 
   const byNewStatus: Partial<Record<RentStatus, number>> = {};
   let rentsUpdated = 0;
   let overdueTransitions = 0;
+  let lateFeesUpdated = 0;
 
   for (const r of rents) {
-    const newStatus = computeRentStatus(
-      r.amountPaid,
-      r.amountDue,
-      r.dueDate,
-      now,
-      r.amountWaived,
-    );
-    if (newStatus === r.status) continue;
+    // 1) Avance de estado: solo para estados avanzables. OVERDUE_3M es terminal,
+    //    pero igual entra al loop para seguir acumulando interés.
+    const advanceable = ADVANCEABLE_STATUSES.includes(r.status);
+    const newStatus = advanceable
+      ? computeRentStatus(r.amountPaid, r.amountDue, r.dueDate, now, r.amountWaived)
+      : r.status;
+    const statusChanged = newStatus !== r.status;
 
-    await prisma.rent.updateMany({
-      where: { id: r.id, tenantId },
-      data: { status: newStatus },
-    });
+    // 2) Interés moratorio: snapshot recalculado sobre el saldo de principal
+    //    (redondeado a 2 decimales para evitar updates espurios por precisión).
+    const newLateFee = calculateLateFee(
+      {
+        amountDue: r.amountDue,
+        amountPaid: r.amountPaid,
+        amountWaived: r.amountWaived,
+        dueDate: r.dueDate,
+        status: newStatus,
+      },
+      { lateFeePercentage: r.contract.lateFeePercentage },
+      now,
+    ).amount.toDecimalPlaces(2);
+    const feeChanged = !newLateFee.eq(r.lateFeeAccrued);
+
+    if (statusChanged || feeChanged) {
+      await prisma.rent.updateMany({
+        where: { id: r.id, tenantId },
+        data: {
+          ...(statusChanged ? { status: newStatus } : {}),
+          ...(feeChanged ? { lateFeeAccrued: newLateFee } : {}),
+        },
+      });
+    }
+    if (feeChanged) lateFeesUpdated += 1;
+    if (!statusChanged) continue;
+
     rentsUpdated += 1;
     byNewStatus[newStatus] = (byNewStatus[newStatus] ?? 0) + 1;
 
@@ -135,5 +172,5 @@ export async function updateRentStatuses(
     }
   }
 
-  return { rentsUpdated, byNewStatus, overdueTransitions };
+  return { rentsUpdated, byNewStatus, overdueTransitions, lateFeesUpdated };
 }

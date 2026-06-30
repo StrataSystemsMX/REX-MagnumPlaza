@@ -17,8 +17,10 @@ const ZERO = new Prisma.Decimal(0);
  * Se prorratea por días: si la renta lleva 45 días vencida con 5% mensual,
  * el interés es saldo_pendiente × 5% × (45/30) = saldo × 7.5%.
  *
- * No cobra automáticamente — sólo expone el monto para mostrarlo en UI y en
- * el estado de cuenta. La aplicación al Rent se decide a mano por el operador.
+ * El monto se persiste en Rent.lateFeeAccrued (snapshot) desde el cron diario y
+ * desde recalcRentInTx en cada pago, y se suma al adeudo total vía computeBalance.
+ * Como se calcula sobre el saldo de principal, al saldar el principal el interés
+ * vuelve a 0 (no sobrevive al pago del principal).
  */
 export function calculateLateFee(
   rent: {

@@ -98,11 +98,13 @@ export async function generateAccountStatement(
   let totalDue = new Prisma.Decimal(0);
   let totalPaid = new Prisma.Decimal(0);
   let totalWaived = new Prisma.Decimal(0);
+  let totalLateFee = new Prisma.Decimal(0);
   const contractBlocks = lessee.contracts.map((c) => {
     for (const r of c.rents) {
       totalDue = totalDue.plus(new Prisma.Decimal(r.amountDue));
       totalPaid = totalPaid.plus(new Prisma.Decimal(r.amountPaid));
       totalWaived = totalWaived.plus(new Prisma.Decimal(r.amountWaived));
+      totalLateFee = totalLateFee.plus(new Prisma.Decimal(r.lateFeeAccrued ?? 0));
     }
     return {
       contractId: c.id,
@@ -119,7 +121,7 @@ export async function generateAccountStatement(
       })),
     };
   });
-  const balance = computeBalance(totalDue, totalPaid, totalWaived);
+  const balance = computeBalance(totalDue, totalPaid, totalWaived, totalLateFee);
 
   const asOfDate = new Date();
   const tokens = {
@@ -146,6 +148,7 @@ export async function generateAccountStatement(
       totals={{
         totalDue: totalDue.toString(),
         totalPaid: totalPaid.toString(),
+        totalLateFee: totalLateFee.toString(),
         balance: balance.toString(),
       }}
       contactInfo={buildContactInfo(billingEntity)}
@@ -250,7 +253,12 @@ export async function generateOverdueReminder(
 
   const allRents = [rent, ...additional];
   const balance = allRents.reduce(
-    (acc, r) => acc.plus(computeBalance(r.amountDue, r.amountPaid, r.amountWaived)),
+    (acc, r) =>
+      acc.plus(computeBalance(r.amountDue, r.amountPaid, r.amountWaived, r.lateFeeAccrued)),
+    new Prisma.Decimal(0),
+  );
+  const lateFeeTotal = allRents.reduce(
+    (acc, r) => acc.plus(new Prisma.Decimal(r.lateFeeAccrued ?? 0)),
     new Prisma.Decimal(0),
   );
 
@@ -268,6 +276,7 @@ export async function generateOverdueReminder(
     unitLabel,
     daysOverdue: String(days(rent.dueDate)),
     balance: formatMXN(balance, 2),
+    lateFee: formatMXN(lateFeeTotal, 2),
     contractSignedDate,
     paymentDay: String(rent.contract.paymentDay),
     billingEntityName: billingEntity.legalName,

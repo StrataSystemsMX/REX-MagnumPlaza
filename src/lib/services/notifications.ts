@@ -365,10 +365,11 @@ export async function sendRentReminder(
       contractId: rent.contractId,
       status: { in: ["DUE", "PARTIAL", "OVERDUE_1M", "OVERDUE_2M", "OVERDUE_3M"] },
     },
-    select: { amountDue: true, amountPaid: true, amountWaived: true },
+    select: { amountDue: true, amountPaid: true, amountWaived: true, lateFeeAccrued: true },
   });
   const totalBalance = allPending.reduce(
-    (acc, r) => acc.plus(computeBalance(r.amountDue, r.amountPaid, r.amountWaived)),
+    (acc, r) =>
+      acc.plus(computeBalance(r.amountDue, r.amountPaid, r.amountWaived, r.lateFeeAccrued)),
     new Prisma.Decimal(0),
   );
   const overdueCount = allPending.length;

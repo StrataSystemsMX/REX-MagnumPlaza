@@ -50,6 +50,7 @@ export interface AccountStatementProps {
   totals: {
     totalDue: string;
     totalPaid: string;
+    totalLateFee: string;
     balance: string;
   };
   contactInfo: string;
@@ -158,6 +159,16 @@ export function AccountStatementPdf(props: AccountStatementProps) {
               {formatMXN(props.totals.totalPaid, 2)}
             </Text>
           </View>
+          {Number(props.totals.totalLateFee) > 0 ? (
+            <View style={{ flexDirection: "row", marginTop: 2 }}>
+              <Text style={[{ width: "60%" }, sharedStyles.bold]}>
+                Interés moratorio acumulado
+              </Text>
+              <Text style={{ width: "40%", textAlign: "right" }}>
+                {formatMXN(props.totals.totalLateFee, 2)}
+              </Text>
+            </View>
+          ) : null}
           <View
             style={{
               flexDirection: "row",

@@ -173,6 +173,7 @@ async function buildAgingReport(tenantId: string, now: Date): Promise<AgingRepor
       amountDue: true,
       amountPaid: true,
       amountWaived: true,
+      lateFeeAccrued: true,
       dueDate: true,
       contract: {
         select: {
@@ -188,7 +189,7 @@ async function buildAgingReport(tenantId: string, now: Date): Promise<AgingRepor
   const totals = { b30: ZERO, b60: ZERO, b90: ZERO, bPlus: ZERO };
 
   for (const r of rents) {
-    const balance = computeBalance(r.amountDue, r.amountPaid, r.amountWaived);
+    const balance = computeBalance(r.amountDue, r.amountPaid, r.amountWaived, r.lateFeeAccrued);
     if (balance.lte(ZERO)) continue;
 
     const days = Math.max(
