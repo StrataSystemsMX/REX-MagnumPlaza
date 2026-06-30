@@ -164,6 +164,52 @@ describe("generateAccountStatement", () => {
     expect(documentMock.create).not.toHaveBeenCalled();
     expect(result.buffer.subarray(0, 4).toString()).toBe(PDF_HEADER);
   });
+
+  it("filtro de plazo: propaga where por period y agrega el rango al filename", async () => {
+    tenantMock.findUniqueOrThrow.mockResolvedValue(fakeTenant());
+    lesseeMock.findFirstOrThrow.mockResolvedValue(fakeLesseeWithContracts());
+    documentMock.create.mockResolvedValue({ id: "doc-1" });
+
+    const { generateAccountStatement } = await import("@/lib/pdf/generator");
+    const from = utc(2026, 0, 1); // Ene 2026
+    const to = utc(2026, 2, 1); // Mar 2026
+    const result = await generateAccountStatement(TENANT_ID, "lessee-1", {
+      from,
+      to,
+    });
+
+    // El filtro de period debe llegar a la query de Prisma (el filtrado real
+    // ocurre en la DB; aquí verificamos que el where se construye y propaga).
+    const arg = lesseeMock.findFirstOrThrow.mock.calls[0]?.[0] as {
+      include: {
+        contracts: {
+          include: { rents: { where?: { period?: { gte?: Date; lte?: Date } } } };
+        };
+      };
+    };
+    const periodWhere = arg.include.contracts.include.rents.where?.period;
+    expect(periodWhere?.gte).toEqual(from);
+    expect(periodWhere?.lte).toEqual(to);
+
+    // El nombre del archivo refleja el rango (YYYY-MM_YYYY-MM).
+    expect(result.filename).toMatch(
+      /^estado-de-cuenta-sushi-\d{4}-\d{2}-\d{2}-2026-01_2026-03\.pdf$/,
+    );
+  });
+
+  it("sin filtro de plazo: no pasa where a los rents", async () => {
+    tenantMock.findUniqueOrThrow.mockResolvedValue(fakeTenant());
+    lesseeMock.findFirstOrThrow.mockResolvedValue(fakeLesseeWithContracts());
+    documentMock.create.mockResolvedValue({ id: "doc-1" });
+
+    const { generateAccountStatement } = await import("@/lib/pdf/generator");
+    await generateAccountStatement(TENANT_ID, "lessee-1");
+
+    const arg = lesseeMock.findFirstOrThrow.mock.calls[0]?.[0] as {
+      include: { contracts: { include: { rents: { where?: unknown } } } };
+    };
+    expect(arg.include.contracts.include.rents.where).toBeUndefined();
+  });
 });
 
 // ============================================================================

@@ -6,6 +6,13 @@ import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Table,
   TableBody,
   TableCell,
@@ -32,6 +39,8 @@ export function LesseeStatement({ data }: LesseeStatementProps) {
   const [paymentContext, setPaymentContext] = useState<RegisterPaymentDialogContext | null>(
     null,
   );
+  // Plazo del estado de cuenta: "all" = todo el historial; "6"/"12" = ventana móvil.
+  const [statementMonths, setStatementMonths] = useState<string>("all");
   const { lessee, summary, lastPayment } = data;
 
   return (
@@ -69,12 +78,33 @@ export function LesseeStatement({ data }: LesseeStatementProps) {
         </SummaryCard>
       </div>
 
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-muted-foreground">Plazo:</span>
+          <Select
+            value={statementMonths}
+            onValueChange={(v) => setStatementMonths(v ?? "all")}
+          >
+            <SelectTrigger className="w-[180px]" aria-label="Plazo del estado de cuenta">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todo el historial</SelectItem>
+              <SelectItem value="6">Últimos 6 meses</SelectItem>
+              <SelectItem value="12">Últimos 12 meses</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
         <Button
           variant="secondary"
           onClick={() => {
-            const url = `/api/documents/account-statement?lesseeId=${encodeURIComponent(lessee.id)}`;
-            window.open(url, "_blank", "noopener,noreferrer");
+            const params = new URLSearchParams({ lesseeId: lessee.id });
+            if (statementMonths !== "all") params.set("months", statementMonths);
+            window.open(
+              `/api/documents/account-statement?${params.toString()}`,
+              "_blank",
+              "noopener,noreferrer",
+            );
           }}
         >
           <FileDown className="size-4" />

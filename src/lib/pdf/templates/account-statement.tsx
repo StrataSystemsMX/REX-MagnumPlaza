@@ -46,6 +46,8 @@ export interface AccountStatementProps {
     rfc: string | null;
   };
   asOfDate: Date;
+  /** Plazo cubierto por el estado de cuenta (ej. "Enero de 2026 – Junio de 2026"). */
+  periodLabel?: string;
   contracts: AccountStatementContractBlock[];
   totals: {
     totalDue: string;
@@ -81,6 +83,7 @@ export function AccountStatementPdf(props: AccountStatementProps) {
         <Text style={sharedStyles.title}>{props.texts.title}</Text>
         <Text style={sharedStyles.subtitle}>
           Generado el {capitalizeFirst(DATE.format(props.asOfDate))}
+          {props.periodLabel ? ` · Periodo: ${props.periodLabel}` : ""}
         </Text>
 
         <View style={sharedStyles.section}>

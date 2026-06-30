@@ -44,6 +44,13 @@ export interface GenerateOptions {
   uploadedById?: string | null;
 }
 
+export interface AccountStatementOptions extends GenerateOptions {
+  /** Filtra rents con period >= from (inclusive). Sin valor = sin límite inferior. */
+  from?: Date;
+  /** Filtra rents con period <= to (inclusive). Sin valor = sin límite superior. */
+  to?: Date;
+}
+
 // ============================================================================
 // Estado de cuenta
 // ============================================================================
@@ -51,9 +58,20 @@ export interface GenerateOptions {
 export async function generateAccountStatement(
   tenantId: string,
   lesseeId: string,
-  options: GenerateOptions = {},
+  options: AccountStatementOptions = {},
 ): Promise<GeneratedPdf> {
   const persist = options.persist ?? true;
+
+  // Filtro opcional por periodo (plazo): solo rents dentro del rango pedido.
+  const periodWhere: Prisma.RentWhereInput | undefined =
+    options.from || options.to
+      ? {
+          period: {
+            ...(options.from ? { gte: options.from } : {}),
+            ...(options.to ? { lte: options.to } : {}),
+          },
+        }
+      : undefined;
 
   // Datos: tenant + lessee + sus contratos con rents.
   const [tenant, lessee] = await Promise.all([
@@ -79,6 +97,7 @@ export async function generateAccountStatement(
               },
             },
             rents: {
+              where: periodWhere,
               orderBy: { period: "asc" },
             },
           },
@@ -99,29 +118,40 @@ export async function generateAccountStatement(
   let totalPaid = new Prisma.Decimal(0);
   let totalWaived = new Prisma.Decimal(0);
   let totalLateFee = new Prisma.Decimal(0);
-  const contractBlocks = lessee.contracts.map((c) => {
-    for (const r of c.rents) {
-      totalDue = totalDue.plus(new Prisma.Decimal(r.amountDue));
-      totalPaid = totalPaid.plus(new Prisma.Decimal(r.amountPaid));
-      totalWaived = totalWaived.plus(new Prisma.Decimal(r.amountWaived));
-      totalLateFee = totalLateFee.plus(new Prisma.Decimal(r.lateFeeAccrued ?? 0));
-    }
-    return {
-      contractId: c.id,
-      propertyName: c.unit.property.name,
-      unitCode: c.unit.code,
-      unitName: c.unit.name,
-      monthlyAmount: c.monthlyAmount.toString(),
-      rents: c.rents.map((r) => ({
-        period: r.period,
-        amountDue: r.amountDue.toString(),
-        amountPaid: r.amountPaid.toString(),
-        amountWaived: r.amountWaived.toString(),
-        status: r.status,
-      })),
-    };
-  });
+  const contractBlocks = lessee.contracts
+    // Con filtro de plazo, un contrato puede no tener rents en el rango: se omite.
+    .filter((c) => c.rents.length > 0)
+    .map((c) => {
+      for (const r of c.rents) {
+        totalDue = totalDue.plus(new Prisma.Decimal(r.amountDue));
+        totalPaid = totalPaid.plus(new Prisma.Decimal(r.amountPaid));
+        totalWaived = totalWaived.plus(new Prisma.Decimal(r.amountWaived));
+        totalLateFee = totalLateFee.plus(new Prisma.Decimal(r.lateFeeAccrued ?? 0));
+      }
+      return {
+        contractId: c.id,
+        propertyName: c.unit.property.name,
+        unitCode: c.unit.code,
+        unitName: c.unit.name,
+        monthlyAmount: c.monthlyAmount.toString(),
+        rents: c.rents.map((r) => ({
+          period: r.period,
+          amountDue: r.amountDue.toString(),
+          amountPaid: r.amountPaid.toString(),
+          amountWaived: r.amountWaived.toString(),
+          status: r.status,
+        })),
+      };
+    });
   const balance = computeBalance(totalDue, totalPaid, totalWaived, totalLateFee);
+
+  // Etiqueta del plazo cubierto, para que el PDF deje claro su alcance.
+  const periodLabel =
+    options.from || options.to
+      ? `${options.from ? formatPeriodLong(options.from) : "Inicio"} – ${
+          options.to ? formatPeriodLong(options.to) : "Actual"
+        }`
+      : "Todos los movimientos";
 
   const asOfDate = new Date();
   const tokens = {
@@ -144,6 +174,7 @@ export async function generateAccountStatement(
         rfc: lessee.rfc,
       }}
       asOfDate={asOfDate}
+      periodLabel={periodLabel}
       contracts={contractBlocks}
       totals={{
         totalDue: totalDue.toString(),
@@ -160,9 +191,16 @@ export async function generateAccountStatement(
     />,
   );
 
+  // Sufijo de rango en el nombre para distinguir estados de cuenta por plazo.
+  const rangeSuffix =
+    options.from || options.to
+      ? `-${options.from ? options.from.toISOString().slice(0, 7) : "inicio"}_${
+          options.to ? options.to.toISOString().slice(0, 7) : "actual"
+        }`
+      : "";
   const filename = `estado-de-cuenta-${slug(lessee.legalName)}-${asOfDate
     .toISOString()
-    .slice(0, 10)}.pdf`;
+    .slice(0, 10)}${rangeSuffix}.pdf`;
 
   if (!persist) {
     return { buffer, filename, mimeType: "application/pdf", url: null, documentId: null };
