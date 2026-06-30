@@ -22,6 +22,11 @@ export async function getMaintenances(filters: MaintenanceFilters = {}) {
     include: {
       property: { select: { id: true, name: true, type: true } },
       unit: { select: { id: true, code: true, name: true } },
+      documents: {
+        where: { type: "MAINTENANCE_PHOTO" },
+        orderBy: { createdAt: "desc" },
+        select: { id: true, url: true, filename: true, mimeType: true },
+      },
     },
   });
 
@@ -41,6 +46,7 @@ export async function getMaintenances(filters: MaintenanceFilters = {}) {
     createdAt: m.createdAt,
     property: m.property,
     unit: m.unit,
+    documents: m.documents,
     // Los mantenimientos generados desde el cierre de una fianza llevan el
     // marcador `[deposit:<guaranteeId>]` en `notes`.
     source: (m.notes?.includes("[deposit:") ? "deposit" : "manual") as

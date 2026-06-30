@@ -28,6 +28,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { MaintenanceAttachments } from "@/components/maintenances/MaintenanceAttachments";
 import { actionUpdateMaintenance } from "@/lib/services/maintenances";
 import { CharacterCount } from "@/components/ui/character-count";
 import {
@@ -399,6 +400,13 @@ export function EditMaintenanceDialog({
             </div>
           </form>
         </Form>
+
+        {maintenance ? (
+          <MaintenanceAttachments
+            maintenanceId={maintenance.id}
+            documents={maintenance.documents}
+          />
+        ) : null}
       </DialogContent>
     </Dialog>
   );
