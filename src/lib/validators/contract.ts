@@ -131,11 +131,19 @@ export const terminateContractSchema = z.object({
 
 export type TerminateContractInput = z.infer<typeof terminateContractSchema>;
 
-export const renewContractSchema = z.object({
-  newEndDate: dateLike,
-  newAmount: z
-    .number({ message: "Monto inválido." })
-    .positive("La nueva renta debe ser mayor a 0."),
-});
+export const renewContractSchema = z
+  .object({
+    // Fecha de inicio explícita (no se asume el día siguiente al fin del padre):
+    // editable después por retrasos en la firma.
+    newStartDate: dateLike,
+    newEndDate: dateLike,
+    newAmount: z
+      .number({ message: "Monto inválido." })
+      .positive("La nueva renta debe ser mayor a 0."),
+  })
+  .refine((d) => d.newEndDate.getTime() > d.newStartDate.getTime(), {
+    message: "La fecha de fin debe ser posterior a la de inicio.",
+    path: ["newEndDate"],
+  });
 
 export type RenewContractInput = z.infer<typeof renewContractSchema>;

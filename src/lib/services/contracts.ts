@@ -319,14 +319,10 @@ export async function actionRenewContract(
     where: { id, tenantId },
   });
   if (!parent) throw new Error("Contrato no encontrado o fuera de tu tenant.");
-  if (data.newEndDate.getTime() <= parent.endDate.getTime()) {
-    throw new Error(
-      "La nueva fecha de fin debe ser posterior al fin del contrato actual.",
-    );
-  }
 
-  // El hijo arranca el día siguiente al fin del padre.
-  const childStart = new Date(parent.endDate.getTime() + 24 * 60 * 60 * 1000);
+  // El hijo arranca en la fecha de inicio indicada (editable después si la firma
+  // se retrasa). El validador ya garantiza newEndDate > newStartDate.
+  const childStart = data.newStartDate;
 
   const child = await prisma.contract.create({
     data: {
