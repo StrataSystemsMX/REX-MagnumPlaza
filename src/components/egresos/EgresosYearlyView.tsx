@@ -21,6 +21,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { ExpenseFormDialog } from "@/components/egresos/ExpenseFormDialog";
+import { ManageCategoriesDialog } from "@/components/egresos/ManageCategoriesDialog";
 import {
   RegisterExpenseDialog,
   type RegisterExpenseContext,
@@ -36,6 +37,7 @@ import type {
   YearlyExpenses,
   ExpenseCategoryOption,
   ExpensePropertyOption,
+  ManagedExpenseCategory,
 } from "@/lib/services/expenses-queries";
 import type { LegalEntityOption } from "@/lib/services/properties-queries";
 
@@ -70,6 +72,7 @@ interface EgresosYearlyViewProps {
   availableYears: ReadonlyArray<number>;
   legalEntities: ReadonlyArray<LegalEntityOption>;
   categories: ReadonlyArray<ExpenseCategoryOption>;
+  managedCategories: ReadonlyArray<ManagedExpenseCategory>;
   properties: ReadonlyArray<ExpensePropertyOption>;
   canCreate: boolean;
   canUpdate: boolean;
@@ -80,6 +83,7 @@ export function EgresosYearlyView({
   availableYears,
   legalEntities,
   categories,
+  managedCategories,
   properties,
   canCreate,
   canUpdate,
@@ -251,6 +255,10 @@ export function EgresosYearlyView({
               ))}
             </SelectContent>
           </Select>
+
+          {canUpdate ? (
+            <ManageCategoriesDialog categories={managedCategories} />
+          ) : null}
 
           {canCreate ? (
             <Button onClick={() => setFormMode("create")} className="w-full sm:w-auto">

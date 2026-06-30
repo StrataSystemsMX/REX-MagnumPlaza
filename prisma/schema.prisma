@@ -558,6 +558,9 @@ model ExpenseCategory {
   name        String      @db.VarChar(120)
   type        ExpenseType
   isRecurring Boolean     @default(false)
+  // Archivar un concepto lo oculta de la captura de egresos sin borrar el
+  // historial: los egresos ya registrados bajo él siguen apareciendo en reportes.
+  isActive    Boolean     @default(true)
   parentId    String? // permite jerarquía (Servicios > CFE)
 
   tenant      Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
