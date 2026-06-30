@@ -12,7 +12,7 @@ const PROPERTY_TYPE_VALUES = [
   "OTRO",
 ] as const;
 
-const PROPERTY_STATUS_VALUES = ["ACTIVO", "BLOQUEADO"] as const;
+const PROPERTY_STATUS_VALUES = ["DISPONIBLE", "EN_RENTA", "BLOQUEADO"] as const;
 
 export const createPropertySchema = z.object({
   name: z.string().trim().min(1, "El nombre es requerido.").max(50, "Máximo 50 caracteres.").regex(SPANISH_TEXT, "Solo letras, números y puntuación básica."),

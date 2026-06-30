@@ -82,8 +82,10 @@ export function propertyTypeLabel(t: PropertyType): string {
 
 export function propertyStatusLabel(s: PropertyStatus): string {
   switch (s) {
-    case "ACTIVO":
-      return "Activo";
+    case "DISPONIBLE":
+      return "Disponible";
+    case "EN_RENTA":
+      return "En renta";
     case "BLOQUEADO":
       return "Bloqueado";
     default:

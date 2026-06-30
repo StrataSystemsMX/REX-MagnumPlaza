@@ -111,7 +111,7 @@ describe("Fase 1 — Crear contrato", () => {
       id: "unit-1",
       code: "L1",
       status: "DISPONIBLE",
-      property: { status: "ACTIVO", name: "Plaza Progreso" },
+      property: { status: "EN_RENTA", name: "Plaza Progreso" },
     });
     lesseeMock.findFirst.mockResolvedValue({ id: "lessee-1" });
     contractMock.create.mockResolvedValue({

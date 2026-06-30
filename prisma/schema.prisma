@@ -214,7 +214,7 @@ model Property {
   managerEntityId String // quién factura/administra (puede ser CRT)
   name            String         @db.VarChar(50) // "Plaza Magnum Progreso"
   type            PropertyType
-  status          PropertyStatus @default(ACTIVO) // BLOQUEADO = no se renta (ej. casa del dueño)
+  status          PropertyStatus @default(DISPONIBLE) // EN_RENTA con contrato; BLOQUEADO = solo administrado
   address         String         @db.VarChar(120)
   cadastralKey    String?        @db.VarChar(30) // clave catastral
   latitude        Float?
@@ -253,8 +253,9 @@ enum PropertyType {
 }
 
 enum PropertyStatus {
-  ACTIVO // estado normal: rentable / con contrato
-  BLOQUEADO // no se renta (ej. casa del dueño); UI oculta renta/inquilino
+  DISPONIBLE // genera egresos pero no ingresos (sin contrato activo)
+  EN_RENTA // genera ingresos y egresos (con contrato activo)
+  BLOQUEADO // solo administrado: no genera nada (ej. casa del dueño)
 }
 
 model Unit {

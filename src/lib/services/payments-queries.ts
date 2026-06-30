@@ -737,7 +737,7 @@ export async function getYearlyCollectionsMatrix(year: number): Promise<YearlyCo
   );
 
   const properties = await prisma.property.findMany({
-    where: { tenantId, isActive: true, status: "ACTIVO" },
+    where: { tenantId, isActive: true, status: { not: "BLOQUEADO" } },
     orderBy: { name: "asc" },
     include: {
       ownerEntity: { select: { code: true } },

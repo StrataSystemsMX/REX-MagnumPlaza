@@ -78,6 +78,7 @@ export function InmueblesTable({
   const [photosTarget, setPhotosTarget] = useState<PropertyListItem | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<PropertyListItem | null>(null);
   const [deleteDeps, setDeleteDeps] = useState<DependentCounts | null>(null);
+  const [showBlocked, setShowBlocked] = useState(false);
   const [view, setView] = usePropertiesViewMode(initialView);
   const [pending, startTransition] = useTransition();
 
@@ -113,7 +114,12 @@ export function InmueblesTable({
     };
   }, [deleteTarget]);
 
-  const filtered = inmuebles;
+  // Las propiedades bloqueadas (solo administración) se ocultan por defecto;
+  // un toggle las muestra cuando hay alguna.
+  const blockedCount = inmuebles.filter((p) => p.status === "BLOQUEADO").length;
+  const filtered = showBlocked
+    ? inmuebles
+    : inmuebles.filter((p) => p.status !== "BLOQUEADO");
 
   function confirmDelete() {
     if (!deleteTarget) return;
@@ -155,6 +161,18 @@ export function InmueblesTable({
               <List className="size-4" />
             </Button>
           </div>
+          {blockedCount > 0 ? (
+            <Button
+              variant={showBlocked ? "secondary" : "ghost"}
+              size="sm"
+              onClick={() => setShowBlocked((v) => !v)}
+              aria-pressed={showBlocked}
+            >
+              {showBlocked
+                ? "Ocultar bloqueadas"
+                : `Mostrar bloqueadas (${blockedCount})`}
+            </Button>
+          ) : null}
         </div>
 
         <Dialog open={createOpen} onOpenChange={setCreateOpen}>

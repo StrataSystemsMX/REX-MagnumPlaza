@@ -202,7 +202,7 @@ export async function getAvailableUnits() {
       tenantId,
       isActive: true,
       status: { in: ["DISPONIBLE", "APARTADA"] },
-      property: { status: "ACTIVO" },
+      property: { status: { not: "BLOQUEADO" } },
       parentUnitId: null,
       contracts: {
         none: { status: { in: ["DRAFT", "ACTIVE", "PENDING_RENEWAL"] } },

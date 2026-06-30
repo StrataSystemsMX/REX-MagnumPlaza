@@ -46,7 +46,11 @@ const PROPERTY_TYPES: ReadonlyArray<PropertyType> = [
   "OTRO",
 ];
 
-const PROPERTY_STATUSES: ReadonlyArray<PropertyStatus> = ["ACTIVO", "BLOQUEADO"];
+const PROPERTY_STATUSES: ReadonlyArray<PropertyStatus> = [
+  "DISPONIBLE",
+  "EN_RENTA",
+  "BLOQUEADO",
+];
 
 export interface PropertyFormInitial {
   id?: string;
@@ -120,7 +124,7 @@ export function PropertyForm({
     defaultValues: {
       name: initial?.name ?? "",
       type: initialType,
-      status: initial?.status ?? "ACTIVO",
+      status: initial?.status ?? "DISPONIBLE",
       address: initial?.address ?? "",
       ownerEntityId: initial?.ownerEntityId ?? "",
       managerEntityId: initial?.managerEntityId ?? "",

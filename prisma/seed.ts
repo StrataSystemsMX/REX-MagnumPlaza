@@ -595,7 +595,7 @@ async function main(): Promise<void> {
         managerEntityId: entities[p.manager].id,
         name: p.name,
         type: p.type,
-        status: p.status ?? PropertyStatus.ACTIVO,
+        status: p.status ?? PropertyStatus.EN_RENTA,
         address: p.address,
         cadastralKey: p.cadastralKey,
         notes: p.notes,
