@@ -10,6 +10,7 @@ import {
 } from "@/lib/i18n/enums";
 import { capitalizeFirst } from "@/lib/utils";
 import { entityTypeLabel, type AuditEntryLike } from "@/lib/audit/categories";
+import { DATE_KEYS, MONEY_KEYS } from "@/lib/audit/field-types";
 
 // =============================================================================
 // Detalle legible de auditoría
@@ -78,26 +79,6 @@ const HIDDEN_KEYS = new Set<string>([
   "parentUnitId",
   "ownerEntityId",
   "managerEntityId",
-]);
-
-const MONEY_KEYS = new Set<string>([
-  "amount",
-  "amountDue",
-  "monthlyAmount",
-  "guaranteeAmount",
-  "returnedAmount",
-]);
-
-const DATE_KEYS = new Set<string>([
-  "startDate",
-  "endDate",
-  "expenseDate",
-  "paymentDate",
-  "receivedDate",
-  "returnedDate",
-  "advancePaidUntil",
-  "signedDate",
-  "scheduledDate",
 ]);
 
 const BOOL_LABELS: Record<string, string> = {

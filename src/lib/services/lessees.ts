@@ -5,6 +5,7 @@ import { requireAuth } from "@/lib/auth/get-session";
 import { requirePermission } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/prisma/client";
 import { logAudit as logAuditCore } from "@/lib/services/audit";
+import { serializeFields } from "@/lib/audit/field-types";
 import {
   createLesseeSchema,
   updateLesseeSchema,
@@ -83,19 +84,26 @@ export async function actionUpdateLessee(
 
   const data = updateLesseeSchema.parse(input);
 
-  const result = await prisma.lessee.updateMany({
+  // Snapshot previo para poder revertir la edición desde el historial.
+  const prev = await prisma.lessee.findFirst({ where: { id, tenantId } });
+  if (!prev) {
+    throw new Error("Inquilino no encontrado o fuera de tu tenant.");
+  }
+
+  await prisma.lessee.updateMany({
     where: { id, tenantId },
     data,
   });
-  if (result.count === 0) {
-    throw new Error("Inquilino no encontrado o fuera de tu tenant.");
-  }
 
   const updated = await prisma.lessee.findFirstOrThrow({
     where: { id, tenantId },
   });
 
   await logAudit(tenantId, dbUser.id, "UPDATE", id, {
+    before: serializeFields(
+      prev as unknown as Record<string, unknown>,
+      Object.keys(data),
+    ) as Prisma.InputJsonValue,
     after: data as unknown as Prisma.InputJsonValue,
   });
 

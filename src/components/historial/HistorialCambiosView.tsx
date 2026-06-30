@@ -14,11 +14,7 @@ import {
 } from "@/components/ui/table";
 import { HistorialFilters } from "@/components/historial/HistorialFilters";
 import { UndoChangeButton } from "@/components/historial/UndoChangeButton";
-import {
-  auditCategoryLabel,
-  categoryOf,
-  entityTypeLabel,
-} from "@/lib/audit/categories";
+import { auditCategoryLabel, categoryOf } from "@/lib/audit/categories";
 import { describeAuditDetail } from "@/lib/audit/describe";
 import { auditActionLabel } from "@/lib/i18n/enums";
 import { capitalizeFirst } from "@/lib/utils";
@@ -96,7 +92,7 @@ export function HistorialCambiosView({ data, users, canUndo }: Props) {
               <TableHead className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                 Usuario
               </TableHead>
-              <TableHead className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              <TableHead className="text-center text-xs font-medium uppercase tracking-wide text-muted-foreground">
                 Área
               </TableHead>
               <TableHead className="text-center text-xs font-medium uppercase tracking-wide text-muted-foreground">
@@ -129,15 +125,10 @@ export function HistorialCambiosView({ data, users, canUndo }: Props) {
                   <TableCell className="text-sm">
                     {e.user?.name ?? e.user?.email ?? "Sistema"}
                   </TableCell>
-                  <TableCell>
-                    <span className="flex flex-col gap-0.5">
-                      <Badge variant="outline" className="w-fit">
-                        {auditCategoryLabel(categoryOf(e.entityType))}
-                      </Badge>
-                      <span className="text-[11px] text-muted-foreground">
-                        {entityTypeLabel(e.entityType)}
-                      </span>
-                    </span>
+                  <TableCell className="text-center">
+                    <Badge variant="outline">
+                      {auditCategoryLabel(categoryOf(e.entityType))}
+                    </Badge>
                   </TableCell>
                   <TableCell className="text-center">
                     <Badge variant="secondary" className={actionBadgeClass(e.action)}>

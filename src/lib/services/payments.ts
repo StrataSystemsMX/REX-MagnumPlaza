@@ -9,6 +9,7 @@ import { logAudit as logAuditCore } from "@/lib/services/audit";
 import { getOutstandingRentsForLessee } from "@/lib/services/payments-queries";
 import { sendPaymentConfirmation } from "@/lib/services/notifications";
 import { computeRentStatus } from "@/lib/services/rent-status";
+import { recalcRentInTx } from "@/lib/services/rent-recalc";
 import {
   bulkPaymentSchema,
   registerPaymentSchema,
@@ -20,8 +21,6 @@ import {
 import type { PaymentModel } from "@/generated/prisma/models";
 import type { RentStatus } from "@/generated/prisma/enums";
 import { capitalizeFirst } from "@/lib/utils";
-
-type TxClient = Parameters<Parameters<typeof prisma.$transaction>[0]>[0];
 
 function decimal(n: number | string | Prisma.Decimal): Prisma.Decimal {
   return new Prisma.Decimal(n);
@@ -35,60 +34,6 @@ async function logAudit(
   changes: Prisma.InputJsonValue,
 ): Promise<void> {
   await logAuditCore({ tenantId, userId, action, entityType: "Payment", entityId, changes });
-}
-
-/**
- * Recalcula amountPaid (suma de Payments asociados) y status del Rent.
- * Debe correr dentro de la misma transacción que crea/borra el Payment para
- * que la suma incluya/excluya correctamente el movimiento recién hecho.
- *
- * Respeta WAIVED: si el operador condonó la renta no recalculamos el status.
- */
-async function recalcRentInTx(
-  tx: TxClient,
-  tenantId: string,
-  rentId: string,
-  now: Date,
-): Promise<{ amountPaid: Prisma.Decimal; status: string }> {
-  const payments = await tx.payment.findMany({
-    where: { tenantId, rentId },
-    select: { amount: true },
-  });
-  const amountPaid = payments.reduce(
-    (acc, p) => acc.plus(new Prisma.Decimal(p.amount)),
-    new Prisma.Decimal(0),
-  );
-
-  const rent = await tx.rent.findFirstOrThrow({
-    where: { id: rentId, tenantId },
-    select: { amountDue: true, dueDate: true, status: true, amountWaived: true },
-  });
-
-  // Si la renta fue completamente condonada (WAIVED puro, sin pagos), no
-  // modificamos el status — sigue siendo terminal hasta que el operador
-  // reverse la condonación. Cualquier pago entrante hace que el flujo normal
-  // recalcule (puede pasar de WAIVED a PAID si llega pago manual posterior).
-  const isFullyWaivedPure =
-    rent.status === "WAIVED" &&
-    amountPaid.eq(0) &&
-    new Prisma.Decimal(rent.amountWaived ?? 0).gte(rent.amountDue);
-
-  const status = isFullyWaivedPure
-    ? "WAIVED"
-    : computeRentStatus(
-        amountPaid,
-        rent.amountDue,
-        rent.dueDate,
-        now,
-        rent.amountWaived,
-      );
-
-  await tx.rent.updateMany({
-    where: { id: rentId, tenantId },
-    data: { amountPaid, status },
-  });
-
-  return { amountPaid, status };
 }
 
 /**

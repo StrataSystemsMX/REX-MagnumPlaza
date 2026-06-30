@@ -6,6 +6,7 @@ import { requireAuth } from "@/lib/auth/get-session";
 import { requirePermission } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/prisma/client";
 import { logAudit as logAuditCore } from "@/lib/services/audit";
+import { serializeFields } from "@/lib/audit/field-types";
 import {
   generateRentsForContract,
   reconcileRentsForContract,
@@ -143,6 +144,12 @@ export async function actionUpdateContract(
 
   const data = updateContractSchema.parse(input);
 
+  // Snapshot previo para poder revertir la edición desde el historial.
+  const prev = await prisma.contract.findFirst({ where: { id, tenantId } });
+  if (!prev) {
+    throw new Error("Contrato no encontrado o fuera de tu tenant.");
+  }
+
   const update: Prisma.ContractUpdateManyMutationInput = {};
   if (data.status !== undefined) update.status = data.status;
   if (data.type !== undefined) update.type = data.type;
@@ -190,6 +197,10 @@ export async function actionUpdateContract(
   }
 
   await logAudit(tenantId, dbUser.id, "UPDATE", id, {
+    before: serializeFields(
+      prev as unknown as Record<string, unknown>,
+      Object.keys(data),
+    ) as Prisma.InputJsonValue,
     after: data as unknown as Prisma.InputJsonValue,
     ...(reconcile ? { reconcile: reconcile as unknown as Prisma.InputJsonValue } : {}),
   });

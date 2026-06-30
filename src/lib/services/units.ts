@@ -5,6 +5,7 @@ import { requireAuth } from "@/lib/auth/get-session";
 import { requirePermission } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/prisma/client";
 import { logAudit as logAuditCore } from "@/lib/services/audit";
+import { serializeFields } from "@/lib/audit/field-types";
 import {
   createUnitSchema,
   updateUnitSchema,
@@ -163,19 +164,26 @@ export async function actionUpdateUnit(
   const { propertyId: _ignored, ...data } = parsed;
   void _ignored;
 
-  const result = await prisma.unit.updateMany({
+  // Snapshot previo para poder revertir la edición desde el historial.
+  const prev = await prisma.unit.findFirst({ where: { id, tenantId } });
+  if (!prev) {
+    throw new Error("Unidad no encontrada o fuera de tu tenant.");
+  }
+
+  await prisma.unit.updateMany({
     where: { id, tenantId },
     data,
   });
-  if (result.count === 0) {
-    throw new Error("Unidad no encontrada o fuera de tu tenant.");
-  }
 
   const updated = await prisma.unit.findFirstOrThrow({
     where: { id, tenantId },
   });
 
   await logAudit(tenantId, dbUser.id, "UPDATE", id, {
+    before: serializeFields(
+      prev as unknown as Record<string, unknown>,
+      Object.keys(data),
+    ) as Prisma.InputJsonValue,
     after: data as unknown as Prisma.InputJsonValue,
   });
 

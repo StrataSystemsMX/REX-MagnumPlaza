@@ -13,24 +13,76 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { actionUndoChange } from "@/lib/services/audit-actions";
-import { reversibilityOf, type AuditEntryLike } from "@/lib/audit/categories";
+import { DangerConfirmDialog } from "@/components/historial/DangerConfirmDialog";
+import { actionGetUndoImpact, actionUndoChange } from "@/lib/services/audit-actions";
+import {
+  auditCategoryLabel,
+  categoryOf,
+  entityTypeLabel,
+  reversibilityOf,
+} from "@/lib/audit/categories";
+import { describeAuditDetail } from "@/lib/audit/describe";
+import { capitalizeFirst } from "@/lib/utils";
+import type { AuditLogEntry } from "@/lib/services/audit";
+import type { UndoImpact } from "@/lib/services/audit-undo";
+import type { AuditAction } from "@/generated/prisma/enums";
+
+const DATETIME = new Intl.DateTimeFormat("es-MX", {
+  dateStyle: "medium",
+  timeStyle: "short",
+});
 
 interface Props {
-  entry: AuditEntryLike & { id: string };
+  entry: AuditLogEntry;
   canUndo: boolean;
 }
 
+function copyFor(action: AuditAction): {
+  title: string;
+  description: string;
+  confirm: string;
+  success: string;
+} {
+  switch (action) {
+    case "CREATE":
+      return {
+        title: "¿Deshacer esta creación?",
+        description:
+          "Se eliminará el registro recién creado. La acción quedará anotada en el historial.",
+        confirm: "Sí, deshacer",
+        success: "Creación deshecha.",
+      };
+    case "UPDATE":
+      return {
+        title: "¿Revertir esta edición?",
+        description:
+          "Se regresarán los valores anteriores. La acción quedará anotada en el historial.",
+        confirm: "Sí, revertir",
+        success: "Edición revertida.",
+      };
+    default:
+      return {
+        title: "¿Restaurar este registro?",
+        description:
+          "Se restaurará el registro eliminado. La acción quedará anotada en el historial.",
+        confirm: "Sí, restaurar",
+        success: "Registro restaurado.",
+      };
+  }
+}
+
 /**
- * Botón "Deshacer". Sólo se habilita para cambios reversibles (restaurar un
- * borrado lógico) y para usuarios con permiso. Confirma antes de ejecutar.
+ * Botón "Deshacer". Habilitado solo para cambios reversibles y con permiso.
+ * Al usarlo consulta el impacto: si deshacer borrará dependientes, muestra el
+ * aviso destacado (destructivo); si no, una confirmación normal.
  */
 export function UndoChangeButton({ entry, canUndo }: Props) {
   const rev = reversibilityOf(entry);
   const router = useRouter();
   const [open, setOpen] = useState(false);
+  const [impact, setImpact] = useState<UndoImpact | null>(null);
+  const [loading, setLoading] = useState(false);
   const [pending, startTransition] = useTransition();
 
   if (!canUndo) {
@@ -41,7 +93,6 @@ export function UndoChangeButton({ entry, canUndo }: Props) {
       </Button>
     );
   }
-
   if (!rev.reversible) {
     return (
       <Button size="xs" variant="ghost" disabled title={rev.reason}>
@@ -51,11 +102,29 @@ export function UndoChangeButton({ entry, canUndo }: Props) {
     );
   }
 
+  async function handleOpen() {
+    setLoading(true);
+    try {
+      const imp = await actionGetUndoImpact(entry.id);
+      if (!imp.reversible) {
+        // p. ej. ya hay un cambio más reciente (guarda de recencia).
+        toast.error(imp.reason ?? "Este cambio ya no se puede deshacer.");
+        return;
+      }
+      setImpact(imp);
+      setOpen(true);
+    } catch {
+      toast.error("No se pudo preparar el deshacer.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
   function handleConfirm() {
     startTransition(async () => {
       try {
         await actionUndoChange(entry.id);
-        toast.success("Cambio deshecho. Registro restaurado.");
+        toast.success(copy.success);
         setOpen(false);
         router.refresh();
       } catch (e) {
@@ -64,31 +133,64 @@ export function UndoChangeButton({ entry, canUndo }: Props) {
     });
   }
 
+  const copy = copyFor(entry.action);
+  const detail = describeAuditDetail({
+    action: entry.action,
+    entityType: entry.entityType,
+    changes: entry.changes,
+  });
+  const area = auditCategoryLabel(categoryOf(entry.entityType));
+  const when = capitalizeFirst(DATETIME.format(new Date(entry.createdAt)));
+  const who = entry.user?.name ?? entry.user?.email ?? "Sistema";
+  const noun = entityTypeLabel(entry.entityType).toLowerCase();
+
   return (
-    <AlertDialog open={open} onOpenChange={setOpen}>
-      <AlertDialogTrigger
-        render={
-          <Button size="xs" variant="ghost">
-            <Undo2 />
-            Deshacer
-          </Button>
-        }
-      />
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle>¿Deshacer este cambio?</AlertDialogTitle>
-          <AlertDialogDescription>
-            Se restaurará el registro eliminado. La restauración quedará anotada en
-            el historial.
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogCancel disabled={pending}>Cancelar</AlertDialogCancel>
-          <Button variant="default" onClick={handleConfirm} disabled={pending}>
-            {pending ? "Deshaciendo…" : "Sí, deshacer"}
-          </Button>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
+    <>
+      <Button size="xs" variant="ghost" onClick={handleOpen} disabled={loading}>
+        <Undo2 />
+        Deshacer
+      </Button>
+
+      {impact?.danger ? (
+        <DangerConfirmDialog
+          open={open}
+          onOpenChange={setOpen}
+          dependents={impact.dependents}
+          description={
+            <>
+              Vas a deshacer la creación de <strong>{noun}</strong>. Se borrará el
+              registro y todo lo que cuelga de él. Esta acción es permanente.
+            </>
+          }
+          confirmLabel="Sí, eliminar todo"
+          pending={pending}
+          onConfirm={handleConfirm}
+        />
+      ) : (
+        <AlertDialog open={open} onOpenChange={setOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>{copy.title}</AlertDialogTitle>
+              <AlertDialogDescription>{copy.description} ¿Deseas continuar?</AlertDialogDescription>
+            </AlertDialogHeader>
+
+            {/* Resumen del movimiento que se va a deshacer. */}
+            <div className="rounded-lg border bg-muted/40 px-3 py-2 text-left text-sm">
+              <p className="font-medium text-foreground">{detail}</p>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                {area} · {when} · {who}
+              </p>
+            </div>
+
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={pending}>Cancelar</AlertDialogCancel>
+              <Button variant="default" onClick={handleConfirm} disabled={pending}>
+                {pending ? "Procesando…" : copy.confirm}
+              </Button>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
+    </>
   );
 }

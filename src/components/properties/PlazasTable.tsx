@@ -46,9 +46,13 @@ import {
   UnitCard,
   UnitRow,
 } from "@/components/properties/UnitCard";
+import { NewUnitDialog } from "@/components/properties/NewUnitDialog";
 import { usePropertiesViewMode } from "@/hooks/use-properties-view-mode";
 import type { PropertiesViewMode } from "@/lib/properties-view-mode";
 import { actionDeleteProperty } from "@/lib/services/properties";
+import { actionCountSubjectDependents } from "@/lib/services/audit-actions";
+import { DependentsWarning } from "@/components/historial/DangerConfirmDialog";
+import type { DependentCounts } from "@/lib/services/audit-undo";
 import type {
   LegalEntityOption,
   PropertyListItem,
@@ -67,9 +71,29 @@ export function PlazasTable({ plazas, legalEntities, initialView }: PlazasTableP
   const [editTarget, setEditTarget] = useState<PropertyListItem | null>(null);
   const [photosTarget, setPhotosTarget] = useState<PropertyListItem | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<PropertyListItem | null>(null);
+  const [deleteDeps, setDeleteDeps] = useState<DependentCounts | null>(null);
   const [view, setView] = usePropertiesViewMode(initialView);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [pending, startTransition] = useTransition();
+
+  // Al abrir el diálogo de borrado, cuenta los dependientes para el aviso.
+  useEffect(() => {
+    if (!deleteTarget) {
+      setDeleteDeps(null);
+      return;
+    }
+    let active = true;
+    actionCountSubjectDependents("Property", deleteTarget.id)
+      .then((d) => {
+        if (active) setDeleteDeps(d);
+      })
+      .catch(() => {
+        if (active) setDeleteDeps(null);
+      });
+    return () => {
+      active = false;
+    };
+  }, [deleteTarget]);
 
   // Cuando los datos del servidor se refrescan (ej. tras reordenar fotos),
   // re-sincronizar los targets abiertos para que reciban la versión fresca.
@@ -302,6 +326,7 @@ export function PlazasTable({ plazas, legalEntities, initialView }: PlazasTableP
               históricos se conservan; podrás restaurarla después.
             </AlertDialogDescription>
           </AlertDialogHeader>
+          {deleteDeps && <DependentsWarning dependents={deleteDeps} />}
           <AlertDialogFooter>
             <AlertDialogCancel disabled={pending}>Cancelar</AlertDialogCancel>
             <AlertDialogAction
@@ -465,8 +490,11 @@ function PlazaCard({
 
       {isExpanded ? (
         <>
-          <div className="border-t bg-muted/30 px-4 py-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            Locales de {name}
+          <div className="flex items-center justify-between gap-2 border-t bg-muted/30 px-4 py-2">
+            <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              Locales de {name}
+            </span>
+            <NewUnitDialog propertyId={plaza.id} propertyName={name} size="xs" />
           </div>
           <div className="bg-muted/30 p-4">
             {activeUnits.length === 0 ? (
@@ -629,8 +657,11 @@ function PlazasTableView({
               </div>
               {isExpanded ? (
                 <div className="border-b bg-muted/30 px-4 py-3 last:border-b-0">
-                  <div className="mb-2 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-                    Locales de {p.name}
+                  <div className="mb-2 flex items-center justify-between gap-2">
+                    <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                      Locales de {p.name}
+                    </span>
+                    <NewUnitDialog propertyId={p.id} propertyName={p.name} size="xs" />
                   </div>
                   {activeUnits.length === 0 ? (
                     <p className="text-sm text-muted-foreground">

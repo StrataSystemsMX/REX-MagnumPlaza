@@ -11,7 +11,7 @@ import {
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { toast } from "sonner";
 import {
   AlertDialog,
@@ -37,6 +37,9 @@ import { UnitForm } from "@/components/forms/UnitForm";
 import { UnitPhotoGallery } from "@/components/properties/UnitPhotoGallery";
 import { unitStatusLabel, unitStatusVariant } from "@/lib/i18n/enums";
 import { actionDeleteUnit } from "@/lib/services/units";
+import { actionCountSubjectDependents } from "@/lib/services/audit-actions";
+import { DependentsWarning } from "@/components/historial/DangerConfirmDialog";
+import type { DependentCounts } from "@/lib/services/audit-undo";
 import type { UnitStatus } from "@/generated/prisma/enums";
 
 const MXN = new Intl.NumberFormat("es-MX", {
@@ -96,7 +99,27 @@ function useUnitDialogControls(unit: UnitCardData) {
   const [editOpen, setEditOpen] = useState(false);
   const [photosOpen, setPhotosOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteDeps, setDeleteDeps] = useState<DependentCounts | null>(null);
   const [pending, startTransition] = useTransition();
+
+  // Cuenta dependientes al abrir el borrado, para el aviso destacado.
+  useEffect(() => {
+    if (!deleteOpen) {
+      setDeleteDeps(null);
+      return;
+    }
+    let active = true;
+    actionCountSubjectDependents("Unit", unit.id)
+      .then((d) => {
+        if (active) setDeleteDeps(d);
+      })
+      .catch(() => {
+        if (active) setDeleteDeps(null);
+      });
+    return () => {
+      active = false;
+    };
+  }, [deleteOpen, unit.id]);
 
   function openDetail() {
     setDetailOpen(true);
@@ -145,6 +168,7 @@ function useUnitDialogControls(unit: UnitCardData) {
     deleteOpen,
     setDeleteOpen,
     handleDeleteOpenChange,
+    deleteDeps,
     pending,
     openDetail,
     confirmDelete,
@@ -266,6 +290,7 @@ function UnitDialogs({
               conservan.
             </AlertDialogDescription>
           </AlertDialogHeader>
+          {controls.deleteDeps && <DependentsWarning dependents={controls.deleteDeps} />}
           <AlertDialogFooter>
             <AlertDialogCancel disabled={controls.pending}>Cancelar</AlertDialogCancel>
             <AlertDialogAction

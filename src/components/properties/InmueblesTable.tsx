@@ -45,6 +45,9 @@ import { usePropertiesViewMode } from "@/hooks/use-properties-view-mode";
 import { propertyTypeLabel } from "@/lib/i18n/enums";
 import type { PropertiesViewMode } from "@/lib/properties-view-mode";
 import { actionDeleteProperty } from "@/lib/services/properties";
+import { actionCountSubjectDependents } from "@/lib/services/audit-actions";
+import { DependentsWarning } from "@/components/historial/DangerConfirmDialog";
+import type { DependentCounts } from "@/lib/services/audit-undo";
 import { actionEnsureInmuebleUnit } from "@/lib/services/units";
 import type {
   LegalEntityOption,
@@ -75,6 +78,7 @@ export function InmueblesTable({
   const [editTarget, setEditTarget] = useState<PropertyListItem | null>(null);
   const [photosTarget, setPhotosTarget] = useState<PropertyListItem | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<PropertyListItem | null>(null);
+  const [deleteDeps, setDeleteDeps] = useState<DependentCounts | null>(null);
   const [view, setView] = usePropertiesViewMode(initialView);
   const [pending, startTransition] = useTransition();
 
@@ -90,6 +94,25 @@ export function InmueblesTable({
       if (fresh && fresh !== detailTarget) setDetailTarget(fresh);
     }
   }, [inmuebles, photosTarget, detailTarget]);
+
+  // Al abrir el diálogo de borrado, cuenta los dependientes para el aviso.
+  useEffect(() => {
+    if (!deleteTarget) {
+      setDeleteDeps(null);
+      return;
+    }
+    let active = true;
+    actionCountSubjectDependents("Property", deleteTarget.id)
+      .then((d) => {
+        if (active) setDeleteDeps(d);
+      })
+      .catch(() => {
+        if (active) setDeleteDeps(null);
+      });
+    return () => {
+      active = false;
+    };
+  }, [deleteTarget]);
 
   const filtered = inmuebles;
 
@@ -294,6 +317,7 @@ export function InmueblesTable({
               históricos se conservan; podrás restaurarlo después.
             </AlertDialogDescription>
           </AlertDialogHeader>
+          {deleteDeps && <DependentsWarning dependents={deleteDeps} />}
           <AlertDialogFooter>
             <AlertDialogCancel disabled={pending}>Cancelar</AlertDialogCancel>
             <AlertDialogAction

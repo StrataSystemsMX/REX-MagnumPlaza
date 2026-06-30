@@ -103,8 +103,6 @@ export function entityTypeLabel(entityType: string): string {
 // estado posterior (`after`), no el anterior, y otros borrados son físicos.
 // =============================================================================
 
-const SOFT_DELETE_ENTITIES = new Set<string>(["Lessee", "Property", "Unit"]);
-
 export type Reversibility =
   | { reversible: true }
   | { reversible: false; reason: string };
@@ -115,32 +113,83 @@ export interface AuditEntryLike {
   changes: unknown;
 }
 
+export interface UndoCapabilities {
+  /** La edición (UPDATE) se puede revertir (requiere `before` en el log). */
+  revert?: boolean;
+  /** La creación (CREATE) se puede deshacer borrando el subárbol en cascada. */
+  cascadeDelete?: boolean;
+  /** El borrado lógico (DELETE soft) se puede restaurar. */
+  restore?: boolean;
+}
+
+/**
+ * Qué se puede deshacer por tipo de entidad. DEBE mantenerse alineado con
+ * `UNDO_HANDLERS` en [src/lib/services/audit-undo.ts]. Vive aquí (módulo puro)
+ * para que el botón decida habilitado/deshabilitado sin tocar el servidor.
+ */
+export const UNDO_CAPABILITIES: Record<string, UndoCapabilities> = {
+  Lessee: { revert: true, cascadeDelete: true, restore: true },
+  Property: { revert: true, cascadeDelete: true, restore: true },
+  Unit: { revert: true, cascadeDelete: true, restore: true },
+  Contract: { revert: true, cascadeDelete: true },
+  Payment: { cascadeDelete: true },
+};
+
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null && !Array.isArray(v);
+}
+
 function isSoftDeleteChange(changes: unknown): boolean {
-  return (
-    typeof changes === "object" &&
-    changes !== null &&
-    !Array.isArray(changes) &&
-    (changes as Record<string, unknown>)["soft"] === true
-  );
+  return isRecord(changes) && changes["soft"] === true;
+}
+
+function hasBefore(changes: unknown): boolean {
+  return isRecord(changes) && isRecord(changes["before"]);
 }
 
 export function reversibilityOf(entry: AuditEntryLike): Reversibility {
-  if (entry.action === "RESTORE") {
-    return { reversible: false, reason: "Ya es una restauración." };
+  const caps = UNDO_CAPABILITIES[entry.entityType];
+  if (!caps) {
+    return { reversible: false, reason: "Este tipo de cambio no se puede deshacer." };
   }
-  if (entry.action !== "DELETE") {
-    return { reversible: false, reason: "Sólo las eliminaciones se pueden deshacer." };
+  switch (entry.action) {
+    case "CREATE":
+      return caps.cascadeDelete
+        ? { reversible: true }
+        : {
+            reversible: false,
+            reason: "No se puede deshacer la creación de este registro.",
+          };
+    case "UPDATE":
+      if (!caps.revert) {
+        return {
+          reversible: false,
+          reason: "Las ediciones de este registro no se pueden deshacer.",
+        };
+      }
+      if (!hasBefore(entry.changes)) {
+        return {
+          reversible: false,
+          reason: "Sin estado previo guardado (cambio anterior a esta función).",
+        };
+      }
+      return { reversible: true };
+    case "DELETE":
+      if (!caps.restore) {
+        return {
+          reversible: false,
+          reason: "Eliminación permanente: no se puede restaurar.",
+        };
+      }
+      if (!isSoftDeleteChange(entry.changes)) {
+        return { reversible: false, reason: "No es una eliminación reversible." };
+      }
+      return { reversible: true };
+    case "RESTORE":
+      return { reversible: false, reason: "Ya es una restauración." };
+    default:
+      return { reversible: false, reason: "Esta acción no se puede deshacer." };
   }
-  if (!SOFT_DELETE_ENTITIES.has(entry.entityType)) {
-    return {
-      reversible: false,
-      reason: "Eliminación permanente: no se puede restaurar.",
-    };
-  }
-  if (!isSoftDeleteChange(entry.changes)) {
-    return { reversible: false, reason: "No es una eliminación reversible." };
-  }
-  return { reversible: true };
 }
 
 export function isReversible(entry: AuditEntryLike): boolean {
