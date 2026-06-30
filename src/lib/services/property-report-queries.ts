@@ -18,6 +18,30 @@ export interface UnitReportRow {
   arBalance: string;
 }
 
+export interface CadastralPaymentRow {
+  id: string;
+  year: number;
+  totalAmount: string | null;
+  paidAmount: string | null;
+  dueDate: Date;
+  paymentDate: Date | null;
+  isPaid: boolean;
+  /** Razón social (código) o tercero que paga; null si lo paga el dueño. */
+  payerLabel: string | null;
+}
+
+export interface MaintenanceRow {
+  id: string;
+  title: string;
+  type: string;
+  status: string;
+  scheduledDate: Date | null;
+  completedDate: Date | null;
+  cost: string | null;
+  vendor: string | null;
+  unitCode: string | null;
+}
+
 export interface PropertyReport {
   propertyId: string;
   propertyName: string;
@@ -33,6 +57,10 @@ export interface PropertyReport {
   insuranceProvider: string | null;
   insurancePolicyNumber: string | null;
   insuranceExpiresAt: Date | null;
+  cadastralPayments: CadastralPaymentRow[];
+  maintenances: MaintenanceRow[];
+  /** Suma del costo de los mantenimientos del año (gasto realizado/planeado). */
+  maintenanceYearCost: string;
 }
 
 export async function getPropertyReport(
@@ -112,6 +140,76 @@ export async function getPropertyReport(
     },
   });
 
+  // Predial (prediales del inmueble) y mantenimientos del año — vista consolidada.
+  const [cadastralRaw, maintenanceRaw] = await Promise.all([
+    prisma.cadastralPayment.findMany({
+      where: { tenantId, propertyId },
+      select: {
+        id: true,
+        year: true,
+        totalAmount: true,
+        paidAmount: true,
+        dueDate: true,
+        paymentDate: true,
+        isPaid: true,
+        payerEntity: { select: { code: true } },
+        paidByThirdPartyName: true,
+      },
+      orderBy: { year: "desc" },
+      take: 6,
+    }),
+    prisma.maintenance.findMany({
+      where: {
+        tenantId,
+        propertyId,
+        OR: [
+          { completedDate: { gte: yearStart, lt: yearEnd } },
+          { scheduledDate: { gte: yearStart, lt: yearEnd } },
+        ],
+      },
+      select: {
+        id: true,
+        title: true,
+        type: true,
+        status: true,
+        scheduledDate: true,
+        completedDate: true,
+        cost: true,
+        vendor: true,
+        unit: { select: { code: true } },
+      },
+      orderBy: [{ completedDate: "desc" }, { scheduledDate: "desc" }],
+      take: 50,
+    }),
+  ]);
+
+  const cadastralPayments: CadastralPaymentRow[] = cadastralRaw.map((c) => ({
+    id: c.id,
+    year: c.year,
+    totalAmount: c.totalAmount?.toString() ?? null,
+    paidAmount: c.paidAmount?.toString() ?? null,
+    dueDate: c.dueDate,
+    paymentDate: c.paymentDate,
+    isPaid: c.isPaid,
+    payerLabel: c.payerEntity?.code ?? c.paidByThirdPartyName ?? null,
+  }));
+
+  const maintenances: MaintenanceRow[] = maintenanceRaw.map((m) => ({
+    id: m.id,
+    title: m.title,
+    type: m.type,
+    status: m.status,
+    scheduledDate: m.scheduledDate,
+    completedDate: m.completedDate,
+    cost: m.cost?.toString() ?? null,
+    vendor: m.vendor,
+    unitCode: m.unit?.code ?? null,
+  }));
+
+  const maintenanceYearCost = maintenanceRaw
+    .reduce((acc, m) => acc.plus(dec(m.cost)), ZERO)
+    .toString();
+
   // Monthly income for the whole property
   const monthlyIncome = Array.from({ length: 12 }, () => ZERO);
   const incomeByUnit = new Map<string, Prisma.Decimal>();
@@ -165,5 +263,8 @@ export async function getPropertyReport(
     insuranceProvider: property.insuranceProvider,
     insurancePolicyNumber: property.insurancePolicyNumber,
     insuranceExpiresAt: property.insuranceExpiresAt,
+    cadastralPayments,
+    maintenances,
+    maintenanceYearCost,
   };
 }
