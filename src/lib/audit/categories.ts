@@ -132,7 +132,7 @@ export const UNDO_CAPABILITIES: Record<string, UndoCapabilities> = {
   Property: { revert: true, cascadeDelete: true, restore: true },
   Unit: { revert: true, cascadeDelete: true, restore: true },
   Contract: { revert: true, cascadeDelete: true },
-  Payment: { cascadeDelete: true },
+  Payment: { revert: true, cascadeDelete: true },
 };
 
 function isRecord(v: unknown): v is Record<string, unknown> {

@@ -6,15 +6,18 @@ import { requireAuth } from "@/lib/auth/get-session";
 import { getUserRoleCodes, requirePermission } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/prisma/client";
 import { logAudit as logAuditCore } from "@/lib/services/audit";
+import { serializeFields } from "@/lib/audit/field-types";
 import { getOutstandingRentsForLessee } from "@/lib/services/payments-queries";
 import { sendPaymentConfirmation } from "@/lib/services/notifications";
 import { computeRentStatus } from "@/lib/services/rent-status";
 import { recalcRentInTx } from "@/lib/services/rent-recalc";
 import {
   bulkPaymentSchema,
+  editPaymentSchema,
   registerPaymentSchema,
   waiveRentsSchema,
   type BulkPaymentInput,
+  type EditPaymentInput,
   type RegisterPaymentInput,
   type WaiveRentsInput,
 } from "@/lib/validators/payment";
@@ -30,12 +33,16 @@ function decimal(n: number | string | Prisma.Decimal): Prisma.Decimal {
 async function logAudit(
   tenantId: string,
   userId: string,
-  action: "CREATE" | "DELETE",
+  action: "CREATE" | "UPDATE" | "DELETE",
   entityId: string,
   changes: Prisma.InputJsonValue,
 ): Promise<void> {
   await logAuditCore({ tenantId, userId, action, entityType: "Payment", entityId, changes });
 }
+
+/** Campos del Payment que se serializan en el AuditLog (before/after) y que el
+ *  "Deshacer" del Historial restaura al revertir una edición. */
+const PAYMENT_AUDIT_FIELDS = ["amount", "paymentDate", "method", "reference", "notes"] as const;
 
 /**
  * Cuando un Rent queda PAID dispara la confirmación por WhatsApp.
@@ -388,6 +395,63 @@ export async function actionDeletePayment(id: string): Promise<void> {
   });
 
   revalidatePath("/collections");
+}
+
+/**
+ * Edita un pago ya capturado (corrige errores de captura). NO cambia la renta a
+ * la que pertenece ni re-ejecuta la cascada de adelantos: solo actualiza monto/
+ * fecha/método/referencia/notas y recalcula el status de la renta. Queda en el
+ * Historial de Cambios (UPDATE con before/after) y se puede deshacer.
+ */
+export async function actionEditPayment(
+  id: string,
+  input: EditPaymentInput,
+): Promise<PaymentModel> {
+  const { tenantId, dbUser } = await requireAuth();
+  await requirePermission(dbUser.id, "payment.register");
+
+  const data = editPaymentSchema.parse(input);
+
+  const before = await prisma.payment.findFirst({
+    where: { id, tenantId },
+    select: {
+      id: true,
+      rentId: true,
+      amount: true,
+      paymentDate: true,
+      method: true,
+      reference: true,
+      notes: true,
+    },
+  });
+  if (!before) {
+    throw new Error("Pago no encontrado o fuera de tu tenant.");
+  }
+
+  const now = new Date();
+  const updated = await prisma.$transaction(async (tx) => {
+    await tx.payment.updateMany({
+      where: { id, tenantId },
+      data: {
+        amount: decimal(data.amount),
+        paymentDate: data.paymentDate,
+        method: data.method,
+        reference: data.reference ?? null,
+        notes: data.notes ?? null,
+      },
+    });
+    await recalcRentInTx(tx, tenantId, before.rentId, now);
+    return tx.payment.findFirstOrThrow({ where: { id, tenantId } });
+  });
+
+  await logAudit(tenantId, dbUser.id, "UPDATE", id, {
+    rentId: before.rentId,
+    before: serializeFields(before, PAYMENT_AUDIT_FIELDS),
+    after: serializeFields(updated, PAYMENT_AUDIT_FIELDS),
+  } as unknown as Prisma.InputJsonValue);
+
+  revalidatePath("/collections");
+  return updated;
 }
 
 /** Server Action wrapper: lista los Rents pendientes de un Lessee. */

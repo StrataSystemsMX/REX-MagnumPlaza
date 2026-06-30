@@ -166,6 +166,7 @@ export default async function CollectionsPage({
         payments={payments}
         monthly={monthly}
         canDeletePayment={master}
+        canEditPayment={master}
         rentasData={rentasData}
         activeTab={activeTab}
         mesMode={mesMode}
