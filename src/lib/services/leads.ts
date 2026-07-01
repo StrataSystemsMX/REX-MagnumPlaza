@@ -15,7 +15,8 @@ import { captureLeadSchema, type CaptureLeadInput } from "@/lib/validators/promo
  * crea con `prisma` pasando tenantId explícito. NUNCA se loguea el token.
  */
 export async function actionCaptureLead(input: CaptureLeadInput): Promise<void> {
-  const { token, name, phone, email, message } = captureLeadSchema.parse(input);
+  const { token, name, phone, email, message, source } =
+    captureLeadSchema.parse(input);
 
   const link = await prismaUnsafe.promoterLink.findUnique({
     where: { publicToken: token },
@@ -42,6 +43,7 @@ export async function actionCaptureLead(input: CaptureLeadInput): Promise<void> 
       phone,
       email: email ?? null,
       message: message ?? null,
+      source,
     },
   });
 
@@ -60,6 +62,7 @@ export async function actionCaptureLead(input: CaptureLeadInput): Promise<void> 
           `<h2>Nuevo interesado en una vacante</h2>`,
           `<p><strong>Local:</strong> ${escapeHtml(unitLabel)}</p>`,
           `<p><strong>Promotor:</strong> ${escapeHtml(link.promoter.fullName)}</p>`,
+          `<p><strong>Canal:</strong> ${source === "PHYSICAL" ? "Lona / QR físico" : "Liga digital"}</p>`,
           `<hr/>`,
           `<p><strong>Nombre:</strong> ${escapeHtml(name)}</p>`,
           `<p><strong>Teléfono:</strong> ${escapeHtml(phone)}</p>`,

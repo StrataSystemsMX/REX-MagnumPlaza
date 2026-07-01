@@ -35,6 +35,8 @@ interface Props {
   /** URL wa.me prearmada; null si el tenant no tiene teléfono de contacto. */
   whatsappUrl: string | null;
   label: string;
+  /** Canal de origen: PHYSICAL si se llegó por QR de lona (?src=fisica). */
+  source?: "DIGITAL" | "PHYSICAL";
   className?: string;
   size?: "default" | "lg";
 }
@@ -43,6 +45,7 @@ export function VacancyLeadButton({
   token,
   whatsappUrl,
   label,
+  source = "DIGITAL",
   className,
   size = "lg",
 }: Props) {
@@ -50,7 +53,7 @@ export function VacancyLeadButton({
 
   const form = useForm<CaptureLeadInput>({
     resolver: zodResolver(captureLeadSchema) as unknown as Resolver<CaptureLeadInput>,
-    defaultValues: { token, name: "", phone: "", email: "", message: "" },
+    defaultValues: { token, name: "", phone: "", email: "", message: "", source },
   });
 
   async function onSubmit(values: CaptureLeadInput) {
@@ -58,7 +61,7 @@ export function VacancyLeadButton({
       await actionCaptureLead(values);
       toast.success("¡Gracias! La administración te contactará pronto.");
       setOpen(false);
-      form.reset({ token, name: "", phone: "", email: "", message: "" });
+      form.reset({ token, name: "", phone: "", email: "", message: "", source });
       // Abre WhatsApp para contacto inmediato, si hay teléfono.
       if (whatsappUrl) window.open(whatsappUrl, "_blank", "noopener,noreferrer");
     } catch (error) {

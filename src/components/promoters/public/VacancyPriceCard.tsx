@@ -9,6 +9,7 @@ import { formatMXN } from "@/lib/format-currency";
 
 interface Props {
   token: string;
+  source: "DIGITAL" | "PHYSICAL";
   estimatedRent: number | null;
   area: number | null;
   status: PublicVacancyData["unit"]["status"];
@@ -21,6 +22,7 @@ interface Props {
 
 export function VacancyPriceCard({
   token,
+  source,
   estimatedRent,
   area,
   status,
@@ -64,6 +66,7 @@ export function VacancyPriceCard({
             token={token}
             whatsappUrl={whatsappUrl}
             label="Me interesa"
+            source={source}
             className="w-full bg-green-600 hover:bg-green-700"
           />
           <p className="mt-2 text-center text-xs text-muted-foreground">

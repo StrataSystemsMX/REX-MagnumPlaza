@@ -45,5 +45,6 @@ export const captureLeadSchema = z.object({
     .max(500, "Máximo 500 caracteres.")
     .optional()
     .or(z.literal("").transform(() => undefined)),
+  source: z.enum(["DIGITAL", "PHYSICAL"]).default("DIGITAL"),
 });
 export type CaptureLeadInput = z.infer<typeof captureLeadSchema>;

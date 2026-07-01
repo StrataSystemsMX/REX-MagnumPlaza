@@ -4,6 +4,7 @@ import { formatMXN } from "@/lib/format-currency";
 
 interface Props {
   token: string;
+  source: "DIGITAL" | "PHYSICAL";
   contactPhone: string | null;
   tenantName: string;
   promoterFullName: string;
@@ -14,6 +15,7 @@ interface Props {
 
 export function VacancyContactCTA({
   token,
+  source,
   contactPhone,
   tenantName,
   promoterFullName,
@@ -36,7 +38,12 @@ export function VacancyContactCTA({
           </p>
         </div>
         <div className="shrink-0">
-          <VacancyLeadButton token={token} whatsappUrl={url} label="Me interesa" />
+          <VacancyLeadButton
+            token={token}
+            whatsappUrl={url}
+            label="Me interesa"
+            source={source}
+          />
         </div>
       </div>
     </div>

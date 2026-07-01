@@ -1,7 +1,7 @@
 "use client";
 
 import { useTransition, useState, useEffect } from "react";
-import { Link2, Link2Off, UserCheck, UserX, Copy, QrCode } from "lucide-react";
+import { Link2, Link2Off, UserCheck, UserX, Copy, QrCode, Printer } from "lucide-react";
 import { toast } from "sonner";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm, type Resolver } from "react-hook-form";
@@ -198,17 +198,19 @@ export function PromotersTable({ promoters, units, canManage }: Props) {
     toast.success("Link copiado.");
   }
 
-  // QR imprimible de la liga pública (para compartir o pegar en lonas físicas).
-  // Import dinámico: mantiene la lib qrcode fuera del bundle inicial.
-  async function downloadQr(url: string, token: string) {
+  // QR imprimible de la liga pública. Import dinámico: mantiene la lib qrcode
+  // fuera del bundle inicial. La variante `physical` agrega ?src=fisica para
+  // atribuir los leads escaneados de una lona al canal físico.
+  async function downloadQr(url: string, token: string, physical = false) {
     try {
       const QRCode = (await import("qrcode")).default;
-      const dataUrl = await QRCode.toDataURL(url, { width: 512, margin: 2 });
+      const target = physical ? `${url}?src=fisica` : url;
+      const dataUrl = await QRCode.toDataURL(target, { width: 512, margin: 2 });
       const a = document.createElement("a");
       a.href = dataUrl;
-      a.download = `qr-liga-${token.slice(0, 8)}.png`;
+      a.download = `qr-${physical ? "lona" : "liga"}-${token.slice(0, 8)}.png`;
       a.click();
-      toast.success("QR descargado.");
+      toast.success(physical ? "QR de lona descargado." : "QR descargado.");
     } catch {
       toast.error("No se pudo generar el QR.");
     }
@@ -297,6 +299,7 @@ export function PromotersTable({ promoters, units, canManage }: Props) {
                     <TableHead>Local</TableHead>
                     <TableHead>Vence</TableHead>
                     <TableHead className="text-right">Visitas</TableHead>
+                    <TableHead className="text-right">Interesados</TableHead>
                     <TableHead>¿Rentó?</TableHead>
                     {canManage && <TableHead />}
                   </TableRow>
@@ -334,9 +337,18 @@ export function PromotersTable({ promoters, units, canManage }: Props) {
                                 size="sm"
                                 className="size-6 shrink-0 p-0 text-muted-foreground"
                                 onClick={() => downloadQr(url, l.publicToken)}
-                                title="Descargar QR"
+                                title="Descargar QR (liga digital)"
                               >
                                 <QrCode className="size-3" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="size-6 shrink-0 p-0 text-muted-foreground"
+                                onClick={() => downloadQr(url, l.publicToken, true)}
+                                title="Descargar QR para lona (mide escaneos físicos)"
+                              >
+                                <Printer className="size-3" />
                               </Button>
                             </div>
                           </div>
@@ -346,6 +358,20 @@ export function PromotersTable({ promoters, units, canManage }: Props) {
                         </TableCell>
                         <TableCell className="text-right tabular-nums text-sm">
                           {l.visitCount}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums text-sm">
+                          {l.leadCount > 0 ? (
+                            <span className="font-medium">
+                              {l.leadCount}
+                              {l.physicalLeadCount > 0 ? (
+                                <span className="ml-1 text-xs font-normal text-muted-foreground">
+                                  ({l.physicalLeadCount} lona)
+                                </span>
+                              ) : null}
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground">0</span>
+                          )}
                         </TableCell>
                         <TableCell>
                           {l.resultedInRent ? (
