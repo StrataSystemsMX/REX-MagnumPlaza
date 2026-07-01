@@ -127,6 +127,7 @@ enum RoleCode {
   MASTER // Juan Carlos. Ve todo, autoriza decisiones críticas.
   ADMIN // Eli, Leonardo. Operación completa con permisos granulares.
   ACCOUNTANT // Solo lectura financiera, exporta para despacho contable.
+  OWNER // Dueño: solo consulta (read-only) de vistas operativas, sin editar.
   PROMOTER // Externo, ve solo inmuebles asignados.
   LESSEE // Inquilino, ve su estado de cuenta (futuro).
 }

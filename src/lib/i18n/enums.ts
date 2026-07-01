@@ -48,6 +48,8 @@ export function roleCodeLabel(r: RoleCode): string {
       return "Administrador";
     case "ACCOUNTANT":
       return "Contador";
+    case "OWNER":
+      return "Dueño";
     case "PROMOTER":
       return "Promotor";
     case "LESSEE":

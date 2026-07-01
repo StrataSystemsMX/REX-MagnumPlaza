@@ -185,6 +185,11 @@ async function main(): Promise<void> {
       description: "Solo lectura financiera, exporta para despacho contable.",
     },
     {
+      code: RoleCode.OWNER,
+      name: "Dueño",
+      description: "Solo consulta (read-only) de vistas operativas.",
+    },
+    {
       code: RoleCode.PROMOTER,
       name: "Promotor",
       description: "Externo, ve solo inmuebles asignados.",
@@ -201,6 +206,66 @@ async function main(): Promise<void> {
       update: { name: r.name, description: r.description },
       create: r,
     });
+  }
+
+  // -- 2b. Permisos globales + asignación por rol ---------------------------
+  // Sin esto, solo MASTER pasa hasPermission (MASTER hace bypass por definición)
+  // y cualquier ADMIN/ACCOUNTANT/OWNER falla toda acción protegida. Los códigos
+  // deben coincidir con los usados en requirePermission(...) en src/lib/services.
+  const PERMISSIONS: { code: string; name: string }[] = [
+    { code: "property.create", name: "Crear inmuebles" },
+    { code: "property.update", name: "Editar inmuebles" },
+    { code: "property.delete", name: "Eliminar inmuebles" },
+    { code: "unit.create", name: "Crear unidades" },
+    { code: "unit.update", name: "Editar unidades" },
+    { code: "unit.delete", name: "Eliminar unidades" },
+    { code: "contract.create", name: "Crear contratos" },
+    { code: "contract.update", name: "Editar contratos" },
+    { code: "lessee.view", name: "Ver inquilinos" },
+    { code: "lessee.create", name: "Crear inquilinos" },
+    { code: "lessee.update", name: "Editar inquilinos" },
+    { code: "lessee.delete", name: "Eliminar inquilinos" },
+    { code: "payment.register", name: "Registrar pagos" },
+    { code: "payment.delete", name: "Eliminar pagos" },
+    { code: "expense.create", name: "Crear egresos" },
+    { code: "expense.update", name: "Editar egresos" },
+    { code: "expense.delete", name: "Eliminar egresos" },
+  ];
+  for (const p of PERMISSIONS) {
+    await prisma.permission.upsert({
+      where: { code: p.code },
+      update: { name: p.name },
+      create: p,
+    });
+  }
+
+  const ALL_CODES = PERMISSIONS.map((p) => p.code);
+  // Read-only: solo consulta. Las vistas financieras se gatean por rol aparte.
+  const READ_ONLY_CODES = ["lessee.view"];
+  // MASTER hace bypass en hasPermission, así que no necesita filas.
+  const rolePermissionMap: Partial<Record<RoleCode, string[]>> = {
+    [RoleCode.ADMIN]: ALL_CODES, // operación completa
+    [RoleCode.ACCOUNTANT]: READ_ONLY_CODES,
+    [RoleCode.OWNER]: READ_ONLY_CODES,
+  };
+  for (const [roleCode, permCodes] of Object.entries(rolePermissionMap)) {
+    const role = await prisma.role.findUnique({
+      where: { code: roleCode as RoleCode },
+    });
+    if (!role) continue;
+    for (const permCode of permCodes) {
+      const perm = await prisma.permission.findUnique({
+        where: { code: permCode },
+      });
+      if (!perm) continue;
+      await prisma.rolePermission.upsert({
+        where: {
+          roleId_permissionId: { roleId: role.id, permissionId: perm.id },
+        },
+        update: {},
+        create: { roleId: role.id, permissionId: perm.id },
+      });
+    }
   }
 
   // -- 3. Tenant ------------------------------------------------------------
