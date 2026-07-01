@@ -30,6 +30,10 @@ import type {
   UnitStatus,
 } from "@/generated/prisma/enums";
 import type { ReportsBundle } from "@/lib/services/reports-queries";
+import {
+  ExpensesByCategoryChart,
+  OccupancyChart,
+} from "@/components/dashboard/charts";
 import { formatMXN, formatPercent } from "@/lib/format-currency";
 import { formatDate } from "@/lib/format-date";
 
@@ -247,6 +251,24 @@ function OccupancyTab({ data }: { data: ReportsBundle["occupancy"] }) {
         />
       </div>
 
+      {data.rows.length > 0 ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Ocupación por inmueble</CardTitle>
+            <CardDescription>% de unidades rentadas por inmueble.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <OccupancyChart
+              data={data.rows.map((r) => ({
+                propertyName: r.propertyName,
+                occupancyRate: r.occupancyRate,
+                totalUnits: r.totalUnits,
+              }))}
+            />
+          </CardContent>
+        </Card>
+      ) : null}
+
       <Card>
         <CardHeader>
           <CardTitle>Por inmueble</CardTitle>
@@ -460,6 +482,15 @@ function ExpensesByCategoryTab({
         {data.rows.length === 0 ? (
           <EmptyState message="Sin egresos registrados este año." />
         ) : (
+          <>
+          <div className="mb-6">
+            <ExpensesByCategoryChart
+              data={data.rows.map((r) => ({
+                categoryName: r.categoryName,
+                total: r.total,
+              }))}
+            />
+          </div>
           <Table>
             <TableHeader>
               <TableRow>
@@ -524,6 +555,7 @@ function ExpensesByCategoryTab({
               </TableRow>
             </TableBody>
           </Table>
+          </>
         )}
       </CardContent>
     </Card>

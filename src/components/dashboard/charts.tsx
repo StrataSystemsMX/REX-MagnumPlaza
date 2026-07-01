@@ -160,6 +160,64 @@ export function MorosityTrendChart({ data }: MorosityTrendChartProps) {
   );
 }
 
+export interface ExpensesByCategoryChartProps {
+  data: Array<{ categoryName: string; total: string }>;
+  /** Máximo de categorías a graficar (las mayores). Default 8. */
+  topN?: number;
+}
+
+export function ExpensesByCategoryChart({
+  data,
+  topN = 8,
+}: ExpensesByCategoryChartProps) {
+  const chartData = data
+    .map((d) => ({ name: d.categoryName, Gasto: Number(d.total) }))
+    .filter((d) => d.Gasto > 0)
+    .sort((a, b) => b.Gasto - a.Gasto)
+    .slice(0, topN);
+
+  if (chartData.length === 0) {
+    return (
+      <div className="flex h-72 w-full items-center justify-center text-sm text-muted-foreground">
+        Sin egresos para graficar.
+      </div>
+    );
+  }
+
+  return (
+    <div className="h-72 w-full">
+      <ResponsiveContainer width="100%" height="100%">
+        <BarChart
+          data={chartData}
+          layout="vertical"
+          margin={{ top: 4, right: 16, left: 8, bottom: 4 }}
+        >
+          <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" horizontal={false} />
+          <XAxis
+            type="number"
+            stroke="hsl(var(--muted-foreground))"
+            fontSize={11}
+            tickFormatter={(v: number) => formatMXNCompact(Number(v))}
+          />
+          <YAxis
+            type="category"
+            dataKey="name"
+            stroke="hsl(var(--muted-foreground))"
+            fontSize={11}
+            width={120}
+            interval={0}
+          />
+          <Tooltip
+            formatter={(value) => formatMXN(Number(value))}
+            contentStyle={{ borderRadius: 8, fontSize: 12 }}
+          />
+          <Bar dataKey="Gasto" fill="#ef4444" radius={[0, 4, 4, 0]} />
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
 export interface OccupancyChartProps {
   data: Array<{ propertyName: string; occupancyRate: number; totalUnits: number }>;
 }
