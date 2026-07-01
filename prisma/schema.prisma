@@ -74,6 +74,7 @@ model Tenant {
   loanPayments         LoanPayment[]
   investmentProjects   InvestmentProject[]
   investmentPayments   InvestmentPayment[]
+  leads                Lead[]
 
   @@map("tenants")
 }
@@ -800,11 +801,34 @@ model PromoterLink {
   tenant   Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   promoter Promoter @relation(fields: [promoterId], references: [id])
   unit     Unit     @relation(fields: [unitId], references: [id])
+  leads    Lead[]
 
   @@index([tenantId])
   @@index([publicToken])
   @@index([expiresAt])
   @@map("promoter_links")
+}
+
+// Lead capturado desde la página pública de una vacante ("Me interesa").
+// Sin auth: lo crea un visitante anónimo; tenantId/promoterLinkId se derivan
+// del token de la liga en el servidor.
+model Lead {
+  id             String   @id @default(cuid())
+  tenantId       String
+  promoterLinkId String
+  name           String?  @db.VarChar(120)
+  email          String?  @db.VarChar(254)
+  phone          String?  @db.VarChar(20)
+  message        String?  @db.VarChar(500)
+  contacted      Boolean  @default(false) // el admin ya dio seguimiento
+  createdAt      DateTime @default(now())
+
+  tenant       Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  promoterLink PromoterLink @relation(fields: [promoterLinkId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([promoterLinkId])
+  @@map("leads")
 }
 
 // ============================================================================

@@ -1,9 +1,9 @@
-import { MessageCircle } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { VacancyLeadButton } from "@/components/promoters/public/VacancyLeadButton";
 import { buildWhatsAppUrl } from "@/lib/utils/whatsapp-link";
 import { formatMXN } from "@/lib/format-currency";
 
 interface Props {
+  token: string;
   contactPhone: string | null;
   tenantName: string;
   promoterFullName: string;
@@ -13,6 +13,7 @@ interface Props {
 }
 
 export function VacancyContactCTA({
+  token,
   contactPhone,
   tenantName,
   promoterFullName,
@@ -34,12 +35,9 @@ export function VacancyContactCTA({
             {estimatedRent != null ? formatMXN(estimatedRent) : "Consultar"}
           </p>
         </div>
-        <a href={url} target="_blank" rel="noopener noreferrer" className="shrink-0">
-          <Button size="lg" className="bg-green-600 hover:bg-green-700">
-            <MessageCircle className="size-4" />
-            WhatsApp
-          </Button>
-        </a>
+        <div className="shrink-0">
+          <VacancyLeadButton token={token} whatsappUrl={url} label="Me interesa" />
+        </div>
       </div>
     </div>
   );

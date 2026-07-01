@@ -84,6 +84,7 @@ export default async function PublicVacancyPage({ params }: PageProps) {
           <aside className="lg:order-2 lg:col-span-1">
             <div className="lg:sticky lg:top-6">
               <VacancyPriceCard
+                token={token}
                 estimatedRent={data.unit.estimatedRent}
                 area={data.unit.area ?? data.property.totalArea}
                 status={data.unit.status}
@@ -101,6 +102,7 @@ export default async function PublicVacancyPage({ params }: PageProps) {
       </article>
 
       <VacancyContactCTA
+        token={token}
         contactPhone={data.tenant.contactPhone}
         tenantName={data.tenant.name}
         promoterFullName={data.promoter.fullName}
