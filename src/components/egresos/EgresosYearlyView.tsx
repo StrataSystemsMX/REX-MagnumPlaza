@@ -117,13 +117,21 @@ export function EgresosYearlyView({
     [data.entities],
   );
 
-  const categoryItems = useMemo<Record<string, string>>(
-    () => ({
-      ALL: "Todas las categorías",
-      ...Object.fromEntries(categories.map((c) => [c.id, c.name])),
-    }),
-    [categories],
-  );
+  // El filtro se arma con las categorías presentes en la matriz (no solo las
+  // activas), para poder filtrar por un concepto archivado que aún tiene egresos
+  // históricos visibles. La captura de egresos sí usa solo las activas.
+  const categoryItems = useMemo<Record<string, string>>(() => {
+    const present = new Map<string, string>();
+    for (const e of data.entities) {
+      for (const r of e.rows) {
+        if (!present.has(r.categoryId)) present.set(r.categoryId, r.categoryName);
+      }
+    }
+    const sorted = [...present.entries()].sort((a, b) =>
+      a[1].localeCompare(b[1], "es-MX"),
+    );
+    return { ALL: "Todas las categorías", ...Object.fromEntries(sorted) };
+  }, [data.entities]);
 
   const visibleEntities = useMemo<YearlyExpenseEntityGroup[]>(() => {
     return data.entities

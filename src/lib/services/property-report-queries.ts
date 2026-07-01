@@ -141,7 +141,18 @@ export async function getPropertyReport(
   });
 
   // Predial (prediales del inmueble) y mantenimientos del año — vista consolidada.
-  const [cadastralRaw, maintenanceRaw] = await Promise.all([
+  // El where del año se comparte entre la lista (con take) y el agregado del
+  // total, para que el "Gasto del año" sume TODOS los mantenimientos del año y
+  // no solo los que caben en el take de la tabla.
+  const maintenanceYearWhere: Prisma.MaintenanceWhereInput = {
+    tenantId,
+    propertyId,
+    OR: [
+      { completedDate: { gte: yearStart, lt: yearEnd } },
+      { scheduledDate: { gte: yearStart, lt: yearEnd } },
+    ],
+  };
+  const [cadastralRaw, maintenanceRaw, maintenanceCostAgg] = await Promise.all([
     prisma.cadastralPayment.findMany({
       where: { tenantId, propertyId },
       select: {
@@ -159,14 +170,7 @@ export async function getPropertyReport(
       take: 6,
     }),
     prisma.maintenance.findMany({
-      where: {
-        tenantId,
-        propertyId,
-        OR: [
-          { completedDate: { gte: yearStart, lt: yearEnd } },
-          { scheduledDate: { gte: yearStart, lt: yearEnd } },
-        ],
-      },
+      where: maintenanceYearWhere,
       select: {
         id: true,
         title: true,
@@ -180,6 +184,10 @@ export async function getPropertyReport(
       },
       orderBy: [{ completedDate: "desc" }, { scheduledDate: "desc" }],
       take: 50,
+    }),
+    prisma.maintenance.aggregate({
+      where: maintenanceYearWhere,
+      _sum: { cost: true },
     }),
   ]);
 
@@ -206,9 +214,8 @@ export async function getPropertyReport(
     unitCode: m.unit?.code ?? null,
   }));
 
-  const maintenanceYearCost = maintenanceRaw
-    .reduce((acc, m) => acc.plus(dec(m.cost)), ZERO)
-    .toString();
+  // Total sobre TODO el año (agregado en DB), independiente del take de la lista.
+  const maintenanceYearCost = dec(maintenanceCostAgg._sum.cost).toString();
 
   // Monthly income for the whole property
   const monthlyIncome = Array.from({ length: 12 }, () => ZERO);
