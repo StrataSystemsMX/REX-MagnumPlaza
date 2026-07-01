@@ -1,7 +1,7 @@
 "use client";
 
 import { useTransition, useState, useEffect } from "react";
-import { Link2, Link2Off, UserCheck, UserX, Copy } from "lucide-react";
+import { Link2, Link2Off, UserCheck, UserX, Copy, QrCode } from "lucide-react";
 import { toast } from "sonner";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm, type Resolver } from "react-hook-form";
@@ -198,6 +198,22 @@ export function PromotersTable({ promoters, units, canManage }: Props) {
     toast.success("Link copiado.");
   }
 
+  // QR imprimible de la liga pública (para compartir o pegar en lonas físicas).
+  // Import dinámico: mantiene la lib qrcode fuera del bundle inicial.
+  async function downloadQr(url: string, token: string) {
+    try {
+      const QRCode = (await import("qrcode")).default;
+      const dataUrl = await QRCode.toDataURL(url, { width: 512, margin: 2 });
+      const a = document.createElement("a");
+      a.href = dataUrl;
+      a.download = `qr-liga-${token.slice(0, 8)}.png`;
+      a.click();
+      toast.success("QR descargado.");
+    } catch {
+      toast.error("No se pudo generar el QR.");
+    }
+  }
+
   function toggleActive(promoterId: string, current: boolean) {
     startTransition(async () => {
       try {
@@ -312,6 +328,15 @@ export function PromotersTable({ promoters, units, canManage }: Props) {
                                 title="Copiar link"
                               >
                                 <Copy className="size-3" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="size-6 shrink-0 p-0 text-muted-foreground"
+                                onClick={() => downloadQr(url, l.publicToken)}
+                                title="Descargar QR"
+                              >
+                                <QrCode className="size-3" />
                               </Button>
                             </div>
                           </div>
