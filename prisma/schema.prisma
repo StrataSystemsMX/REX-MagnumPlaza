@@ -75,6 +75,7 @@ model Tenant {
   investmentProjects   InvestmentProject[]
   investmentPayments   InvestmentPayment[]
   leads                Lead[]
+  documentTemplates    DocumentTemplate[]
 
   @@map("tenants")
 }
@@ -835,6 +836,28 @@ model Lead {
   @@index([tenantId])
   @@index([promoterLinkId])
   @@map("leads")
+}
+
+// Plantilla editable de aviso de mora por tenant y nivel ("1M"/"2M"/"3M").
+// Si existe una fila para (tenantId, level) se usa en vez del texto fijo de
+// template-config.ts (fallback). Los campos admiten tokens {lesseeName}, etc.
+model DocumentTemplate {
+  id        String   @id @default(cuid())
+  tenantId  String
+  level     String   @db.VarChar(4) // nivel de aviso: "1M" | "2M" | "3M"
+  title     String   @db.VarChar(120)
+  greeting  String   @db.VarChar(300)
+  body      String // largo; admite tokens
+  legalNote String // largo; admite tokens
+  closing   String   @db.VarChar(600)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, level])
+  @@index([tenantId])
+  @@map("document_templates")
 }
 
 // ============================================================================

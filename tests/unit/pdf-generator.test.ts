@@ -11,6 +11,7 @@ const lesseeMock = { findFirstOrThrow: vi.fn() };
 const rentMock = { findFirstOrThrow: vi.fn(), findMany: vi.fn() };
 const documentMock = { create: vi.fn() };
 const notificationLogMock = { create: vi.fn() };
+const documentTemplateMock = { findUnique: vi.fn() };
 
 vi.mock("@/lib/prisma/client", () => ({
   prisma: {
@@ -19,6 +20,7 @@ vi.mock("@/lib/prisma/client", () => ({
     rent: rentMock,
     document: documentMock,
     notificationLog: notificationLogMock,
+    documentTemplate: documentTemplateMock,
   },
   prismaUnsafe: {},
 }));
@@ -49,6 +51,8 @@ beforeEach(() => {
     url: "https://r2.example.com/test.pdf",
     backend: "r2",
   });
+  // Sin plantilla personalizada → el generador usa el texto por defecto.
+  documentTemplateMock.findUnique.mockResolvedValue(null);
 });
 
 function fakeTenant() {
@@ -311,6 +315,32 @@ describe("generateOverdueReminder", () => {
       data: { templateCode: string };
     };
     expect(logArg.data.templateCode).toBe("EVICTION_INITIATION");
+  });
+
+  it("usa la plantilla personalizada del tenant cuando existe (por tenant+nivel)", async () => {
+    tenantMock.findUniqueOrThrow.mockResolvedValue(fakeTenant());
+    rentMock.findFirstOrThrow.mockResolvedValue(fakeRentForReminder("OVERDUE_2M"));
+    rentMock.findMany.mockResolvedValue([]);
+    documentMock.create.mockResolvedValue({ id: "doc-9" });
+    notificationLogMock.create.mockResolvedValue({ id: "log-9" });
+    documentTemplateMock.findUnique.mockResolvedValue({
+      title: "Aviso personalizado",
+      greeting: "Estimado {lesseeName}",
+      body: "Cuerpo personalizado",
+      legalNote: "Nota legal personalizada",
+      closing: "Atentamente",
+    });
+
+    const { generateOverdueReminder } = await import("@/lib/pdf/generator");
+    const result = await generateOverdueReminder(TENANT_ID, "rent-x", "2M");
+
+    // Se consulta la plantilla por (tenantId, level) y el PDF se renderiza igual.
+    expect(documentTemplateMock.findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { tenantId_level: { tenantId: TENANT_ID, level: "2M" } },
+      }),
+    );
+    expect(result.buffer.subarray(0, 4).toString()).toBe(PDF_HEADER);
   });
 });
 

@@ -8,6 +8,7 @@ import {
   reminderConfigByLevel,
   resolveTokens,
   type ReminderLevel,
+  type ReminderTextConfig,
 } from "@/lib/pdf/template-config";
 import { AccountStatementPdf } from "@/lib/pdf/templates/account-statement";
 import { DashboardSummaryPdf } from "@/lib/pdf/templates/dashboard-summary";
@@ -302,7 +303,18 @@ export async function generateOverdueReminder(
 
   const billingEntity = rent.contract.unit.property.managerEntity;
   const lessee = rent.contract.lessee;
-  const config = reminderConfigByLevel(level);
+  // Plantilla editable por tenant+nivel; si no existe, el texto fijo por defecto.
+  const dbTemplate = await prisma.documentTemplate.findUnique({
+    where: { tenantId_level: { tenantId, level } },
+    select: {
+      title: true,
+      greeting: true,
+      body: true,
+      legalNote: true,
+      closing: true,
+    },
+  });
+  const config: ReminderTextConfig = dbTemplate ?? reminderConfigByLevel(level);
   const unitLabel = `${rent.contract.unit.property.name} ${rent.contract.unit.code}`;
   const contractSignedDate = rent.contract.signedDate
     ? capitalizeFirst(DATE.format(rent.contract.signedDate))
