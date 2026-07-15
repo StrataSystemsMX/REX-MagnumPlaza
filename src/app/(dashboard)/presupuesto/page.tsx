@@ -2,12 +2,7 @@ import { Target, TrendingUp, TrendingDown, BarChart2 } from "lucide-react";
 import { ConsolidatedBudgetView } from "@/components/budgets/ConsolidatedBudgetView";
 import { MetricCard } from "@/components/shared/metric-card";
 import { getRealConsolidatedBudgetForYear } from "@/lib/services/budgets-queries";
-
-const MXN = new Intl.NumberFormat("es-MX", {
-  style: "currency",
-  currency: "MXN",
-  maximumFractionDigits: 0,
-});
+import { formatMXN, formatPercent } from "@/lib/format-currency";
 
 interface SearchParams { year?: string }
 
@@ -65,23 +60,23 @@ export default async function PresupuestoPage({
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <MetricCard
           label="Ingresos registrados"
-          value={<span className="tabular-nums">{MXN.format(totals.annualIncome)}</span>}
+          value={<span className="tabular-nums">{formatMXN(totals.annualIncome)}</span>}
           subValue={`${consolidated.entities.length} razón${consolidated.entities.length === 1 ? "" : "es"} social${consolidated.entities.length === 1 ? "" : "es"}`}
           icon={TrendingUp}
           color="success"
         />
         <MetricCard
           label="Egresos registrados"
-          value={<span className="tabular-nums">{MXN.format(totals.annualExpense)}</span>}
+          value={<span className="tabular-nums">{formatMXN(totals.annualExpense)}</span>}
           subValue="Operativos · sin reparto"
           icon={TrendingDown}
         />
         <MetricCard
           label="Utilidad operativa"
-          value={<span className="tabular-nums">{MXN.format(totals.annualOperatingProfit)}</span>}
+          value={<span className="tabular-nums">{formatMXN(totals.annualOperatingProfit)}</span>}
           subValue={
             totals.annualIncome > 0
-              ? `Margen ${new Intl.NumberFormat("es-MX", { style: "percent", maximumFractionDigits: 1 }).format(marginPct)}`
+              ? `Margen ${formatPercent(marginPct)}`
               : "Sin ingresos"
           }
           icon={BarChart2}
@@ -89,7 +84,7 @@ export default async function PresupuestoPage({
         />
         <MetricCard
           label="Ingresos del mes actual"
-          value={<span className="tabular-nums">{MXN.format(monthlyTarget)}</span>}
+          value={<span className="tabular-nums">{formatMXN(monthlyTarget)}</span>}
           subValue="en ingresos"
           icon={Target}
         />

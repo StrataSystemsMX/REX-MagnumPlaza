@@ -1,12 +1,12 @@
 "use client";
 
 import { useTransition, useState, useEffect } from "react";
-import { Link2, Link2Off, UserCheck, UserX, Plus, Copy } from "lucide-react";
+import { Link2, Link2Off, UserCheck, UserX, Copy, QrCode, Printer } from "lucide-react";
 import { toast } from "sonner";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm, type Resolver } from "react-hook-form";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -22,7 +22,6 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -46,19 +45,8 @@ import {
 import { createPromoterLinkSchema, type CreatePromoterLinkInput } from "@/lib/validators/promoter";
 import type { PromoterRow, UnitForLink } from "@/lib/services/promoters-queries";
 import { unitWithProperty } from "@/lib/i18n/unit-label";
-
-const DATE = new Intl.DateTimeFormat("es-MX", {
-  day: "2-digit",
-  month: "short",
-  year: "numeric",
-  timeZone: "UTC",
-});
-
-const MXN = new Intl.NumberFormat("es-MX", {
-  style: "currency",
-  currency: "MXN",
-  maximumFractionDigits: 0,
-});
+import { formatMXN } from "@/lib/format-currency";
+import { formatDate } from "@/lib/format-date";
 
 function LinkDialog({ promoterId, units }: { promoterId: string; units: UnitForLink[] }) {
   const [open, setOpen] = useState(false);
@@ -73,7 +61,7 @@ function LinkDialog({ promoterId, units }: { promoterId: string; units: UnitForL
   // (oficina, casa, espectacular, etc.) basta con el nombre del inmueble.
   function formatUnitLabel(u: UnitForLink): string {
     const base = unitWithProperty(u);
-    return u.estimatedRent ? `${base} — ${MXN.format(u.estimatedRent)}` : base;
+    return u.estimatedRent ? `${base} — ${formatMXN(u.estimatedRent)}` : base;
   }
 
   const unitLabels = Object.fromEntries(units.map((u) => [u.id, formatUnitLabel(u)]));
@@ -210,6 +198,24 @@ export function PromotersTable({ promoters, units, canManage }: Props) {
     toast.success("Link copiado.");
   }
 
+  // QR imprimible de la liga pública. Import dinámico: mantiene la lib qrcode
+  // fuera del bundle inicial. La variante `physical` agrega ?src=fisica para
+  // atribuir los leads escaneados de una lona al canal físico.
+  async function downloadQr(url: string, token: string, physical = false) {
+    try {
+      const QRCode = (await import("qrcode")).default;
+      const target = physical ? `${url}?src=fisica` : url;
+      const dataUrl = await QRCode.toDataURL(target, { width: 512, margin: 2 });
+      const a = document.createElement("a");
+      a.href = dataUrl;
+      a.download = `qr-${physical ? "lona" : "liga"}-${token.slice(0, 8)}.png`;
+      a.click();
+      toast.success(physical ? "QR de lona descargado." : "QR descargado.");
+    } catch {
+      toast.error("No se pudo generar el QR.");
+    }
+  }
+
   function toggleActive(promoterId: string, current: boolean) {
     startTransition(async () => {
       try {
@@ -293,6 +299,7 @@ export function PromotersTable({ promoters, units, canManage }: Props) {
                     <TableHead>Local</TableHead>
                     <TableHead>Vence</TableHead>
                     <TableHead className="text-right">Visitas</TableHead>
+                    <TableHead className="text-right">Interesados</TableHead>
                     <TableHead>¿Rentó?</TableHead>
                     {canManage && <TableHead />}
                   </TableRow>
@@ -325,14 +332,46 @@ export function PromotersTable({ promoters, units, canManage }: Props) {
                               >
                                 <Copy className="size-3" />
                               </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="size-6 shrink-0 p-0 text-muted-foreground"
+                                onClick={() => downloadQr(url, l.publicToken)}
+                                title="Descargar QR (liga digital)"
+                              >
+                                <QrCode className="size-3" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="size-6 shrink-0 p-0 text-muted-foreground"
+                                onClick={() => downloadQr(url, l.publicToken, true)}
+                                title="Descargar QR para lona (mide escaneos físicos)"
+                              >
+                                <Printer className="size-3" />
+                              </Button>
                             </div>
                           </div>
                         </TableCell>
                         <TableCell className="text-sm text-muted-foreground">
-                          {DATE.format(l.expiresAt)}
+                          {formatDate(l.expiresAt)}
                         </TableCell>
                         <TableCell className="text-right tabular-nums text-sm">
                           {l.visitCount}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums text-sm">
+                          {l.leadCount > 0 ? (
+                            <span className="font-medium">
+                              {l.leadCount}
+                              {l.physicalLeadCount > 0 ? (
+                                <span className="ml-1 text-xs font-normal text-muted-foreground">
+                                  ({l.physicalLeadCount} lona)
+                                </span>
+                              ) : null}
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground">0</span>
+                          )}
                         </TableCell>
                         <TableCell>
                           {l.resultedInRent ? (

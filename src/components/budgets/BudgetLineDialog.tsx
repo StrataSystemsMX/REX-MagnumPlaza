@@ -30,6 +30,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { actionUpsertBudgetLine } from "@/lib/services/budgets";
+import { formatMXN } from "@/lib/format-currency";
 import { upsertBudgetLineSchema, type UpsertBudgetLineInput } from "@/lib/validators/budget";
 import { MONTH_KEYS, type BudgetLineRow } from "@/lib/services/budgets-types";
 import type { BudgetConceptType } from "@/generated/prisma/enums";
@@ -279,7 +280,7 @@ export function BudgetLineDialog({
             <div className="flex items-center justify-between rounded-md border bg-muted/40 px-4 py-2">
               <span className="text-sm text-muted-foreground">Total anual</span>
               <span className="font-semibold tabular-nums">
-                {new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN", maximumFractionDigits: 0 }).format(annual)}
+                {formatMXN(annual)}
               </span>
             </div>
 

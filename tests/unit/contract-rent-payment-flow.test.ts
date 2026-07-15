@@ -73,7 +73,7 @@ vi.mock("@/lib/prisma/client", () => ({
     payment: paymentMock,
     auditLog: auditLogMock,
     userRole: userRoleMock,
-    $transaction: async (fn: (tx: unknown) => Promise<unknown>, opts?: unknown) => {
+    $transaction: async (fn: (tx: unknown) => Promise<unknown>, _opts?: unknown) => {
       // La función recibe el mock correcto según el módulo que la llama.
       // Para contracts usamos txContractMock; para payments txPaymentMock.
       try {
@@ -111,7 +111,7 @@ describe("Fase 1 — Crear contrato", () => {
       id: "unit-1",
       code: "L1",
       status: "DISPONIBLE",
-      property: { status: "ACTIVO", name: "Plaza Progreso" },
+      property: { status: "EN_RENTA", name: "Plaza Progreso" },
     });
     lesseeMock.findFirst.mockResolvedValue({ id: "lessee-1" });
     contractMock.create.mockResolvedValue({
@@ -136,6 +136,7 @@ describe("Fase 1 — Crear contrato", () => {
       paymentDay: 1,
       lateFeePercentage: 5,
       autoRenew: false,
+      friendlyReminderEnabled: false,
       paidInAdvance: false,
     });
 
@@ -161,6 +162,7 @@ describe("Fase 1 — Crear contrato", () => {
         paymentDay: 1,
         lateFeePercentage: 5,
         autoRenew: false,
+        friendlyReminderEnabled: false,
         paidInAdvance: false,
       }),
     ).rejects.toThrow(/ya está rentada/i);

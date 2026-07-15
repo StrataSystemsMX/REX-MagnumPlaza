@@ -1,6 +1,7 @@
 import { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/lib/prisma/client";
 import { computeRentStatus } from "@/lib/services/rent-status";
+import { calculateLateFee } from "@/lib/services/late-fees";
 
 /** Cliente transaccional de Prisma (el `tx` de `prisma.$transaction`). */
 export type TxClient = Parameters<Parameters<typeof prisma.$transaction>[0]>[0];
@@ -32,7 +33,13 @@ export async function recalcRentInTx(
 
   const rent = await tx.rent.findFirstOrThrow({
     where: { id: rentId, tenantId },
-    select: { amountDue: true, dueDate: true, status: true, amountWaived: true },
+    select: {
+      amountDue: true,
+      dueDate: true,
+      status: true,
+      amountWaived: true,
+      contract: { select: { lateFeePercentage: true } },
+    },
   });
 
   // Si la renta fue completamente condonada (WAIVED puro, sin pagos), no
@@ -53,9 +60,17 @@ export async function recalcRentInTx(
         rent.amountWaived,
       );
 
+  // Interés moratorio: se recalcula sobre el nuevo saldo de principal. Si el
+  // pago salda el principal, calculateLateFee devuelve 0 y el interés se limpia.
+  const lateFeeAccrued = calculateLateFee(
+    { amountDue: rent.amountDue, amountPaid, amountWaived: rent.amountWaived, dueDate: rent.dueDate, status },
+    { lateFeePercentage: rent.contract?.lateFeePercentage ?? null },
+    now,
+  ).amount.toDecimalPlaces(2);
+
   await tx.rent.updateMany({
     where: { id: rentId, tenantId },
-    data: { amountPaid, status },
+    data: { amountPaid, status, lateFeeAccrued },
   });
 
   return { amountPaid, status };

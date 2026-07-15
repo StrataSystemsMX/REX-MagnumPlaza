@@ -16,3 +16,35 @@ export const createPromoterLinkSchema = z.object({
   expiresInDays: z.number().int().min(1).max(365).default(30),
 });
 export type CreatePromoterLinkInput = z.infer<typeof createPromoterLinkSchema>;
+
+// Captura pública de un interesado desde la página de la vacante ("Me interesa").
+// El token identifica la liga; tenantId/promoterLinkId se derivan en el servidor.
+export const captureLeadSchema = z.object({
+  token: z.string().regex(/^[a-f0-9]{32}$/i, "Token inválido."),
+  name: z
+    .string()
+    .trim()
+    .min(1, "Ingresa tu nombre.")
+    .max(120, "Máximo 120 caracteres."),
+  phone: z
+    .string()
+    .trim()
+    .min(10, "Teléfono inválido.")
+    .max(20, "Teléfono inválido.")
+    .regex(DIGITS_ONLY, "Solo dígitos."),
+  email: z
+    .string()
+    .trim()
+    .email("Email inválido.")
+    .max(254)
+    .optional()
+    .or(z.literal("").transform(() => undefined)),
+  message: z
+    .string()
+    .trim()
+    .max(500, "Máximo 500 caracteres.")
+    .optional()
+    .or(z.literal("").transform(() => undefined)),
+  source: z.enum(["DIGITAL", "PHYSICAL"]).default("DIGITAL"),
+});
+export type CaptureLeadInput = z.infer<typeof captureLeadSchema>;

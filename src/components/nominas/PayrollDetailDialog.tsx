@@ -14,12 +14,7 @@ import {
 import type { PayrollListItem } from "@/lib/services/payroll-queries";
 import type { PayrollType } from "@/generated/prisma/enums";
 import { payrollTypeLabel } from "@/lib/i18n/enums";
-
-const MXN = new Intl.NumberFormat("es-MX", {
-  style: "currency",
-  currency: "MXN",
-  maximumFractionDigits: 2,
-});
+import { formatMXN } from "@/lib/format-currency";
 
 const MONTH_LABELS = [
   "Enero",
@@ -97,7 +92,7 @@ export function PayrollDetailDialog({
                   Monto total
                 </p>
                 <p className="mt-0.5 text-2xl font-semibold tabular-nums">
-                  {MXN.format(item.amount)}
+                  {formatMXN(item.amount, 2)}
                 </p>
               </div>
 
@@ -111,14 +106,14 @@ export function PayrollDetailDialog({
                   label="Monto sin IVA"
                   value={
                     item.amountWithoutTax !== null
-                      ? MXN.format(item.amountWithoutTax)
+                      ? formatMXN(item.amountWithoutTax, 2)
                       : "—"
                   }
                 />
                 <DetailRow
                   label="IVA"
                   value={
-                    item.taxAmount !== null ? MXN.format(item.taxAmount) : "—"
+                    item.taxAmount !== null ? formatMXN(item.taxAmount, 2) : "—"
                   }
                 />
               </dl>

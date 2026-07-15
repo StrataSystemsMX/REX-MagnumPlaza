@@ -1,5 +1,6 @@
 import { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/lib/prisma/client";
+import { computeBalance } from "@/lib/services/rent-status";
 import type {
   ContractStatus,
   ContractType,
@@ -104,6 +105,7 @@ export interface ExpensesByCategoryRow {
   categoryName: string;
   categoryCode: string;
   total: string;
+  pct: number; // fracción del gasto total del año (0-1)
   byLegalEntity: Record<string, string>; // key: legalEntity.code
 }
 
@@ -114,6 +116,7 @@ export interface ExpensesByCategoryReport {
   totals: {
     total: string;
     byLegalEntity: Record<string, string>;
+    pctByLegalEntity: Record<string, number>; // fracción del total por razón social (0-1)
   };
 }
 
@@ -171,6 +174,8 @@ async function buildAgingReport(tenantId: string, now: Date): Promise<AgingRepor
       id: true,
       amountDue: true,
       amountPaid: true,
+      amountWaived: true,
+      lateFeeAccrued: true,
       dueDate: true,
       contract: {
         select: {
@@ -186,7 +191,7 @@ async function buildAgingReport(tenantId: string, now: Date): Promise<AgingRepor
   const totals = { b30: ZERO, b60: ZERO, b90: ZERO, bPlus: ZERO };
 
   for (const r of rents) {
-    const balance = dec(r.amountDue).minus(dec(r.amountPaid));
+    const balance = computeBalance(r.amountDue, r.amountPaid, r.amountWaived, r.lateFeeAccrued);
     if (balance.lte(ZERO)) continue;
 
     const days = Math.max(
@@ -506,6 +511,11 @@ async function buildExpensesByCategoryReport(
     grand = grand.plus(amount);
   }
 
+  // Fracción del gasto total; 0 si no hubo egresos (evita división por cero).
+  const grandNum = Number(grand);
+  const share = (v: Prisma.Decimal) =>
+    grandNum > 0 ? Number(v) / grandNum : 0;
+
   const rows: ExpensesByCategoryRow[] = Array.from(byCategory.values())
     .sort((a, b) => Number(b.total.minus(a.total)))
     .map((b) => {
@@ -517,13 +527,17 @@ async function buildExpensesByCategoryReport(
         categoryName: b.categoryName,
         categoryCode: b.categoryCode,
         total: b.total.toString(),
+        pct: share(b.total),
         byLegalEntity: byLE,
       };
     });
 
   const totalsByLEOut: Record<string, string> = {};
+  const pctByLEOut: Record<string, number> = {};
   for (const code of legalEntityCodes) {
-    totalsByLEOut[code] = (totalsByLE.get(code) ?? ZERO).toString();
+    const leTotal = totalsByLE.get(code) ?? ZERO;
+    totalsByLEOut[code] = leTotal.toString();
+    pctByLEOut[code] = share(leTotal);
   }
 
   return {
@@ -533,6 +547,7 @@ async function buildExpensesByCategoryReport(
     totals: {
       total: grand.toString(),
       byLegalEntity: totalsByLEOut,
+      pctByLegalEntity: pctByLEOut,
     },
   };
 }

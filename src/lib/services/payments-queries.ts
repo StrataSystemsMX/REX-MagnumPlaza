@@ -2,6 +2,7 @@ import { Prisma } from "@/generated/prisma/client";
 import { requireAuth } from "@/lib/auth/get-session";
 import { OUTSTANDING_STATUSES } from "@/lib/constants/rent-statuses";
 import { prisma } from "@/lib/prisma/client";
+import { computeBalance } from "@/lib/services/rent-status";
 import { serializeDecimals } from "@/lib/utils/serialize-decimals";
 import { unitCode, unitWithProperty } from "@/lib/i18n/unit-label";
 import type { PaymentMethod, PropertyType, RentStatus } from "@/generated/prisma/enums";
@@ -78,9 +79,7 @@ export async function getOutstandingRents(filters: OutstandingFilters = {}) {
 
   const now = Date.now();
   return rents.map((r) => {
-    const balance = new Prisma.Decimal(r.amountDue)
-      .minus(new Prisma.Decimal(r.amountPaid))
-      .minus(new Prisma.Decimal(r.amountWaived ?? 0));
+    const balance = computeBalance(r.amountDue, r.amountPaid, r.amountWaived ?? 0, r.lateFeeAccrued);
     const daysOverdue = Math.floor((now - r.dueDate.getTime()) / (1000 * 60 * 60 * 24));
     return serializeDecimals({ ...r, balance: balance.toString(), daysOverdue });
   });
@@ -190,8 +189,8 @@ export async function getPaymentsByLessee(lesseeId: string) {
 export type LesseePayment = Awaited<ReturnType<typeof getPaymentsByLessee>>[number];
 
 /**
- * Saldo pendiente total de un inquilino: suma de (amountDue - amountPaid)
- * de todos sus Rents en estados DUE/PARTIAL/OVERDUE_*. Usado en el header
+ * Saldo pendiente total de un inquilino: suma de (amountDue - amountPaid -
+ * amountWaived) de todos sus Rents en estados DUE/PARTIAL/OVERDUE_*. Usado en el header
  * del estado de cuenta y en la tarjeta de resumen.
  */
 export async function getOutstandingByLessee(lesseeId: string): Promise<{
@@ -212,6 +211,7 @@ export async function getOutstandingByLessee(lesseeId: string): Promise<{
       amountDue: true,
       amountPaid: true,
       amountWaived: true,
+      lateFeeAccrued: true,
       status: true,
       dueDate: true,
     },
@@ -220,11 +220,7 @@ export async function getOutstandingByLessee(lesseeId: string): Promise<{
 
   const total = rents.reduce(
     (acc, r) =>
-      acc.plus(
-        new Prisma.Decimal(r.amountDue)
-          .minus(new Prisma.Decimal(r.amountPaid))
-          .minus(new Prisma.Decimal(r.amountWaived ?? 0)),
-      ),
+      acc.plus(computeBalance(r.amountDue, r.amountPaid, r.amountWaived ?? 0, r.lateFeeAccrued)),
     new Prisma.Decimal(0),
   );
   const overdueCount = rents.filter((r) =>
@@ -324,10 +320,7 @@ export async function getOutstandingRentsForLessee(lesseeId: string) {
     amountDue: r.amountDue.toString(),
     amountPaid: r.amountPaid.toString(),
     amountWaived: r.amountWaived.toString(),
-    balance: new Prisma.Decimal(r.amountDue)
-      .minus(new Prisma.Decimal(r.amountPaid))
-      .minus(new Prisma.Decimal(r.amountWaived ?? 0))
-      .toString(),
+    balance: computeBalance(r.amountDue, r.amountPaid, r.amountWaived ?? 0, r.lateFeeAccrued).toString(),
     status: r.status,
     unitCode: r.contract.unit.code,
     propertyName: r.contract.unit.property.name,
@@ -744,7 +737,7 @@ export async function getYearlyCollectionsMatrix(year: number): Promise<YearlyCo
   );
 
   const properties = await prisma.property.findMany({
-    where: { tenantId, isActive: true, status: "ACTIVO" },
+    where: { tenantId, isActive: true, status: { not: "BLOQUEADO" } },
     orderBy: { name: "asc" },
     include: {
       ownerEntity: { select: { code: true } },

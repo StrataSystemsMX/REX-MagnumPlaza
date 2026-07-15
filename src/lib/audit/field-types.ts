@@ -32,6 +32,7 @@ export const DATE_KEYS = new Set<string>([
   "scheduledDate",
   "dueDate",
   "period",
+  "insuranceExpiresAt",
 ]);
 
 function isDecimalLike(v: unknown): boolean {

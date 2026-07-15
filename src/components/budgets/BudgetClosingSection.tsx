@@ -13,14 +13,9 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import { formatMXN } from "@/lib/format-currency";
 import { MONTH_KEYS } from "@/lib/services/budgets-types";
 import type { BudgetLineRow, ConsolidatedBudget } from "@/lib/services/budgets-types";
-
-const MXN = new Intl.NumberFormat("es-MX", {
-  style: "currency",
-  currency: "MXN",
-  maximumFractionDigits: 0,
-});
 
 const MONTH_SHORT = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
 
@@ -106,10 +101,10 @@ function OperatingProfitCard({
           "text-3xl font-semibold tracking-tight tabular-nums",
           positive ? "text-emerald-700 dark:text-emerald-400" : "text-rose-700 dark:text-rose-400",
         )}>
-          {MXN.format(annual)}
+          {formatMXN(annual)}
         </div>
         <p className="text-xs text-muted-foreground">
-          Mes actual: <span className="font-medium tabular-nums">{MXN.format(thisMonth)}</span>
+          Mes actual: <span className="font-medium tabular-nums">{formatMXN(thisMonth)}</span>
         </p>
         {entities.length > 0 && (
           <div className="flex flex-wrap gap-1.5 pt-1">
@@ -124,7 +119,7 @@ function OperatingProfitCard({
                     ? "text-emerald-700 dark:text-emerald-400"
                     : "text-rose-700 dark:text-rose-400",
                 )}>
-                  {MXN.format(e.profit)}
+                  {formatMXN(e.profit)}
                 </span>
               </span>
             ))}
@@ -177,7 +172,7 @@ function ClosingLinesCard({
       <CardContent className="space-y-3">
         <div className="flex items-end justify-between">
           <span className={cn("text-3xl font-semibold tracking-tight tabular-nums", accentText)}>
-            {MXN.format(annualTotal)}
+            {formatMXN(annualTotal)}
           </span>
           <span className="text-xs text-muted-foreground">
             {lines.length} {lines.length === 1 ? "línea" : "líneas"}
@@ -235,11 +230,11 @@ function ClosingLinesCard({
                         {showMonths &&
                           monthlyTotal.map((v, i) => (
                             <td key={i} className="px-2 py-1.5 text-right text-xs tabular-nums">
-                              {v !== 0 ? MXN.format(v) : <span className="text-muted-foreground/50">—</span>}
+                              {v !== 0 ? formatMXN(v) : <span className="text-muted-foreground/50">—</span>}
                             </td>
                           ))}
                         <td className="px-3 py-1.5 text-right tabular-nums">
-                          {MXN.format(annualTotal)}
+                          {formatMXN(annualTotal)}
                         </td>
                       </tr>
                     </tbody>
@@ -277,14 +272,14 @@ function ClosingLineRow({
         MONTH_KEYS.map((k) => (
           <td key={k} className="px-2 py-2 text-right text-xs tabular-nums">
             {line.months[k] > 0 ? (
-              MXN.format(line.months[k])
+              formatMXN(line.months[k])
             ) : (
               <span className="text-muted-foreground/40">—</span>
             )}
           </td>
         ))}
       <td className="px-3 py-2 text-right text-sm font-medium tabular-nums">
-        {MXN.format(line.annual)}
+        {formatMXN(line.annual)}
       </td>
     </tr>
   );
@@ -337,10 +332,10 @@ function NetProfitCard({
           "text-4xl font-bold tracking-tight tabular-nums",
           positive ? "text-emerald-700 dark:text-emerald-400" : "text-rose-700 dark:text-rose-400",
         )}>
-          {MXN.format(annual)}
+          {formatMXN(annual)}
         </div>
         <p className="text-xs text-muted-foreground">
-          Mes actual: <span className="font-medium tabular-nums">{MXN.format(thisMonth)}</span>
+          Mes actual: <span className="font-medium tabular-nums">{formatMXN(thisMonth)}</span>
         </p>
       </CardContent>
     </Card>

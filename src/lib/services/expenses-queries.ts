@@ -86,11 +86,11 @@ function buildDateFilter(year?: number, month?: number) {
   return { gte: start, lt: end };
 }
 
-/** Categorías de egreso para el form y los filtros. */
+/** Categorías de egreso para el form y los filtros (solo activas). */
 export async function getExpenseCategories() {
   const { tenantId } = await requireAuth();
   return prisma.expenseCategory.findMany({
-    where: { tenantId, type: { not: "PAYROLL" } },
+    where: { tenantId, type: { not: "PAYROLL" }, isActive: true },
     orderBy: [{ type: "asc" }, { name: "asc" }],
     select: {
       id: true,
@@ -104,6 +104,31 @@ export async function getExpenseCategories() {
 
 export type ExpenseCategoryOption = Awaited<
   ReturnType<typeof getExpenseCategories>
+>[number];
+
+/**
+ * Todas las categorías de egreso (activas y archivadas) con su uso, para la UI
+ * de administración de conceptos. Incluye el conteo de egresos para advertir
+ * antes de archivar un concepto en uso.
+ */
+export async function getManagedExpenseCategories() {
+  const { tenantId } = await requireAuth();
+  return prisma.expenseCategory.findMany({
+    where: { tenantId, type: { not: "PAYROLL" } },
+    orderBy: [{ isActive: "desc" }, { type: "asc" }, { name: "asc" }],
+    select: {
+      id: true,
+      code: true,
+      name: true,
+      type: true,
+      isActive: true,
+      _count: { select: { expenses: true } },
+    },
+  });
+}
+
+export type ManagedExpenseCategory = Awaited<
+  ReturnType<typeof getManagedExpenseCategories>
 >[number];
 
 /** Inmuebles para asociar a un egreso (opcional en el form). */

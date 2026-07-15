@@ -191,6 +191,8 @@ export async function actionRetryNotification(
 export interface TenantNotificationSettings {
   autoSendOverdueNotifications: boolean;
   autoSendPaymentConfirmations: boolean;
+  officeEmail: string | null;
+  officeWhatsapp: string | null;
   whatsappConfigured: boolean;
 }
 
@@ -201,18 +203,36 @@ export async function actionGetTenantNotificationSettings(): Promise<TenantNotif
     select: {
       autoSendOverdueNotifications: true,
       autoSendPaymentConfirmations: true,
+      officeEmail: true,
+      officeWhatsapp: true,
     },
   });
   return {
     autoSendOverdueNotifications: t.autoSendOverdueNotifications,
     autoSendPaymentConfirmations: t.autoSendPaymentConfirmations,
+    officeEmail: t.officeEmail,
+    officeWhatsapp: t.officeWhatsapp,
     whatsappConfigured: isWhatsAppConfigured(),
   };
+}
+
+/** Normaliza un email opcional: trim + lowercase, "" → null. */
+function normalizeEmail(v: string | null | undefined): string | null {
+  const s = (v ?? "").trim().toLowerCase();
+  return s.length > 0 ? s : null;
+}
+
+/** Normaliza un teléfono WhatsApp a E.164 sin "+": solo dígitos, "" → null. */
+function normalizeWhatsapp(v: string | null | undefined): string | null {
+  const s = (v ?? "").replace(/[^\d]/g, "");
+  return s.length > 0 ? s : null;
 }
 
 export async function actionUpdateTenantNotificationSettings(input: {
   autoSendOverdueNotifications: boolean;
   autoSendPaymentConfirmations: boolean;
+  officeEmail?: string | null;
+  officeWhatsapp?: string | null;
 }): Promise<TenantNotificationSettings> {
   const { tenantId, dbUser } = await requireAuth();
   const master = await isMaster(dbUser.id);
@@ -220,11 +240,19 @@ export async function actionUpdateTenantNotificationSettings(input: {
     throw new Error("Sólo MASTER puede cambiar la configuración de notificaciones.");
   }
 
+  const officeEmail = normalizeEmail(input.officeEmail);
+  const officeWhatsapp = normalizeWhatsapp(input.officeWhatsapp);
+  if (officeEmail && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(officeEmail)) {
+    throw new Error("El correo de la oficina no es válido.");
+  }
+
   await prisma.tenant.update({
     where: { id: tenantId },
     data: {
       autoSendOverdueNotifications: input.autoSendOverdueNotifications,
       autoSendPaymentConfirmations: input.autoSendPaymentConfirmations,
+      officeEmail,
+      officeWhatsapp,
     },
   });
 
@@ -238,6 +266,8 @@ export async function actionUpdateTenantNotificationSettings(input: {
       changes: {
         autoSendOverdueNotifications: input.autoSendOverdueNotifications,
         autoSendPaymentConfirmations: input.autoSendPaymentConfirmations,
+        officeEmail,
+        officeWhatsapp,
       },
     },
   });

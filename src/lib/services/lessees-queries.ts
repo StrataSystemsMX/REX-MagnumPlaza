@@ -117,6 +117,7 @@ export async function getOverdueRentsByLessee(lesseeId: string) {
       status: true,
       amountDue: true,
       amountPaid: true,
+      amountWaived: true,
       contract: {
         select: {
           id: true,

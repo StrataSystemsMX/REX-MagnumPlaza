@@ -54,6 +54,7 @@ export interface ContractEditInitial {
   paymentDay: string;
   lateFeePercentage: string;
   autoRenew: boolean;
+  friendlyReminderEnabled: boolean;
   paidInAdvance: boolean;
   advancePaidUntil: string; // YYYY-MM-DD o ""
 }
@@ -126,6 +127,7 @@ export function ContractActions({
           lateFeePercentage:
             form.lateFeePercentage === "" ? undefined : Number(form.lateFeePercentage),
           autoRenew: form.autoRenew,
+          friendlyReminderEnabled: form.friendlyReminderEnabled,
           paidInAdvance: form.paidInAdvance,
           advancePaidUntil:
             form.paidInAdvance && form.advancePaidUntil
@@ -158,6 +160,7 @@ export function ContractActions({
   );
   const [terminationReason, setTerminationReason] = useState("");
 
+  const [renewStartDate, setRenewStartDate] = useState("");
   const [renewEndDate, setRenewEndDate] = useState("");
   const [renewAmount, setRenewAmount] = useState(monthlyAmount);
 
@@ -197,13 +200,14 @@ export function ContractActions({
   }
 
   function doRenew() {
-    if (!renewEndDate || !renewAmount) {
-      toast.error("Completa la nueva fecha y monto.");
+    if (!renewStartDate || !renewEndDate || !renewAmount) {
+      toast.error("Completa las fechas de inicio y fin y el monto.");
       return;
     }
     startRenew(async () => {
       try {
         await actionRenewContract(contractId, {
+          newStartDate: new Date(renewStartDate),
           newEndDate: new Date(renewEndDate),
           newAmount: Number(renewAmount),
         });
@@ -242,9 +246,13 @@ export function ContractActions({
         <Button
           variant="secondary"
           onClick={() => {
-            const next = new Date(endDate);
-            next.setUTCFullYear(next.getUTCFullYear() + 1);
-            setRenewEndDate(next.toISOString().slice(0, 10));
+            // Default: inicio = día siguiente al fin del actual; fin = +1 año.
+            const start = new Date(endDate);
+            start.setUTCDate(start.getUTCDate() + 1);
+            const end = new Date(start);
+            end.setUTCFullYear(end.getUTCFullYear() + 1);
+            setRenewStartDate(start.toISOString().slice(0, 10));
+            setRenewEndDate(end.toISOString().slice(0, 10));
             setRenewOpen(true);
           }}
           disabled={renewing}
@@ -341,11 +349,19 @@ export function ContractActions({
           <DialogHeader>
             <DialogTitle>Renovar contrato</DialogTitle>
             <DialogDescription>
-              Crea un contrato hijo en borrador. Arranca el día siguiente al fin del contrato
-              actual.
+              Crea un contrato hijo en borrador. Ajusta las fechas si la firma se
+              retrasa; puedes editarlas después.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
+            <div className="space-y-1">
+              <Label>Nueva fecha de inicio</Label>
+              <Input
+                type="date"
+                value={renewStartDate}
+                onChange={(e) => setRenewStartDate(e.target.value)}
+              />
+            </div>
             <div className="space-y-1">
               <Label>Nueva fecha de fin</Label>
               <Input
@@ -463,6 +479,17 @@ export function ContractActions({
                   onChange={(e) => setField("autoRenew", e.target.checked)}
                 />
                 Auto-renovar al vencer
+              </label>
+            </div>
+            <div className="md:col-span-2 flex items-end gap-2">
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={form.friendlyReminderEnabled}
+                  onChange={(e) => setField("friendlyReminderEnabled", e.target.checked)}
+                />
+                Recordatorio amable al 1er mes de atraso (el aviso fuerte a los 2
+                meses se manda siempre)
               </label>
             </div>
 

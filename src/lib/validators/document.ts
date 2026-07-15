@@ -112,3 +112,65 @@ export function extensionForContractDocumentMime(mime: string): "pdf" {
   if (mime === "application/pdf") return "pdf";
   throw new Error(`MIME no soportado para contrato: ${mime}`);
 }
+
+// Adjuntos de mantenimiento: fotos (JPG/PNG/WebP) y vales/facturas en PDF.
+export const MAX_MAINTENANCE_DOCUMENT_SIZE_BYTES = 10 * 1024 * 1024;
+
+export const ALLOWED_MAINTENANCE_DOCUMENT_MIME_TYPES = [
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "application/pdf",
+] as const;
+
+export type AllowedMaintenanceDocumentMime =
+  (typeof ALLOWED_MAINTENANCE_DOCUMENT_MIME_TYPES)[number];
+
+const ALLOWED_MAINTENANCE_DOC_LIST =
+  ALLOWED_MAINTENANCE_DOCUMENT_MIME_TYPES as readonly string[];
+
+export const maintenanceDocumentFileSchema = z
+  .instanceof(File, { message: "Archivo inválido." })
+  .refine(
+    (f) => ALLOWED_MAINTENANCE_DOC_LIST.includes(f.type),
+    "Solo se permiten imágenes (JPG, PNG, WebP) o PDF.",
+  )
+  .refine((f) => f.size > 0, "El archivo está vacío.")
+  .refine(
+    (f) => f.size <= MAX_MAINTENANCE_DOCUMENT_SIZE_BYTES,
+    "El archivo no debe pesar más de 10 MB.",
+  );
+
+export const uploadMaintenanceDocumentSchema = z.object({
+  maintenanceId: z.string().min(1, "maintenanceId requerido."),
+  file: maintenanceDocumentFileSchema,
+});
+
+export type UploadMaintenanceDocumentInput = z.infer<
+  typeof uploadMaintenanceDocumentSchema
+>;
+
+export const deleteMaintenanceDocumentSchema = z.object({
+  documentId: z.string().min(1, "documentId requerido."),
+});
+
+export type DeleteMaintenanceDocumentInput = z.infer<
+  typeof deleteMaintenanceDocumentSchema
+>;
+
+export function extensionForMaintenanceDocumentMime(
+  mime: string,
+): "jpg" | "png" | "webp" | "pdf" {
+  switch (mime) {
+    case "image/jpeg":
+      return "jpg";
+    case "image/png":
+      return "png";
+    case "image/webp":
+      return "webp";
+    case "application/pdf":
+      return "pdf";
+    default:
+      throw new Error(`MIME no soportado para mantenimiento: ${mime}`);
+  }
+}

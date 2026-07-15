@@ -22,23 +22,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
+import { formatMXN, formatMXNCompact } from "@/lib/format-currency";
 import { MonthlyPivotTable, themeFor } from "./MonthlyPivotTable";
 import { UtilityMonthlyChart } from "./UtilityMonthlyChart";
 import { EntityUtilityBars } from "./EntityUtilityBars";
 import type { AnnualClosing, Monthly12 } from "@/lib/services/cierres-queries";
-
-const MXN_INT = new Intl.NumberFormat("es-MX", {
-  style: "currency",
-  currency: "MXN",
-  maximumFractionDigits: 0,
-});
-
-const MXN_COMPACT = new Intl.NumberFormat("es-MX", {
-  style: "currency",
-  currency: "MXN",
-  notation: "compact",
-  maximumFractionDigits: 1,
-});
 
 interface CierreAnualViewProps {
   data: AnnualClosing;
@@ -321,24 +309,24 @@ export function CierreAnualView({
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <KpiCard
           label="Ingresos"
-          value={MXN_COMPACT.format(totals.income)}
+          value={formatMXNCompact(totals.income)}
           icon={TrendingUp}
           color="success"
         />
         <KpiCard
           label="Egresos"
-          value={MXN_COMPACT.format(totals.expense)}
+          value={formatMXNCompact(totals.expense)}
           icon={TrendingDown}
         />
         <KpiCard
           label="Utilidad operativa"
-          value={MXN_COMPACT.format(totals.operativeUtility)}
+          value={formatMXNCompact(totals.operativeUtility)}
           icon={Wallet}
           color={totals.operativeUtility >= 0 ? "success" : "danger"}
         />
         <KpiCard
           label="Utilidad final"
-          value={MXN_COMPACT.format(totals.finalUtility)}
+          value={formatMXNCompact(totals.finalUtility)}
           icon={Wallet}
           color={totals.finalUtility >= 0 ? "success" : "danger"}
         />
@@ -677,7 +665,7 @@ function FinalUtilityBand({
             Utilidad final
           </span>
           <span className="mt-0.5 text-3xl font-bold tabular-nums tracking-tight sm:text-4xl">
-            {MXN_INT.format(finalNum)}
+            {formatMXN(finalNum)}
           </span>
         </div>
       </div>
@@ -735,7 +723,7 @@ function FormulaItem({
               valueColor,
             )}
           >
-            {MXN_INT.format(num)}
+            {formatMXN(num)}
           </div>
         </div>
       </div>

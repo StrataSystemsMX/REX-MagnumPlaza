@@ -96,6 +96,7 @@ export async function actionCreateContract(
         lateFeePercentage:
           data.lateFeePercentage !== undefined ? decimal(data.lateFeePercentage) : null,
         autoRenew: data.autoRenew,
+        friendlyReminderEnabled: data.friendlyReminderEnabled,
         paidInAdvance: data.paidInAdvance,
         advancePaidUntil: data.advancePaidUntil,
         signedDate: data.signedDate,
@@ -162,6 +163,8 @@ export async function actionUpdateContract(
   if (data.lateFeePercentage !== undefined)
     update.lateFeePercentage = decimal(data.lateFeePercentage);
   if (data.autoRenew !== undefined) update.autoRenew = data.autoRenew;
+  if (data.friendlyReminderEnabled !== undefined)
+    update.friendlyReminderEnabled = data.friendlyReminderEnabled;
   if (data.paidInAdvance !== undefined) update.paidInAdvance = data.paidInAdvance;
   if (data.advancePaidUntil !== undefined) update.advancePaidUntil = data.advancePaidUntil;
   if (data.signedDate !== undefined) update.signedDate = data.signedDate;
@@ -316,14 +319,10 @@ export async function actionRenewContract(
     where: { id, tenantId },
   });
   if (!parent) throw new Error("Contrato no encontrado o fuera de tu tenant.");
-  if (data.newEndDate.getTime() <= parent.endDate.getTime()) {
-    throw new Error(
-      "La nueva fecha de fin debe ser posterior al fin del contrato actual.",
-    );
-  }
 
-  // El hijo arranca el día siguiente al fin del padre.
-  const childStart = new Date(parent.endDate.getTime() + 24 * 60 * 60 * 1000);
+  // El hijo arranca en la fecha de inicio indicada (editable después si la firma
+  // se retrasa). El validador ya garantiza newEndDate > newStartDate.
+  const childStart = data.newStartDate;
 
   const child = await prisma.contract.create({
     data: {
@@ -339,6 +338,7 @@ export async function actionRenewContract(
       paymentDay: parent.paymentDay,
       lateFeePercentage: parent.lateFeePercentage,
       autoRenew: parent.autoRenew,
+      friendlyReminderEnabled: parent.friendlyReminderEnabled,
       notes: `Renovación de ${id}.`,
     },
   });

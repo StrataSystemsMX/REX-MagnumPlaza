@@ -30,8 +30,11 @@ interface RentRow {
   contractId: string;
   amountDue: Prisma.Decimal;
   amountPaid: Prisma.Decimal;
+  amountWaived: Prisma.Decimal;
+  lateFeeAccrued: Prisma.Decimal;
   dueDate: Date;
   status: string;
+  contract: { lateFeePercentage: Prisma.Decimal | null; friendlyReminderEnabled: boolean };
 }
 
 function rent(
@@ -40,14 +43,23 @@ function rent(
   status: RentRow["status"],
   paid = 0,
   due = 10000,
+  lateFeePct: number | null = null,
+  lateFeeAccrued = 0,
+  friendlyReminderEnabled = false,
 ): RentRow {
   return {
     id,
     contractId: `c-${id}`,
     amountDue: D(due),
     amountPaid: D(paid),
+    amountWaived: D(0),
+    lateFeeAccrued: D(lateFeeAccrued),
     dueDate,
     status,
+    contract: {
+      lateFeePercentage: lateFeePct === null ? null : D(lateFeePct),
+      friendlyReminderEnabled,
+    },
   };
 }
 
@@ -148,8 +160,8 @@ describe("updateRentStatuses", () => {
     expect(auditLogMock.create).not.toHaveBeenCalled(); // PAID no es OVERDUE
   });
 
-  it("no toca PAID/WAIVED/OVERDUE_3M (vienen filtrados desde la query)", async () => {
-    rentMock.findMany.mockResolvedValue([]); // simulación: la query del updater no los devuelve
+  it("no avanza PAID/WAIVED; sí incluye OVERDUE_3M en la query (para acumular interés)", async () => {
+    rentMock.findMany.mockResolvedValue([]); // PAID/WAIVED no los devuelve la query
     const { updateRentStatuses } = await import(
       "@/lib/services/rent-status-updater"
     );
@@ -160,13 +172,51 @@ describe("updateRentStatuses", () => {
       where: { tenantId: string; status: { in: string[] } };
     };
     expect(findArg.where.tenantId).toBe(TENANT);
+    // OVERDUE_3M se incluye para seguir acumulando interés aunque su estado no avance.
     expect(findArg.where.status.in).toEqual([
       "PENDING",
       "DUE",
       "PARTIAL",
       "OVERDUE_1M",
       "OVERDUE_2M",
+      "OVERDUE_3M",
     ]);
+  });
+
+  it("acumula interés moratorio en Rent.lateFeeAccrued sin cambiar el estado", async () => {
+    // OVERDUE_2M con 5% mensual, 63 días vencido, 10000 de saldo:
+    // 10000 × 0.05 × (63/30) = 1050.00
+    rentMock.findMany.mockResolvedValue([
+      rent("r1", utc(2026, 1, 1), "OVERDUE_2M", 0, 10000, 5, 0),
+    ]);
+    const { updateRentStatuses } = await import(
+      "@/lib/services/rent-status-updater"
+    );
+    const r = await updateRentStatuses(TENANT, { now: utc(2026, 3, 5) }); // 63 días
+    expect(r.lateFeesUpdated).toBe(1);
+    expect(r.rentsUpdated).toBe(0); // el estado OVERDUE_2M no cambia aún
+    const call = rentMock.updateMany.mock.calls[0]?.[0] as {
+      data: { lateFeeAccrued: Prisma.Decimal; status?: string };
+    };
+    expect(call.data.status).toBeUndefined();
+    expect(call.data.lateFeeAccrued.toString()).toBe("1050");
+  });
+
+  it("limpia el interés (a 0) cuando el principal queda saldado", async () => {
+    // Estaba con 800 de interés, ahora pagado completo → fee debe volver a 0.
+    rentMock.findMany.mockResolvedValue([
+      rent("r1", utc(2026, 0, 1), "OVERDUE_2M", 10000, 10000, 5, 800),
+    ]);
+    const { updateRentStatuses } = await import(
+      "@/lib/services/rent-status-updater"
+    );
+    const r = await updateRentStatuses(TENANT, { now: utc(2026, 3, 5) });
+    expect(r.lateFeesUpdated).toBe(1);
+    const call = rentMock.updateMany.mock.calls[0]?.[0] as {
+      data: { lateFeeAccrued: Prisma.Decimal; status?: string };
+    };
+    expect(call.data.lateFeeAccrued.toString()).toBe("0");
+    expect(call.data.status).toBe("PAID"); // saldado → PAID
   });
 
   it("procesa varios rents con transiciones distintas en una sola corrida", async () => {
@@ -187,5 +237,42 @@ describe("updateRentStatuses", () => {
     expect(r.byNewStatus.PAID).toBe(1);
     expect(r.overdueTransitions).toBe(2); // sólo OVERDUE_*
     expect(auditLogMock.create).toHaveBeenCalledTimes(2);
+  });
+
+  // --- Política de 2 meses: gating del recordatorio amable (1M) ---
+
+  it("NO manda el recordatorio amable (1M) si el contrato no lo habilitó (default)", async () => {
+    rentMock.findMany.mockResolvedValue([
+      rent("r1", utc(2026, 2, 1), "DUE"), // 35d → OVERDUE_1M, friendly off
+    ]);
+    const { updateRentStatuses } = await import(
+      "@/lib/services/rent-status-updater"
+    );
+    const r = await updateRentStatuses(TENANT, { now: utc(2026, 3, 5) });
+    expect(r.byNewStatus.OVERDUE_1M).toBe(1);
+    expect(mockSendRentReminder).not.toHaveBeenCalled(); // amable no se manda
+    expect(auditLogMock.create).toHaveBeenCalledOnce(); // pero la transición sí se audita
+  });
+
+  it("SÍ manda el recordatorio amable (1M) si el contrato lo habilitó", async () => {
+    rentMock.findMany.mockResolvedValue([
+      rent("r1", utc(2026, 2, 1), "DUE", 0, 10000, null, 0, true), // friendly on
+    ]);
+    const { updateRentStatuses } = await import(
+      "@/lib/services/rent-status-updater"
+    );
+    await updateRentStatuses(TENANT, { now: utc(2026, 3, 5) });
+    expect(mockSendRentReminder).toHaveBeenCalledWith(TENANT, "r1", "1M");
+  });
+
+  it("SIEMPRE manda el aviso fuerte de 2 meses (detonante), sin importar el flag amable", async () => {
+    rentMock.findMany.mockResolvedValue([
+      rent("r1", utc(2026, 1, 1), "OVERDUE_1M"), // 63d → OVERDUE_2M, friendly off
+    ]);
+    const { updateRentStatuses } = await import(
+      "@/lib/services/rent-status-updater"
+    );
+    await updateRentStatuses(TENANT, { now: utc(2026, 3, 5) });
+    expect(mockSendRentReminder).toHaveBeenCalledWith(TENANT, "r1", "2M");
   });
 });

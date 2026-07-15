@@ -8,12 +8,7 @@ import {
   type DocumentTenantInfo,
 } from "./shared";
 import type { AnnualClosing, Monthly12 } from "@/lib/services/cierres-queries";
-
-const MXN_INT = new Intl.NumberFormat("es-MX", {
-  style: "currency",
-  currency: "MXN",
-  maximumFractionDigits: 0,
-});
+import { formatMXN } from "@/lib/format-currency";
 
 const MONTHS_SHORT = [
   "Ene", "Feb", "Mar", "Abr", "May", "Jun",
@@ -228,7 +223,7 @@ export function CierreAnualPdf(props: CierreAnualPdfProps) {
               Resumen operativo · Ingresos − Egresos = Utilidad por entidad
             </Text>
             <Text style={styles.blockHeaderTotal}>
-              {MXN_INT.format(Number(closing.summary.operativeUtilityTotal))}
+              {formatMXN(closing.summary.operativeUtilityTotal)}
             </Text>
           </View>
           <SummaryTable closing={closing} />
@@ -297,7 +292,7 @@ export function CierreAnualPdf(props: CierreAnualPdfProps) {
           />
           <View style={styles.finalCardRowFinal}>
             <Text style={{ flex: 1 }}>UTILIDAD − INVERSIONES − REPARTO</Text>
-            <Text>{MXN_INT.format(Number(closing.finalUtility.total))}</Text>
+            <Text>{formatMXN(closing.finalUtility.total)}</Text>
           </View>
         </View>
 
@@ -338,7 +333,7 @@ function PivotBlock({
           <Text style={{ fontSize: 7, opacity: 0.9, marginLeft: 6 }}>{subtitle}</Text>
         ) : null}
         <Text style={[styles.blockHeaderTotal, { marginLeft: "auto" }]}>
-          {MXN_INT.format(Number(grandTotal))}
+          {formatMXN(grandTotal)}
         </Text>
       </View>
       <View style={styles.tableHeaderRow}>
@@ -362,11 +357,11 @@ function PivotBlock({
             <Text style={styles.cellLabel}>{row.label}</Text>
             {row.monthly.map((v, i) => (
               <Text key={i} style={styles.cellMonth}>
-                {Number(v) === 0 ? "—" : MXN_INT.format(Number(v))}
+                {Number(v) === 0 ? "—" : formatMXN(v)}
               </Text>
             ))}
             <Text style={styles.cellTotal}>
-              {MXN_INT.format(Number(row.total))}
+              {formatMXN(row.total)}
             </Text>
           </View>
         ))
@@ -376,11 +371,11 @@ function PivotBlock({
           <Text style={styles.cellLabel}>TOTAL</Text>
           {monthlyTotals.map((v, i) => (
             <Text key={i} style={styles.cellMonth}>
-              {Number(v) === 0 ? "—" : MXN_INT.format(Number(v))}
+              {Number(v) === 0 ? "—" : formatMXN(v)}
             </Text>
           ))}
           <Text style={styles.cellTotal}>
-            {MXN_INT.format(Number(grandTotal))}
+            {formatMXN(grandTotal)}
           </Text>
         </View>
       ) : null}
@@ -443,11 +438,11 @@ function SummaryTable({ closing }: { closing: AnnualClosing }) {
         <Text style={[styles.cellLabel, { flex: 4 }]}>UTILIDAD OPERATIVA</Text>
         {closing.summary.operativeUtility.map((v, i) => (
           <Text key={i} style={styles.cellMonth}>
-            {Number(v) === 0 ? "—" : MXN_INT.format(Number(v))}
+            {Number(v) === 0 ? "—" : formatMXN(v)}
           </Text>
         ))}
         <Text style={styles.cellTotal}>
-          {MXN_INT.format(Number(closing.summary.operativeUtilityTotal))}
+          {formatMXN(closing.summary.operativeUtilityTotal)}
         </Text>
       </View>
     </View>
@@ -514,7 +509,7 @@ function SummaryRow({
             ...(bold ? { fontFamily: "Helvetica-Bold" } : {}),
           }}
         >
-          {Number(v) === 0 ? "—" : MXN_INT.format(Number(v))}
+          {Number(v) === 0 ? "—" : formatMXN(v)}
         </Text>
       ))}
       <Text
@@ -524,7 +519,7 @@ function SummaryRow({
           ...(bold ? { fontFamily: "Helvetica-Bold" } : {}),
         }}
       >
-        {MXN_INT.format(Number(total))}
+        {formatMXN(total)}
       </Text>
     </View>
   );
@@ -541,7 +536,7 @@ function FinalRow({ label, total, muted }: FinalRowProps) {
     <View style={styles.finalCardRow}>
       <Text style={{ flex: 1, ...(muted ? { color: "#666" } : {}) }}>{label}</Text>
       <Text style={muted ? { color: "#666" } : {}}>
-        {MXN_INT.format(Number(total))}
+        {formatMXN(total)}
       </Text>
     </View>
   );

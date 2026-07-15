@@ -1,6 +1,7 @@
 import { Prisma } from "@/generated/prisma/client";
 import { auditActionLabel } from "@/lib/i18n/enums";
 import type { AuditAction, RentStatus } from "@/generated/prisma/enums";
+import { formatMXN } from "@/lib/format-currency";
 
 // ============================================================================
 // Tipos públicos del dashboard
@@ -21,6 +22,7 @@ export interface DashboardSummary {
   occupancyRate: number;
   activeContracts: number;
   contractsExpiringIn60Days: number;
+  insurancePoliciesExpiringSoon: number;
   totalMonthlyExpectedIncome: string;
   totalCollectedThisMonth: string;
   totalOutstanding: string;
@@ -180,10 +182,13 @@ export interface SummaryInputs {
   occupiedUnits: number;
   activeContracts: Array<{ monthlyAmount: Prisma.Decimal | number | string }>;
   expiringContracts: number;
+  expiringInsurance: number;
   paymentsThisMonth: Array<{ amount: Prisma.Decimal | number | string }>;
   outstandingRents: Array<{
     amountDue: Prisma.Decimal | number | string;
     amountPaid: Prisma.Decimal | number | string;
+    amountWaived: Prisma.Decimal | number | string;
+    lateFeeAccrued?: Prisma.Decimal | number | string;
     status: RentStatus;
   }>;
 }
@@ -202,7 +207,12 @@ export function computeSummary(input: SummaryInputs): DashboardSummary {
     input.paymentsThisMonth.map((p) => dec(p.amount)),
   );
   const totalOutstanding = sumDec(
-    input.outstandingRents.map((r) => dec(r.amountDue).minus(dec(r.amountPaid))),
+    input.outstandingRents.map((r) =>
+      dec(r.amountDue)
+        .plus(dec(r.lateFeeAccrued ?? 0))
+        .minus(dec(r.amountPaid))
+        .minus(dec(r.amountWaived)),
+    ),
   );
   const overdueByLevel = {
     "1M": input.outstandingRents.filter((r) => r.status === "OVERDUE_1M").length,
@@ -218,6 +228,7 @@ export function computeSummary(input: SummaryInputs): DashboardSummary {
     occupancyRate,
     activeContracts: input.activeContracts.length,
     contractsExpiringIn60Days: input.expiringContracts,
+    insurancePoliciesExpiringSoon: input.expiringInsurance,
     totalMonthlyExpectedIncome: totalMonthlyExpectedIncome.toString(),
     totalCollectedThisMonth: totalCollectedThisMonth.toString(),
     totalOutstanding: totalOutstanding.toString(),
@@ -254,6 +265,13 @@ export function detectAlerts(
     alerts.push({
       level: "critical",
       message: `Hay ${current.overdueByLevel["3M"]} renta(s) con 3 meses vencidos. Requieren intervención humana.`,
+    });
+  }
+  if (current.insurancePoliciesExpiringSoon > 0) {
+    const n = current.insurancePoliciesExpiringSoon;
+    alerts.push({
+      level: "warning",
+      message: `Hay ${n} póliza(s) de seguro vencida(s) o por vencer en los próximos 60 días.`,
     });
   }
   return alerts;
@@ -319,9 +337,5 @@ function entityTypeLabel(type: string): string {
 function formatCurrency(value: string | number): string {
   const n = typeof value === "number" ? value : Number(value);
   if (!Number.isFinite(n)) return String(value);
-  return new Intl.NumberFormat("es-MX", {
-    style: "currency",
-    currency: "MXN",
-    maximumFractionDigits: 0,
-  }).format(n);
+  return formatMXN(n);
 }

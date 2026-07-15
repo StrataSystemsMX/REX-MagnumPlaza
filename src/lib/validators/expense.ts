@@ -77,3 +77,11 @@ export const markExpenseNotRequiredSchema = z.object({
 export type MarkExpenseNotRequiredInput = z.infer<
   typeof markExpenseNotRequiredSchema
 >;
+
+export const setExpenseCategoryActiveSchema = z.object({
+  categoryId: z.string().min(1, "categoryId requerido."),
+  isActive: z.boolean(),
+});
+export type SetExpenseCategoryActiveInput = z.infer<
+  typeof setExpenseCategoryActiveSchema
+>;

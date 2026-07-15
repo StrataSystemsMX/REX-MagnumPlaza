@@ -18,6 +18,30 @@ export interface UnitReportRow {
   arBalance: string;
 }
 
+export interface CadastralPaymentRow {
+  id: string;
+  year: number;
+  totalAmount: string | null;
+  paidAmount: string | null;
+  dueDate: Date;
+  paymentDate: Date | null;
+  isPaid: boolean;
+  /** Razón social (código) o tercero que paga; null si lo paga el dueño. */
+  payerLabel: string | null;
+}
+
+export interface MaintenanceRow {
+  id: string;
+  title: string;
+  type: string;
+  status: string;
+  scheduledDate: Date | null;
+  completedDate: Date | null;
+  cost: string | null;
+  vendor: string | null;
+  unitCode: string | null;
+}
+
 export interface PropertyReport {
   propertyId: string;
   propertyName: string;
@@ -30,6 +54,13 @@ export interface PropertyReport {
   totalUnits: number;
   occupiedUnits: number;
   units: UnitReportRow[];
+  insuranceProvider: string | null;
+  insurancePolicyNumber: string | null;
+  insuranceExpiresAt: Date | null;
+  cadastralPayments: CadastralPaymentRow[];
+  maintenances: MaintenanceRow[];
+  /** Suma del costo de los mantenimientos del año (gasto realizado/planeado). */
+  maintenanceYearCost: string;
 }
 
 export async function getPropertyReport(
@@ -48,6 +79,9 @@ export async function getPropertyReport(
       id: true,
       name: true,
       type: true,
+      insuranceProvider: true,
+      insurancePolicyNumber: true,
+      insuranceExpiresAt: true,
       ownerEntity: { select: { code: true } },
       managerEntity: { select: { code: true } },
     },
@@ -106,6 +140,83 @@ export async function getPropertyReport(
     },
   });
 
+  // Predial (prediales del inmueble) y mantenimientos del año — vista consolidada.
+  // El where del año se comparte entre la lista (con take) y el agregado del
+  // total, para que el "Gasto del año" sume TODOS los mantenimientos del año y
+  // no solo los que caben en el take de la tabla.
+  const maintenanceYearWhere: Prisma.MaintenanceWhereInput = {
+    tenantId,
+    propertyId,
+    OR: [
+      { completedDate: { gte: yearStart, lt: yearEnd } },
+      { scheduledDate: { gte: yearStart, lt: yearEnd } },
+    ],
+  };
+  const [cadastralRaw, maintenanceRaw, maintenanceCostAgg] = await Promise.all([
+    prisma.cadastralPayment.findMany({
+      where: { tenantId, propertyId },
+      select: {
+        id: true,
+        year: true,
+        totalAmount: true,
+        paidAmount: true,
+        dueDate: true,
+        paymentDate: true,
+        isPaid: true,
+        payerEntity: { select: { code: true } },
+        paidByThirdPartyName: true,
+      },
+      orderBy: { year: "desc" },
+      take: 6,
+    }),
+    prisma.maintenance.findMany({
+      where: maintenanceYearWhere,
+      select: {
+        id: true,
+        title: true,
+        type: true,
+        status: true,
+        scheduledDate: true,
+        completedDate: true,
+        cost: true,
+        vendor: true,
+        unit: { select: { code: true } },
+      },
+      orderBy: [{ completedDate: "desc" }, { scheduledDate: "desc" }],
+      take: 50,
+    }),
+    prisma.maintenance.aggregate({
+      where: maintenanceYearWhere,
+      _sum: { cost: true },
+    }),
+  ]);
+
+  const cadastralPayments: CadastralPaymentRow[] = cadastralRaw.map((c) => ({
+    id: c.id,
+    year: c.year,
+    totalAmount: c.totalAmount?.toString() ?? null,
+    paidAmount: c.paidAmount?.toString() ?? null,
+    dueDate: c.dueDate,
+    paymentDate: c.paymentDate,
+    isPaid: c.isPaid,
+    payerLabel: c.payerEntity?.code ?? c.paidByThirdPartyName ?? null,
+  }));
+
+  const maintenances: MaintenanceRow[] = maintenanceRaw.map((m) => ({
+    id: m.id,
+    title: m.title,
+    type: m.type,
+    status: m.status,
+    scheduledDate: m.scheduledDate,
+    completedDate: m.completedDate,
+    cost: m.cost?.toString() ?? null,
+    vendor: m.vendor,
+    unitCode: m.unit?.code ?? null,
+  }));
+
+  // Total sobre TODO el año (agregado en DB), independiente del take de la lista.
+  const maintenanceYearCost = dec(maintenanceCostAgg._sum.cost).toString();
+
   // Monthly income for the whole property
   const monthlyIncome = Array.from({ length: 12 }, () => ZERO);
   const incomeByUnit = new Map<string, Prisma.Decimal>();
@@ -156,5 +267,11 @@ export async function getPropertyReport(
     totalUnits: units.length,
     occupiedUnits,
     units: unitRows,
+    insuranceProvider: property.insuranceProvider,
+    insurancePolicyNumber: property.insurancePolicyNumber,
+    insuranceExpiresAt: property.insuranceExpiresAt,
+    cadastralPayments,
+    maintenances,
+    maintenanceYearCost,
   };
 }

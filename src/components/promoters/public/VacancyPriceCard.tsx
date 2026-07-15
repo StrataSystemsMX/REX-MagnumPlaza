@@ -1,12 +1,15 @@
-import { MessageCircle, UserCircle2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { UserCircle2 } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { unitStatusLabel, unitStatusVariant } from "@/lib/i18n/enums";
 import type { PublicVacancyData } from "@/lib/services/promoters-public";
 import { buildWhatsAppUrl } from "@/lib/utils/whatsapp-link";
+import { VacancyLeadButton } from "@/components/promoters/public/VacancyLeadButton";
 import { Badge } from "@/components/ui/badge";
+import { formatMXN } from "@/lib/format-currency";
 
 interface Props {
+  token: string;
+  source: "DIGITAL" | "PHYSICAL";
   estimatedRent: number | null;
   area: number | null;
   status: PublicVacancyData["unit"]["status"];
@@ -17,13 +20,9 @@ interface Props {
   propertyName: string;
 }
 
-const MXN = new Intl.NumberFormat("es-MX", {
-  style: "currency",
-  currency: "MXN",
-  maximumFractionDigits: 0,
-});
-
 export function VacancyPriceCard({
+  token,
+  source,
   estimatedRent,
   area,
   status,
@@ -51,11 +50,11 @@ export function VacancyPriceCard({
           <Badge variant={unitStatusVariant(status)}>{unitStatusLabel(status)}</Badge>
         </div>
         <p className="mt-2 text-3xl font-semibold tracking-tight sm:text-4xl">
-          {estimatedRent != null ? MXN.format(estimatedRent) : "Consultar"}
+          {estimatedRent != null ? formatMXN(estimatedRent) : "Consultar"}
         </p>
         {pricePerM2 != null ? (
           <p className="mt-1 text-xs text-muted-foreground">
-            {MXN.format(pricePerM2)} / m²
+            {formatMXN(pricePerM2)} / m²
           </p>
         ) : null}
       </div>
@@ -63,12 +62,13 @@ export function VacancyPriceCard({
       {whatsappUrl ? (
         <>
           <Separator className="my-5" />
-          <a href={whatsappUrl} target="_blank" rel="noopener noreferrer">
-            <Button size="lg" className="w-full bg-green-600 hover:bg-green-700">
-              <MessageCircle className="size-5" />
-              Contactar por WhatsApp
-            </Button>
-          </a>
+          <VacancyLeadButton
+            token={token}
+            whatsappUrl={whatsappUrl}
+            label="Me interesa"
+            source={source}
+            className="w-full bg-green-600 hover:bg-green-700"
+          />
           <p className="mt-2 text-center text-xs text-muted-foreground">
             Respuesta directa con la administración
           </p>

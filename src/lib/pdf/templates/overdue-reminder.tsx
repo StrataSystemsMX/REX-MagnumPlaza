@@ -10,17 +10,10 @@ import {
 } from "./shared";
 import type { ReminderLevel, ReminderTextConfig } from "@/lib/pdf/template-config";
 import { capitalizeFirst } from "@/lib/utils";
+import { formatMXN } from "@/lib/format-currency";
+import { formatPeriodLong } from "@/lib/format-date";
 
-const MXN = new Intl.NumberFormat("es-MX", {
-  style: "currency",
-  currency: "MXN",
-  maximumFractionDigits: 2,
-});
-const PERIOD = new Intl.DateTimeFormat("es-MX", {
-  month: "long",
-  year: "numeric",
-  timeZone: "UTC",
-});
+// day+month:"long"+year → no mapea a formatDate (que usa month short). Inline.
 const DATE = new Intl.DateTimeFormat("es-MX", {
   day: "2-digit",
   month: "long",
@@ -32,6 +25,7 @@ export interface OverdueReminderRent {
   period: Date;
   amountDue: string;
   amountPaid: string;
+  amountWaived: string;
   daysOverdue: number;
   status: string;
 }
@@ -123,19 +117,20 @@ export function OverdueReminderPdf(props: OverdueReminderProps) {
             <Text style={cell.days}>Días</Text>
           </View>
           {allRents.map((r, idx) => {
-            const balance = Number(r.amountDue) - Number(r.amountPaid);
+            const balance =
+              Number(r.amountDue) - Number(r.amountPaid) - Number(r.amountWaived);
             return (
               <View key={idx} style={sharedStyles.tableRow}>
                 <Text style={cell.period}>
-                  {capitalizeFirst(PERIOD.format(r.period))}
+                  {formatPeriodLong(r.period)}
                 </Text>
                 <Text style={cell.due}>
-                  {MXN.format(Number(r.amountDue))}
+                  {formatMXN(r.amountDue, 2)}
                 </Text>
                 <Text style={cell.paid}>
-                  {MXN.format(Number(r.amountPaid))}
+                  {formatMXN(r.amountPaid, 2)}
                 </Text>
-                <Text style={cell.bal}>{MXN.format(balance)}</Text>
+                <Text style={cell.bal}>{formatMXN(balance, 2)}</Text>
                 <Text style={cell.days}>{r.daysOverdue}d</Text>
               </View>
             );
@@ -161,7 +156,7 @@ export function OverdueReminderPdf(props: OverdueReminderProps) {
                 color: accent,
               }}
             >
-              {MXN.format(Number(props.totals.balance))}
+              {formatMXN(props.totals.balance, 2)}
             </Text>
           </View>
         </View>

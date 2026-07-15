@@ -48,6 +48,8 @@ export function roleCodeLabel(r: RoleCode): string {
       return "Administrador";
     case "ACCOUNTANT":
       return "Contador";
+    case "OWNER":
+      return "Dueño";
     case "PROMOTER":
       return "Promotor";
     case "LESSEE":
@@ -82,8 +84,10 @@ export function propertyTypeLabel(t: PropertyType): string {
 
 export function propertyStatusLabel(s: PropertyStatus): string {
   switch (s) {
-    case "ACTIVO":
-      return "Activo";
+    case "DISPONIBLE":
+      return "Disponible";
+    case "EN_RENTA":
+      return "En renta";
     case "BLOQUEADO":
       return "Bloqueado";
     default:
@@ -427,6 +431,8 @@ export function notificationRecipientTypeLabel(t: NotificationRecipientType): st
       return "Usuario interno";
     case "EXTERNAL":
       return "Externo";
+    case "OFFICE":
+      return "Oficina";
     default:
       return exhaustive(t);
   }

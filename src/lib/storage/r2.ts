@@ -162,3 +162,13 @@ export function r2KeyForContractDocument(
   const id = crypto.randomUUID().replace(/-/g, "");
   return `tenants/${tenantId}/contracts/${contractId}/documents/${id}.${ext}`;
 }
+
+/** Punto único de generación de keys para adjuntos de Maintenance (fotos/vales/PDF). */
+export function r2KeyForMaintenanceDocument(
+  tenantId: string,
+  maintenanceId: string,
+  ext: string,
+): string {
+  const id = crypto.randomUUID().replace(/-/g, "");
+  return `tenants/${tenantId}/maintenances/${maintenanceId}/documents/${id}.${ext}`;
+}

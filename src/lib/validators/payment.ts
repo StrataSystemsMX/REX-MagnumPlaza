@@ -36,6 +36,23 @@ export const registerPaymentSchema = z.object({
 
 export type RegisterPaymentInput = z.infer<typeof registerPaymentSchema>;
 
+/**
+ * Edición de un pago ya capturado (corrección de errores de captura). No cambia
+ * la renta a la que pertenece; solo monto/fecha/método/referencia/notas. El
+ * status de la renta se recalcula tras editar.
+ */
+export const editPaymentSchema = z.object({
+  amount: z
+    .number({ message: "Monto inválido." })
+    .positive("El monto debe ser mayor a 0."),
+  paymentDate: dateLike,
+  method: z.enum(PAYMENT_METHOD_VALUES, { message: "Método inválido." }),
+  reference: optionalString(120, "Máximo 120 caracteres."),
+  notes: optionalString(2000, "Máximo 2000 caracteres."),
+});
+
+export type EditPaymentInput = z.infer<typeof editPaymentSchema>;
+
 export const waiveRentsSchema = z.object({
   items: z
     .array(

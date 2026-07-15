@@ -170,9 +170,15 @@ describe("reversibilityOf", () => {
     if (!sinBefore.reversible) expect(sinBefore.reason).toMatch(/previo/i);
   });
 
-  it("UPDATE no reversible si la entidad no soporta revert (Payment)", () => {
+  it("UPDATE de Payment es reversible (corrección de pago con `before`)", () => {
     expect(
-      isReversible({ action: "UPDATE", entityType: "Payment", changes: { before: {}, after: {} } }),
+      isReversible({ action: "UPDATE", entityType: "Payment", changes: { before: { amount: "100" }, after: {} } }),
+    ).toBe(true);
+  });
+
+  it("UPDATE no reversible si la entidad no soporta revert (Expense)", () => {
+    expect(
+      isReversible({ action: "UPDATE", entityType: "Expense", changes: { before: {}, after: {} } }),
     ).toBe(false);
   });
 

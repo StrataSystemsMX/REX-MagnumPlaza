@@ -17,6 +17,7 @@ export default async function ReportsPage() {
     roles.includes("MASTER") ||
     roles.includes("ADMIN") ||
     roles.includes("ACCOUNTANT") ||
+    roles.includes("OWNER") ||
     roles.length === 0;
   if (!canSeeAll) redirect("/");
 

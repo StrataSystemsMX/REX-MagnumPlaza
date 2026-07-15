@@ -3,14 +3,9 @@
 import { ChevronDown, ChevronUp } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
+import { formatMXN } from "@/lib/format-currency";
 import { Sparkline } from "./Sparkline";
 import type { MatrixRow, Monthly12 } from "@/lib/services/cierres-queries";
-
-const MXN_INT = new Intl.NumberFormat("es-MX", {
-  style: "currency",
-  currency: "MXN",
-  maximumFractionDigits: 0,
-});
 
 const MONTHS_SHORT = [
   "Ene", "Feb", "Mar", "Abr", "May", "Jun",
@@ -175,7 +170,7 @@ export function MonthlyPivotTable({
             Total
           </div>
           <div className="font-mono text-sm font-semibold tabular-nums">
-            {MXN_INT.format(Number(grandTotal))}
+            {formatMXN(Number(grandTotal))}
           </div>
         </div>
         <div className="shrink-0 rounded p-1 text-muted-foreground">
@@ -248,7 +243,7 @@ export function MonthlyPivotTable({
                       {Number(row.total) === 0 ? (
                         <span className="text-muted-foreground/40">—</span>
                       ) : (
-                        MXN_INT.format(Number(row.total))
+                        formatMXN(Number(row.total))
                       )}
                     </td>
                   </tr>
@@ -271,13 +266,13 @@ export function MonthlyPivotTable({
                           {Number(value) === 0 ? (
                             <span className="text-muted-foreground/40">—</span>
                           ) : (
-                            MXN_INT.format(Number(value))
+                            formatMXN(Number(value))
                           )}
                         </td>
                       );
                     })}
                     <td className="px-3 py-2 text-right tabular-nums">
-                      {MXN_INT.format(Number(grandTotal))}
+                      {formatMXN(Number(grandTotal))}
                     </td>
                   </tr>
                 )}
@@ -299,7 +294,7 @@ interface PivotCellProps {
 
 function PivotCell({ value, month, highlight, onClick }: PivotCellProps) {
   const num = Number(value);
-  const display = num === 0 ? null : MXN_INT.format(num);
+  const display = num === 0 ? null : formatMXN(num);
   const isNegative = num < 0;
 
   const cellBg = highlight ? "bg-foreground/5" : "";
