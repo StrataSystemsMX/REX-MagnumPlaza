@@ -57,3 +57,38 @@ aunque el contrato inicie o termine a mitad de mes.
 El resto de los hallazgos de la auditoría se implementó sin necesidad de
 decisión (ver commits `fix(security)`, `fix(core)`, `feat(core)` en la rama
 `fix/auditoria-fase-0-seguridad`).*
+
+---
+
+# Trabajo técnico pendiente de la auditoría
+
+## A. Unificar IngresosYearlyView / EgresosYearlyView (Fase 4.2)
+
+`src/components/ingresos/IngresosYearlyView.tsx` (992 líneas) y
+`src/components/egresos/EgresosYearlyView.tsx` (967) duplican `themeFor`,
+`KpiCard`, `EntityBreakdown`, `Legend`, `EntitySection`, `MatrixCell`,
+`buildTooltip`, `MonthlyTotalsBar` y un `compactMxn` local (que debe migrar a
+`formatMXNCompact`). Plan: extraer las piezas idénticas a
+`src/components/shared/yearly-matrix/` sin cambiar el render, dejando local lo
+que de verdad difiere. Verificar con `pnpm typecheck && pnpm lint` y revisión
+visual de ambas vistas.
+
+## B. Tests E2E (Fase 5)
+
+`tests/e2e/` sigue vacío. CLAUDE.md exige: **login**, **crear contrato**
+(wizard completo → rentas generadas) y **registrar pago** (→ estado de renta
+actualizado). Sumar los flujos reparados: prediales (editar/pagar/borrar) y
+líneas de presupuesto. Requiere decidir la estrategia de auth de prueba con
+Clerk (testing tokens o usuario dedicado en instancia dev) y una DB local
+sembrada.
+
+## C. Post-deploy (recordatorios)
+
+- Correr `pnpm tsx prisma/sync-permissions.ts` contra la BD de cada entorno
+  al desplegar: los módulos ahora usan permisos propios (`guarantee.*`,
+  `cadastral.*`, `payroll.*`, etc.) y ADMIN los necesita sembrados.
+- Aplicar las migraciones nuevas (`add_cadastral_payment_tenant_fk`,
+  `add_composite_indexes`) — **ojo con el drift repo↔prod en Supabase**:
+  verificar `prisma migrate status` antes.
+- Crear la página pública `/cuenta-no-autorizada` ya existe; verificar el
+  flujo completo de un usuario Clerk sin invitación en staging antes de prod.
