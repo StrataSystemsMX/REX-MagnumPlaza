@@ -82,7 +82,8 @@ export async function GET(
       },
     });
   } catch (e) {
-    const message = e instanceof Error ? e.message : "Error al generar el PDF.";
-    return NextResponse.json({ error: message }, { status: 500 });
+    // Detalle solo al log del servidor; mensaje genérico al cliente.
+    console.error("[api/legal-entity/pdf] PDF generation failed", e);
+    return NextResponse.json({ error: "Error al generar el PDF." }, { status: 500 });
   }
 }

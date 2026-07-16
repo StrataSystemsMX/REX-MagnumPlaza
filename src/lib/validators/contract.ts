@@ -1,20 +1,5 @@
 import { z } from "zod";
-
-const CONTRACT_TYPE_VALUES = [
-  "ARRENDAMIENTO",
-  "COMODATO",
-  "ADMINISTRACION_INTERNA",
-  "COMPRAVENTA",
-] as const;
-
-const CONTRACT_STATUS_VALUES = [
-  "DRAFT",
-  "ACTIVE",
-  "EXPIRED",
-  "TERMINATED",
-  "CANCELLED",
-  "PENDING_RENEWAL",
-] as const;
+import { ContractStatus, ContractType } from "@/generated/prisma/enums";
 
 /** Acepta Date (input nativo) o string ISO. Coerciona a Date. */
 const dateLike = z.preprocess((v) => {
@@ -39,7 +24,7 @@ export const createContractSchema = z
   .object({
     unitId: z.string().min(1, "Selecciona la unidad."),
     lesseeId: z.string().min(1, "Selecciona el inquilino."),
-    type: z.enum(CONTRACT_TYPE_VALUES, { message: "Selecciona el tipo de contrato." }),
+    type: z.nativeEnum(ContractType, { message: "Selecciona el tipo de contrato." }),
     startDate: dateLike,
     endDate: dateLike,
     monthlyAmount: z
@@ -82,8 +67,8 @@ export const createContractSchema = z
 export type CreateContractInput = z.infer<typeof createContractSchema>;
 
 export const updateContractSchema = z.object({
-  status: z.enum(CONTRACT_STATUS_VALUES, { message: "Estado inválido." }).optional(),
-  type: z.enum(CONTRACT_TYPE_VALUES, { message: "Tipo de contrato inválido." }).optional(),
+  status: z.nativeEnum(ContractStatus, { message: "Estado inválido." }).optional(),
+  type: z.nativeEnum(ContractType, { message: "Tipo de contrato inválido." }).optional(),
   startDate: optionalDateLike,
   endDate: optionalDateLike,
   monthlyAmount: z

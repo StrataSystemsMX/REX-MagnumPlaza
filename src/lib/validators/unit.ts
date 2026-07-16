@@ -1,23 +1,6 @@
 import { z } from "zod";
+import { IncludedService, UnitStatus } from "@/generated/prisma/enums";
 import { IDENTIFIER_CODE, SPANISH_TEXT } from "./patterns";
-
-const UNIT_STATUS_VALUES = [
-  "DISPONIBLE",
-  "APARTADA",
-  "RENTADA",
-  "EN_REMODELACION",
-  "NO_DISPONIBLE",
-] as const;
-
-const INCLUDED_SERVICE_VALUES = [
-  "AGUA",
-  "LUZ",
-  "GAS",
-  "INTERNET",
-  "MANTENIMIENTO",
-  "VIGILANCIA",
-  "ESTACIONAMIENTO",
-] as const;
 
 export const createUnitSchema = z.object({
   propertyId: z.string().min(1, "El inmueble es requerido."),
@@ -42,7 +25,7 @@ export const createUnitSchema = z.object({
     .number({ message: "La renta estimada debe ser numérica." })
     .nonnegative("La renta no puede ser negativa.")
     .optional(),
-  status: z.enum(UNIT_STATUS_VALUES, { message: "Selecciona el estado." }),
+  status: z.nativeEnum(UnitStatus, { message: "Selecciona el estado." }),
   depositMonths: z
     .number({ message: "Debe ser numérico." })
     .int("Solo meses completos.")
@@ -60,7 +43,7 @@ export const createUnitSchema = z.object({
     .nonnegative("No puede ser negativo.")
     .optional(),
   availableFrom: z.coerce.date().optional(),
-  includedServices: z.array(z.enum(INCLUDED_SERVICE_VALUES)).optional(),
+  includedServices: z.array(z.nativeEnum(IncludedService)).optional(),
   parentUnitId: z.string().min(1).nullable().optional(),
   notes: z
     .string()

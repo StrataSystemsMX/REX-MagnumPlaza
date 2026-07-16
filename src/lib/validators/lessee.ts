@@ -1,13 +1,6 @@
 import { z } from "zod";
+import { CommunicationChannel } from "@/generated/prisma/enums";
 import { SPANISH_TEXT } from "./patterns";
-
-const COMMUNICATION_CHANNEL_VALUES = [
-  "WHATSAPP",
-  "EMAIL",
-  "SMS",
-  "PHONE_CALL",
-  "IN_PERSON",
-] as const;
 
 // RFC Mexicano: 13 caracteres para persona física (4 letras + 6 dígitos + 3 alfanuméricos)
 // o 12 caracteres para persona moral (3 letras + 6 dígitos + 3 alfanuméricos).
@@ -79,7 +72,7 @@ export const createLesseeSchema = z.object({
   email: optionalEmail,
   phone: optionalMxPhone,
   whatsapp: optionalMxPhone,
-  preferredChannel: z.enum(COMMUNICATION_CHANNEL_VALUES, {
+  preferredChannel: z.nativeEnum(CommunicationChannel, {
     message: "Canal preferido inválido.",
   }),
   notes: optionalString(1000, "Máximo 1000 caracteres."),

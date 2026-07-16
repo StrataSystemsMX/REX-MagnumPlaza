@@ -70,18 +70,21 @@ export async function actionReturnGuarantee(input: ReturnGuaranteeInput) {
     select: { id: true, amount: true, contractId: true },
   });
 
-  const depositAmount = guarantee.amount.toNumber();
-  if (data.returnedAmount > depositAmount) {
+  // Comparaciones en Decimal (no float) — dinero real.
+  const returned = new Prisma.Decimal(data.returnedAmount.toFixed(2));
+  if (returned.gt(guarantee.amount)) {
     throw new Error(
-      `El monto devuelto no puede exceder el depósito original ($${depositAmount.toFixed(2)}).`,
+      `El monto devuelto no puede exceder el depósito original ($${guarantee.amount.toFixed(2)}).`,
     );
   }
 
-  const totalDeductions = data.deductions.reduce((acc, d) => acc + d.amount, 0);
-  const newStatus =
-    data.returnedAmount >= depositAmount - totalDeductions
-      ? "RETURNED"
-      : "PARTIALLY_RETURNED";
+  const totalDeductions = data.deductions.reduce(
+    (acc, d) => acc.plus(new Prisma.Decimal(d.amount.toFixed(2))),
+    new Prisma.Decimal(0),
+  );
+  const newStatus = returned.gte(guarantee.amount.minus(totalDeductions))
+    ? "RETURNED"
+    : "PARTIALLY_RETURNED";
 
   // Devolución + regeneración de mantenimientos por deducciones en UNA
   // transacción: un fallo a medias no debe dejar la fianza devuelta sin sus
@@ -92,7 +95,7 @@ export async function actionReturnGuarantee(input: ReturnGuaranteeInput) {
       data: {
         status: newStatus,
         returnedDate: data.returnedDate,
-        returnedAmount: new Prisma.Decimal(data.returnedAmount),
+        returnedAmount: returned,
         deductions:
           data.deductions.length > 0
             ? (data.deductions as Prisma.InputJsonValue)
