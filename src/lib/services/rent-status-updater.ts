@@ -1,3 +1,4 @@
+import { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/lib/prisma/client";
 import { computeRentStatus } from "@/lib/services/rent-status";
 import { calculateLateFee } from "@/lib/services/late-fees";
@@ -122,17 +123,28 @@ export async function updateRentStatuses(
 
     // 2) Interés moratorio: snapshot recalculado sobre el saldo de principal
     //    (redondeado a 2 decimales para evitar updates espurios por precisión).
-    const newLateFee = calculateLateFee(
-      {
-        amountDue: r.amountDue,
-        amountPaid: r.amountPaid,
-        amountWaived: r.amountWaived,
-        dueDate: r.dueDate,
-        status: newStatus,
-      },
-      { lateFeePercentage: r.contract.lateFeePercentage },
-      now,
-    ).amount.toDecimalPlaces(2);
+    //    Política CRT (docs/decisiones-negocio-pendientes.md #1): si el
+    //    principal quedó saldado con pagos tardíos, el interés devengado se
+    //    CONGELA (no se limpia) — sigue exigible como concepto aparte. La
+    //    condonación pura sí lo perdona.
+    const principalSettled = new Prisma.Decimal(r.amountPaid)
+      .plus(new Prisma.Decimal(r.amountWaived ?? 0))
+      .gte(r.amountDue);
+    const settledWithPayments =
+      principalSettled && new Prisma.Decimal(r.amountPaid).gt(0);
+    const newLateFee = settledWithPayments
+      ? new Prisma.Decimal(r.lateFeeAccrued)
+      : calculateLateFee(
+          {
+            amountDue: r.amountDue,
+            amountPaid: r.amountPaid,
+            amountWaived: r.amountWaived,
+            dueDate: r.dueDate,
+            status: newStatus,
+          },
+          { lateFeePercentage: r.contract.lateFeePercentage },
+          now,
+        ).amount.toDecimalPlaces(2);
     const feeChanged = !newLateFee.eq(r.lateFeeAccrued);
 
     const level = statusChanged ? OVERDUE_LEVEL[newStatus] : undefined;

@@ -84,6 +84,7 @@ function rentRow(amountDue: number) {
     amountDue: new Prisma.Decimal(amountDue),
     dueDate: utc(2026, 3, 1),
     status: "DUE" as const,
+    lateFeeAccrued: new Prisma.Decimal(0),
   };
 }
 
@@ -199,6 +200,78 @@ describe("actionRegisterPayment", () => {
       }),
     ).rejects.toThrow(/no encontrada/i);
     expect(paymentMock.create).not.toHaveBeenCalled();
+  });
+
+  it("congela el interés devengado al saldar el principal con pago tardío (política CRT)", async () => {
+    rentMock.findFirst.mockResolvedValue(rentLookup());
+    paymentMock.create.mockResolvedValue({ id: "pay-1" });
+    paymentMock.findMany.mockResolvedValue([{ amount: 10000 }]);
+    // La renta traía 750 de interés acumulado por el cron.
+    rentMock.findFirstOrThrow.mockResolvedValue({
+      ...rentRow(10000),
+      lateFeeAccrued: new Prisma.Decimal(750),
+      contract: { lateFeePercentage: new Prisma.Decimal(5) },
+    });
+
+    const { actionRegisterPayment } = await import("@/lib/services/payments");
+    const result = await actionRegisterPayment({
+      rentId: "rent-1",
+      amount: 10000,
+      paymentDate: utc(2026, 5, 20), // pago tardío
+      method: "TRANSFER",
+    });
+
+    expect(result.rentStatus).toBe("PAID");
+    const arg = rentMock.updateMany.mock.calls[0]?.[0] as {
+      data: { status: string; lateFeeAccrued: Prisma.Decimal };
+    };
+    // El interés NO se limpia: queda congelado como cargo exigible aparte
+    // (docs/decisiones-negocio-pendientes.md #1).
+    expect(arg.data.status).toBe("PAID");
+    expect(arg.data.lateFeeAccrued.toString()).toBe("750");
+  });
+
+  it("el sobrante cascadea a mensualidades del año siguiente (sin límite de año)", async () => {
+    rentMock.findFirst.mockResolvedValue(rentLookup()); // abr 2026, due 10000
+    // Sobrante de 20000 tras saldar el principal → cubre dic 2026 y ene 2027.
+    rentMock.findMany.mockResolvedValueOnce([
+      {
+        id: "rent-2",
+        period: utc(2026, 11, 1),
+        amountDue: new Prisma.Decimal(10000),
+        amountPaid: new Prisma.Decimal(0),
+        amountWaived: new Prisma.Decimal(0),
+      },
+      {
+        id: "rent-3",
+        period: utc(2027, 0, 1), // enero del año SIGUIENTE
+        amountDue: new Prisma.Decimal(10000),
+        amountPaid: new Prisma.Decimal(0),
+        amountWaived: new Prisma.Decimal(0),
+      },
+    ]);
+    paymentMock.create.mockResolvedValue({ id: "pay-n" });
+    paymentMock.findMany.mockResolvedValue([{ amount: 10000 }]);
+    rentMock.findFirstOrThrow.mockResolvedValue(rentRow(10000));
+
+    const { actionRegisterPayment } = await import("@/lib/services/payments");
+    const result = await actionRegisterPayment({
+      rentId: "rent-1",
+      amount: 30000,
+      paymentDate: utc(2026, 3, 5),
+      method: "TRANSFER",
+    });
+
+    // La query de cascada NO limita por periodo/año (política CRT #2).
+    const whereArg = (
+      rentMock.findMany.mock.calls[0]?.[0] as { where: Record<string, unknown> }
+    ).where;
+    expect(whereArg["period"]).toBeUndefined();
+
+    expect(result.cascade).toHaveLength(2);
+    expect(result.cascade[1]?.rentId).toBe("rent-3");
+    expect(result.cascade[1]?.amount).toBe(10000);
+    expect(result.remainderApplied).toBe(0); // todo el sobrante quedó aplicado
   });
 
   it("recalcula una renta WAIVED si entra un pago real (WAIVED no bloquea cobros)", async () => {

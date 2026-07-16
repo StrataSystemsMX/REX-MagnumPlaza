@@ -38,6 +38,7 @@ export async function recalcRentInTx(
       dueDate: true,
       status: true,
       amountWaived: true,
+      lateFeeAccrued: true,
       contract: { select: { lateFeePercentage: true } },
     },
   });
@@ -60,13 +61,23 @@ export async function recalcRentInTx(
         rent.amountWaived,
       );
 
-  // Interés moratorio: se recalcula sobre el nuevo saldo de principal. Si el
-  // pago salda el principal, calculateLateFee devuelve 0 y el interés se limpia.
-  const lateFeeAccrued = calculateLateFee(
-    { amountDue: rent.amountDue, amountPaid, amountWaived: rent.amountWaived, dueDate: rent.dueDate, status },
-    { lateFeePercentage: rent.contract?.lateFeePercentage ?? null },
-    now,
-  ).amount.toDecimalPlaces(2);
+  // Interés moratorio. Política CRT (docs/decisiones-negocio-pendientes.md #1):
+  // si el principal queda saldado CON PAGOS tardíos, el interés ya devengado se
+  // CONGELA (sigue exigible como concepto aparte — computeBalance lo suma al
+  // adeudo) en vez de limpiarse. El snapshot congelado es el que mantuvo el
+  // cron diario, así que su devengo corre hasta la víspera del pago.
+  // La condonación (waived cubre el principal sin pagos) sí perdona el interés.
+  const principalBalance = new Prisma.Decimal(rent.amountDue)
+    .minus(amountPaid)
+    .minus(new Prisma.Decimal(rent.amountWaived ?? 0));
+  const settledWithPayments = principalBalance.lte(0) && amountPaid.gt(0);
+  const lateFeeAccrued = settledWithPayments
+    ? new Prisma.Decimal(rent.lateFeeAccrued ?? 0)
+    : calculateLateFee(
+        { amountDue: rent.amountDue, amountPaid, amountWaived: rent.amountWaived, dueDate: rent.dueDate, status },
+        { lateFeePercentage: rent.contract?.lateFeePercentage ?? null },
+        now,
+      ).amount.toDecimalPlaces(2);
 
   await tx.rent.updateMany({
     where: { id: rentId, tenantId },

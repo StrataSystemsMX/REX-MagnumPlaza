@@ -207,8 +207,10 @@ describe("updateRentStatuses", () => {
     expect(call.data.lateFeeAccrued.toString()).toBe("1050");
   });
 
-  it("limpia el interés (a 0) cuando el principal queda saldado", async () => {
-    // Estaba con 800 de interés, ahora pagado completo → fee debe volver a 0.
+  it("CONGELA el interés devengado cuando el principal se salda con pagos (política CRT)", async () => {
+    // Estaba con 800 de interés y ahora el principal quedó pagado completo:
+    // el interés NO se limpia — queda congelado como cargo exigible aparte
+    // (docs/decisiones-negocio-pendientes.md #1).
     rentMock.findMany.mockResolvedValue([
       rent("r1", utc(2026, 0, 1), "OVERDUE_2M", 10000, 10000, 5, 800),
     ]);
@@ -216,12 +218,29 @@ describe("updateRentStatuses", () => {
       "@/lib/services/rent-status-updater"
     );
     const r = await updateRentStatuses(TENANT, { now: utc(2026, 3, 5) });
+    // El fee no cambió (800 → 800): solo se persiste la transición de status.
+    expect(r.lateFeesUpdated).toBe(0);
+    const call = rentMock.updateMany.mock.calls[0]?.[0] as {
+      data: { lateFeeAccrued?: Prisma.Decimal; status?: string };
+    };
+    expect(call.data.lateFeeAccrued).toBeUndefined();
+    expect(call.data.status).toBe("PAID"); // saldado → PAID
+  });
+
+  it("SÍ limpia el interés cuando el principal se salda solo con condonación", async () => {
+    // Condonación total sin pagos → el interés se perdona junto con la deuda.
+    const row = rent("r1", utc(2026, 0, 1), "OVERDUE_2M", 0, 10000, 5, 800);
+    row.amountWaived = D(10000);
+    rentMock.findMany.mockResolvedValue([row]);
+    const { updateRentStatuses } = await import(
+      "@/lib/services/rent-status-updater"
+    );
+    const r = await updateRentStatuses(TENANT, { now: utc(2026, 3, 5) });
     expect(r.lateFeesUpdated).toBe(1);
     const call = rentMock.updateMany.mock.calls[0]?.[0] as {
-      data: { lateFeeAccrued: Prisma.Decimal; status?: string };
+      data: { lateFeeAccrued: Prisma.Decimal };
     };
     expect(call.data.lateFeeAccrued.toString()).toBe("0");
-    expect(call.data.status).toBe("PAID"); // saldado → PAID
   });
 
   it("procesa varios rents con transiciones distintas en una sola corrida", async () => {

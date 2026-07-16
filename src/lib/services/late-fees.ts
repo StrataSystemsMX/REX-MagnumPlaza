@@ -19,8 +19,11 @@ const ZERO = new Prisma.Decimal(0);
  *
  * El monto se persiste en Rent.lateFeeAccrued (snapshot) desde el cron diario y
  * desde recalcRentInTx en cada pago, y se suma al adeudo total vía computeBalance.
- * Como se calcula sobre el saldo de principal, al saldar el principal el interés
- * vuelve a 0 (no sobrevive al pago del principal).
+ *
+ * Esta función es PURA y devuelve 0 cuando el saldo de principal es 0; la
+ * política de CONGELAR el interés devengado al saldar el principal con pagos
+ * tardíos (decisión CRT 2026-07-16) vive en las capas que persisten el
+ * snapshot: recalcRentInTx y updateRentStatuses.
  */
 export function calculateLateFee(
   rent: {

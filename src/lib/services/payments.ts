@@ -138,20 +138,19 @@ export async function actionRegisterPayment(
     ? Prisma.Decimal.max(balance, new Prisma.Decimal(0))
     : total;
 
-  // Si hay sobrante, prefetch de las demás rentas impagas del MISMO AÑO del mes
-  // seleccionado (no PAID/WAIVED), en orden cronológico ascendente. Así el
-  // excedente liquida primero los meses más antiguos —incluidos los anteriores
-  // al mes seleccionado— y solo después los siguientes.
-  // Incluimos amountWaived para calcular su saldo real al cascadear.
-  const yearStart = new Date(Date.UTC(rent.period.getUTCFullYear(), 0, 1));
-  const yearEnd = new Date(Date.UTC(rent.period.getUTCFullYear() + 1, 0, 1));
+  // Si hay sobrante, prefetch de las demás rentas impagas del contrato (no
+  // PAID/WAIVED), en orden cronológico ascendente y SIN límite de año —
+  // política CRT (docs/decisiones-negocio-pendientes.md #2): un adelanto
+  // liquida los meses que cubra aunque crucen al año siguiente (caso Bluecell
+  // paga 6 meses en noviembre). El excedente liquida primero los meses más
+  // antiguos —incluidos los anteriores al mes seleccionado— y luego los
+  // siguientes. Incluimos amountWaived para calcular su saldo real.
   const cascadeRents = excess.greaterThan(0)
     ? await prisma.rent.findMany({
         where: {
           tenantId,
           contractId: rent.contractId,
           id: { not: rent.id },
-          period: { gte: yearStart, lt: yearEnd },
           status: { notIn: ["PAID", "WAIVED"] },
         },
         orderBy: { period: "asc" },
@@ -223,12 +222,12 @@ export async function actionRegisterPayment(
       remaining = remaining.minus(apply);
     }
 
-    // 3. Si tras cubrir las mensualidades del año sigue sobrando, el remanente
-    //    queda como saldo a favor en la renta original.
+    // 3. Si tras cubrir TODAS las mensualidades pendientes del contrato sigue
+    //    sobrando, el remanente queda como saldo a favor en la renta original.
     let remainderAmount = new Prisma.Decimal(0);
     if (remaining.greaterThan(0)) {
       const remainderNote =
-        "Sobrante a favor: no hay más mensualidades pendientes del año en este contrato.";
+        "Sobrante a favor: no hay más mensualidades pendientes en este contrato.";
       await tx.payment.create({
         data: {
           tenantId,

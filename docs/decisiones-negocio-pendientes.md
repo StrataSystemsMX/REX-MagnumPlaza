@@ -1,8 +1,23 @@
-# Decisiones de negocio pendientes (auditoría 2026-07-15)
+# Decisiones de negocio (auditoría 2026-07-15)
 
-Tres hallazgos de la auditoría de código requieren una decisión del cliente
-(CRT) antes de implementarse. Se documenta el comportamiento actual, el
-problema y la propuesta, para revisarlos en la próxima junta.
+> **RESUELTAS el 2026-07-16.** Decisión tomada e implementación aplicada:
+>
+> 1. **Mora:** SÍ se cobra — el interés devengado se **congela** al saldar el
+>    principal con pagos tardíos y queda como cargo exigible aparte
+>    (`Rent.lateFeeAccrued`, sumado al adeudo vía `computeBalance`). La
+>    condonación pura sí lo perdona. Implementado en `rent-recalc.ts` y
+>    `rent-status-updater.ts`.
+> 2. **Adelantos:** la cascada de sobrantes liquida mensualidades **sin límite
+>    de año** (caso Bluecell). Implementado en `payments.ts`
+>    (`actionRegisterPayment`).
+> 3. **Prorrateo:** NO se prorratea — el primer/último mes se cobra completo.
+>    Documentado como política en `rent-generation.ts`.
+>
+> Se conserva el análisis original abajo como referencia.
+
+Tres hallazgos de la auditoría de código requerían una decisión del cliente
+(CRT) antes de implementarse. Se documenta el comportamiento previo, el
+problema y la propuesta.
 
 ---
 
