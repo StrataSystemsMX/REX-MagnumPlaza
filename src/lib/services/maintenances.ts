@@ -129,7 +129,7 @@ export async function actionUpdateMaintenance(input: UpdateMaintenanceInput) {
       : null;
 
   const updated = await prisma.maintenance.update({
-    where: { id: existing.id },
+    where: { id: existing.id, tenantId },
     data: {
       propertyId: data.propertyId,
       unitId: data.unitId ?? null,
@@ -170,7 +170,7 @@ export async function actionUpdateMaintenanceStatus(input: UpdateMaintenanceStat
   });
 
   const updated = await prisma.maintenance.update({
-    where: { id: data.maintenanceId },
+    where: { id: data.maintenanceId, tenantId },
     data: {
       status: data.status,
       ...(data.status === "COMPLETED"

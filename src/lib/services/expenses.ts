@@ -88,7 +88,7 @@ export async function actionSetExpenseCategoryActive(
   await ensureCategoryInTenant(tenantId, categoryId);
 
   await prisma.expenseCategory.update({
-    where: { id: categoryId },
+    where: { id: categoryId, tenantId },
     data: { isActive },
   });
 

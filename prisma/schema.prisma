@@ -76,6 +76,7 @@ model Tenant {
   investmentPayments   InvestmentPayment[]
   leads                Lead[]
   documentTemplates    DocumentTemplate[]
+  cadastralPayments    CadastralPayment[]
 
   @@map("tenants")
 }
@@ -653,6 +654,7 @@ model CadastralPayment {
   createdAt            DateTime  @default(now())
   updatedAt            DateTime  @updatedAt
 
+  tenant      Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   property    Property     @relation(fields: [propertyId], references: [id], onDelete: Cascade)
   payerEntity LegalEntity? @relation("CadastralPayer", fields: [payerEntityId], references: [id])
   documents   Document[]

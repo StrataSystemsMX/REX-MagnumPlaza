@@ -1,10 +1,12 @@
 import { prismaUnsafe } from "@/lib/prisma/client";
 import { recordMorosityDailySnapshot } from "@/lib/services/morosity-snapshot";
+import { generateMonthlyRents } from "@/lib/services/rent-generation";
 import { updateRentStatuses } from "@/lib/services/rent-status-updater";
 import type { RentStatus } from "@/generated/prisma/enums";
 
 export interface CronRunSummary {
   tenantsProcessed: number;
+  rentsGenerated: number;
   rentsUpdated: number;
   overdueTransitions: number;
   byNewStatus: Partial<Record<RentStatus, number>>;
@@ -13,8 +15,9 @@ export interface CronRunSummary {
 }
 
 /**
- * Itera todos los tenants activos: actualiza statuses + escribe snapshot.
- * Compartido entre el endpoint de Vercel Cron y el endpoint de dev.
+ * Itera todos los tenants activos: genera rentas faltantes + actualiza
+ * statuses + escribe snapshot. Compartido entre el endpoint de Vercel Cron y
+ * el endpoint de dev.
  */
 export async function runDailyMorosityCron(
   options: { now?: Date } = {},
@@ -25,12 +28,19 @@ export async function runDailyMorosityCron(
     select: { id: true },
   });
 
+  let rentsGenerated = 0;
   let rentsUpdated = 0;
   let overdueTransitions = 0;
   const byNewStatus: Partial<Record<RentStatus, number>> = {};
   let snapshotDate: Date | null = null;
 
   for (const t of tenants) {
+    // Materializa rentas faltantes ANTES de evaluar morosidad, para cubrir
+    // contratos extendidos o activados sin generación inicial. Idempotente
+    // por el unique [contractId, period].
+    const gen = await generateMonthlyRents(t.id, { now });
+    rentsGenerated += gen.reduce((sum, g) => sum + g.created, 0);
+
     const u = await updateRentStatuses(t.id, { now });
     rentsUpdated += u.rentsUpdated;
     overdueTransitions += u.overdueTransitions;
@@ -43,6 +53,7 @@ export async function runDailyMorosityCron(
 
   return {
     tenantsProcessed: tenants.length,
+    rentsGenerated,
     rentsUpdated,
     overdueTransitions,
     byNewStatus,

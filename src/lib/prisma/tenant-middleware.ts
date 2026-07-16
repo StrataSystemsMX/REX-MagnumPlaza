@@ -13,7 +13,11 @@ import { Prisma } from "@/generated/prisma/client";
  * se da por relaciones (User.tenantId, Budget.tenantId, etc.).
  */
 
-const TENANT_SCOPED_MODELS: ReadonlySet<string> = new Set([
+// Debe incluir TODO modelo del schema con columna tenantId. El test
+// tests/unit/tenant-middleware.test.ts compara este set contra
+// prisma/schema.prisma y falla si se desincronizan (p.ej. al agregar un
+// modelo nuevo y olvidar registrarlo aquí).
+export const TENANT_SCOPED_MODELS: ReadonlySet<string> = new Set([
   "User",
   "LegalEntity",
   "Property",
@@ -30,11 +34,17 @@ const TENANT_SCOPED_MODELS: ReadonlySet<string> = new Set([
   "Maintenance",
   "Promoter",
   "PromoterLink",
+  "Lead",
   "Budget",
   "Document",
+  "DocumentTemplate",
   "NotificationLog",
   "AuditLog",
   "MorosityDailySnapshot",
+  "Loan",
+  "LoanPayment",
+  "InvestmentProject",
+  "InvestmentPayment",
 ]);
 
 const READ_OPS: ReadonlySet<string> = new Set([
