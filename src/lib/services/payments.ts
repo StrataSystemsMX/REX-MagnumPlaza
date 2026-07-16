@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { Prisma } from "@/generated/prisma/client";
 import { requireAuth } from "@/lib/auth/get-session";
-import { getUserRoleCodes, requirePermission } from "@/lib/auth/permissions";
+import { getUserRoleCodes, isMaster, PermissionError, requirePermission } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/prisma/client";
 import { logAudit as logAuditCore } from "@/lib/services/audit";
 import { serializeFields } from "@/lib/audit/field-types";
@@ -365,13 +365,15 @@ export async function actionRegisterBulkPayment(input: BulkPaymentInput): Promis
 }
 
 /**
- * Sólo MASTER puede borrar pagos. Como no se siembra el permission
- * "payment.delete" para ningún rol, MASTER pasa por el bypass de
- * hasPermission y el resto cae con PermissionError.
+ * Sólo MASTER puede borrar pagos. Gate explícito por rol: el seed asigna
+ * ALL_CODES (incluido "payment.delete") a ADMIN, así que confiar en la
+ * ausencia del permission dejaría pasar a ADMIN.
  */
 export async function actionDeletePayment(id: string): Promise<void> {
   const { tenantId, dbUser } = await requireAuth();
-  await requirePermission(dbUser.id, "payment.delete");
+  if (!(await isMaster(dbUser.id))) {
+    throw new PermissionError("payment.delete");
+  }
 
   const payment = await prisma.payment.findFirst({
     where: { id, tenantId },

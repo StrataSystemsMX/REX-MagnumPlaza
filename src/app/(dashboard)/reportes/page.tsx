@@ -17,8 +17,7 @@ export default async function ReportsPage() {
     roles.includes("MASTER") ||
     roles.includes("ADMIN") ||
     roles.includes("ACCOUNTANT") ||
-    roles.includes("OWNER") ||
-    roles.length === 0;
+    roles.includes("OWNER");
   if (!canSeeAll) redirect("/");
 
   const legalEntities = await prisma.legalEntity.findMany({

@@ -17,8 +17,7 @@ export async function GET(
   // Solo MASTER y ACCOUNTANT ven finanzas por LegalEntity (CLAUDE.md §2).
   const canExport =
     roles.includes("MASTER") ||
-    roles.includes("ACCOUNTANT") ||
-    roles.length === 0;
+    roles.includes("ACCOUNTANT");
   if (!canExport) {
     return NextResponse.json(
       { error: "No tienes permiso para exportar." },

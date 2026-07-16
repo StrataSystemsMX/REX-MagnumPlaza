@@ -100,6 +100,13 @@ export async function actionUpsertBudgetLine(input: UpsertBudgetLineInput) {
   );
 
   if (data.lineId) {
+    // BudgetLine no tiene tenantId propio: su aislamiento va vía Budget.
+    // Verificar que la línea pertenezca a ESTE budget (y por tanto al tenant)
+    // antes de mutar — evita IDOR con lineId ajeno.
+    await prisma.budgetLine.findFirstOrThrow({
+      where: { id: data.lineId, budget: { id: data.budgetId, tenantId } },
+      select: { id: true },
+    });
     await prisma.budgetLine.update({
       where: { id: data.lineId },
       data: {
@@ -129,12 +136,21 @@ export async function actionDeleteBudgetLine(lineId: string, budgetId: string) {
   const { tenantId, dbUser } = await requireAuth();
   await requirePermission(dbUser.id, "expense.delete");
 
-  await prisma.budget.findFirstOrThrow({
+  const budget = await prisma.budget.findFirstOrThrow({
     where: { id: budgetId, tenantId },
-    select: { id: true },
+    select: { id: true, isLocked: true },
   });
+  if (budget.isLocked) {
+    throw new Error("El presupuesto está cerrado y no puede modificarse.");
+  }
 
-  await prisma.budgetLine.delete({ where: { id: lineId } });
+  // Borrar solo si la línea pertenece a este budget/tenant (evita IDOR).
+  const { count } = await prisma.budgetLine.deleteMany({
+    where: { id: lineId, budget: { id: budgetId, tenantId } },
+  });
+  if (count === 0) {
+    throw new Error("Línea de presupuesto no encontrada.");
+  }
 
   revalidatePath("/presupuesto");
   revalidatePath("/presupuesto/comparativo");

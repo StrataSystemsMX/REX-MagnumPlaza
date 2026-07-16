@@ -10,7 +10,7 @@ export default async function PrestamosPage() {
   const { dbUser } = await requireAuth();
   const roles = await getUserRoleCodes(dbUser.id);
   const canCreate =
-    roles.includes("MASTER") || roles.includes("ADMIN") || roles.includes("ACCOUNTANT") || roles.length === 0;
+    roles.includes("MASTER") || roles.includes("ADMIN") || roles.includes("ACCOUNTANT");
 
   const [loans, legalEntities] = await Promise.all([
     getLoans(),

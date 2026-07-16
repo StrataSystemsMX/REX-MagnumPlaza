@@ -63,7 +63,7 @@ export default async function LegalEntityPage({ params, searchParams }: PageProp
 
   // Solo MASTER y ACCOUNTANT pueden ver finanzas por LegalEntity (CLAUDE.md §2).
   const canSee =
-    roles.includes("MASTER") || roles.includes("ACCOUNTANT") || roles.includes("ADMIN") || roles.length === 0;
+    roles.includes("MASTER") || roles.includes("ACCOUNTANT") || roles.includes("ADMIN");
   if (!canSee) redirect("/");
 
   const year = yearParam && /^\d{4}$/.test(yearParam) ? Number(yearParam) : undefined;

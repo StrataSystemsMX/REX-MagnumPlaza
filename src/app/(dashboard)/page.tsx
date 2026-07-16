@@ -78,7 +78,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
 
   const canSeeAll =
     roles.includes("MASTER") || roles.includes("ADMIN") ||
-    roles.includes("ACCOUNTANT") || roles.includes("OWNER") || roles.length === 0;
+    roles.includes("ACCOUNTANT") || roles.includes("OWNER");
   if (!canSeeAll) redirect("/portal");
 
   const legalEntityParam = params.legalEntity ?? (await getActiveLegalEntityId()) ?? undefined;

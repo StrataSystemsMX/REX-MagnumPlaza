@@ -310,6 +310,7 @@ describe("actionRegisterBulkPayment", () => {
 
 describe("actionDeletePayment", () => {
   it("borra el pago y recalcula la renta", async () => {
+    userRoleMock.findFirst.mockResolvedValue({ userId: USER }); // es MASTER
     paymentMock.findFirst.mockResolvedValue({
       id: "pay-1",
       rentId: "rent-1",
@@ -333,15 +334,14 @@ describe("actionDeletePayment", () => {
     expect(arg.data.amountPaid.toString()).toBe("0");
   });
 
-  it("PermissionError si el user no es MASTER", async () => {
-    mockRequirePermission.mockImplementation(async (_u, code: string) => {
-      const { PermissionError } = await import("@/lib/auth/permissions");
-      throw new PermissionError(code);
-    });
+  it("PermissionError si el user no es MASTER (aunque tenga el permission sembrado)", async () => {
+    // El gate es por rol explícito: ni siquiera requirePermission aplica.
+    userRoleMock.findFirst.mockResolvedValue(null); // no es MASTER
     const { actionDeletePayment } = await import("@/lib/services/payments");
     await expect(actionDeletePayment("pay-1")).rejects.toMatchObject({
       name: "PermissionError",
       code: "payment.delete",
     });
+    expect(paymentMock.deleteMany).not.toHaveBeenCalled();
   });
 });

@@ -57,6 +57,16 @@ export async function isMaster(dbUserId: string): Promise<boolean> {
   return match !== null;
 }
 
+/**
+ * ¿Puede exportar reportes financieros (PDFs de cierre, dashboard, historial
+ * de pagos)? MASTER, ADMIN o ACCOUNTANT. Fail-closed: un usuario sin roles
+ * no ve finanzas.
+ */
+export async function canExportFinancials(dbUserId: string): Promise<boolean> {
+  const codes = await getUserRoleCodes(dbUserId);
+  return codes.includes("MASTER") || codes.includes("ADMIN") || codes.includes("ACCOUNTANT");
+}
+
 /** Códigos de roles del usuario. Útil para gating de UI por rol múltiple. */
 export async function getUserRoleCodes(dbUserId: string): Promise<RoleCode[]> {
   const rows = await prisma.userRole.findMany({

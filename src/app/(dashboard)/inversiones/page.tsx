@@ -14,7 +14,7 @@ export default async function InversionesPage() {
   const { dbUser, tenantId } = await requireAuth();
   const roles = await getUserRoleCodes(dbUser.id);
   const canCreate =
-    roles.includes("MASTER") || roles.includes("ADMIN") || roles.includes("ACCOUNTANT") || roles.length === 0;
+    roles.includes("MASTER") || roles.includes("ADMIN") || roles.includes("ACCOUNTANT");
 
   const [kpis, projects, legalEntities, properties] = await Promise.all([
     getInversionesKpis(),

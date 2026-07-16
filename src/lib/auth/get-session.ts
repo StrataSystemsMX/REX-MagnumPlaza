@@ -26,8 +26,8 @@ export interface AuthContext {
  *  - Redirige a /sign-in si no hay sesión Clerk.
  *  - Vincula al User de la DB por clerkId.
  *  - Si no existe, intenta vincular por email (caso seed → primera sesión).
- *  - Si tampoco, crea uno bajo el primer Tenant disponible (DEV ONLY —
- *    en prod entrará vía flujo de invitación; ver Prompt 4 en CLAUDE.md).
+ *  - Si tampoco: en producción redirige a /cuenta-no-autorizada (fail-closed);
+ *    en dev crea uno bajo el primer Tenant disponible con rol MASTER.
  *
  * Memoizada con React.cache para que layouts y pages compartan una sola
  * lookup por request.
@@ -71,10 +71,16 @@ export const requireAuth = cache(async (): Promise<AuthContext> => {
       }
     }
 
-    // Fallback dev: ningún match. Lo enganchamos al primer Tenant y, en dev,
-    // le pegamos rol MASTER para que pueda operar la app. En prod no aplica
-    // porque el alta entrará vía flujo de invitación con rol explícito.
+    // Ningún match por clerkId ni por email. En producción NUNCA se
+    // auto-provisiona: el alta debe venir del seed o de una invitación
+    // explícita — fail-closed (CLAUDE.md §4.1).
     if (!dbUser) {
+      if (process.env["NODE_ENV"] === "production") {
+        redirect("/cuenta-no-autorizada");
+      }
+
+      // Fallback dev: lo enganchamos al primer Tenant con rol MASTER para
+      // poder operar la app.
       const firstTenant = await prismaUnsafe.tenant.findFirst({
         orderBy: { createdAt: "asc" },
       });
@@ -88,10 +94,9 @@ export const requireAuth = cache(async (): Promise<AuthContext> => {
       }
       const fullName =
         `${profile.firstName ?? ""} ${profile.lastName ?? ""}`.trim() || "Usuario";
-      const masterRoleId =
-        process.env["NODE_ENV"] !== "production"
-          ? (await prismaUnsafe.role.findUnique({ where: { code: "MASTER" } }))?.id
-          : undefined;
+      const masterRoleId = (
+        await prismaUnsafe.role.findUnique({ where: { code: "MASTER" } })
+      )?.id;
       dbUser = await prismaUnsafe.user.create({
         data: {
           tenantId: firstTenant.id,
