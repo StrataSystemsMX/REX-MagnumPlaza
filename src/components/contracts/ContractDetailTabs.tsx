@@ -24,12 +24,10 @@ import type {
 } from "@/lib/services/contracts-queries";
 import { describeAuditDetail } from "@/lib/audit/describe";
 import { capitalizeFirst } from "@/lib/utils";
+import { formatMXN } from "@/lib/format-currency";
 
-const MXN = new Intl.NumberFormat("es-MX", {
-  style: "currency",
-  currency: "MXN",
-  maximumFractionDigits: 2,
-});
+// Alias local: mismo output que la const Intl que existía aquí (2 decimales).
+const mxn = (v: number | string) => formatMXN(v, 2);
 
 const DATE = new Intl.DateTimeFormat("es-MX", {
   year: "numeric",
@@ -103,7 +101,7 @@ export function ContractDetailTabs({
             <Row label="Tipo">{contractTypeLabel(contract.type)}</Row>
             <Row label="Renta mensual">
               <span className="font-medium tabular-nums">
-                {MXN.format(Number(contract.monthlyAmount))}
+                {mxn(Number(contract.monthlyAmount))}
               </span>
             </Row>
             <Row label="Vigencia">
@@ -155,7 +153,7 @@ export function ContractDetailTabs({
                 <li key={g.id} className="rounded-md border p-3">
                   <div className="flex items-center justify-between">
                     <span className="font-medium tabular-nums">
-                      {MXN.format(Number(g.amount))}
+                      {mxn(Number(g.amount))}
                     </span>
                     <Badge variant="secondary">
                       {guaranteeStatusLabel(g.status)}

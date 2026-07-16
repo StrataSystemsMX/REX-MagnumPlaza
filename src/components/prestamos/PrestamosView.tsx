@@ -15,12 +15,7 @@ import { NewLoanDialog } from "@/components/prestamos/NewLoanDialog";
 import { cn } from "@/lib/utils";
 import type { LoanRow } from "@/lib/services/prestamos-queries";
 import type { LegalEntityOption } from "@/lib/services/properties-queries";
-
-const MXN = new Intl.NumberFormat("es-MX", {
-  style: "currency",
-  currency: "MXN",
-  maximumFractionDigits: 0,
-});
+import { formatMXN } from "@/lib/format-currency";
 
 const DATE_FMT = new Intl.DateTimeFormat("es-MX", {
   day: "2-digit",
@@ -66,7 +61,7 @@ export function PrestamosView({ loans, legalEntities, canCreate }: Props) {
         <Card size="sm">
           <CardContent className="space-y-1">
             <p className="text-xs text-muted-foreground">Total prestado activo</p>
-            <p className="text-2xl font-semibold tabular-nums">{MXN.format(totalActive)}</p>
+            <p className="text-2xl font-semibold tabular-nums">{formatMXN(totalActive)}</p>
           </CardContent>
         </Card>
       </div>
@@ -119,7 +114,7 @@ export function PrestamosView({ loans, legalEntities, canCreate }: Props) {
                     {DATE_FMT.format(loan.date)}
                   </TableCell>
                   <TableCell className="text-right tabular-nums font-medium">
-                    {MXN.format(loan.amount)}
+                    {formatMXN(loan.amount)}
                   </TableCell>
                   <TableCell>
                     <Badge

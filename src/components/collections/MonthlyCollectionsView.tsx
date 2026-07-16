@@ -36,18 +36,10 @@ import type {
   MonthlyUnitRow,
   MonthlyUnitStatus,
 } from "@/lib/services/payments-queries";
+import { formatMXN } from "@/lib/format-currency";
 
-const MXN = new Intl.NumberFormat("es-MX", {
-  style: "currency",
-  currency: "MXN",
-  maximumFractionDigits: 2,
-});
-
-const MXN_INT = new Intl.NumberFormat("es-MX", {
-  style: "currency",
-  currency: "MXN",
-  maximumFractionDigits: 0,
-});
+// Alias local: mismo output que la const Intl que existía aquí (2 decimales).
+const mxn = (v: number | string) => formatMXN(v, 2);
 
 const TABLE_COLUMN_COUNT = 6;
 
@@ -283,7 +275,7 @@ function PropertyGroupRows({
                 : ""}
             </span>
             <span className="ml-auto text-xs tabular-nums text-muted-foreground">
-              {MXN_INT.format(Number(group.expectedTotal))} esperado
+              {formatMXN(Number(group.expectedTotal))} esperado
             </span>
           </div>
         </TableCell>
@@ -371,7 +363,7 @@ function UnitRow({
         {row.status === "VACANT" ? (
           <span className="text-muted-foreground">—</span>
         ) : (
-          MXN.format(Number(row.amountDue))
+          mxn(Number(row.amountDue))
         )}
       </TableCell>
       <TableCell className="text-right tabular-nums">
@@ -405,21 +397,21 @@ function CobradoCell({ row }: { row: MonthlyUnitRow }) {
   if (row.status === "SIN_PAGO") {
     return (
       <span className="font-semibold text-red-700 dark:text-red-300">
-        {MXN.format(0)}
+        {mxn(0)}
       </span>
     );
   }
   if (row.status === "PAID") {
     return (
       <span className="font-semibold text-green-700 dark:text-green-300">
-        {MXN.format(Number(row.amountPaid))}
+        {mxn(Number(row.amountPaid))}
       </span>
     );
   }
   // PARTIAL
   return (
     <span className="font-semibold text-amber-700 dark:text-amber-300">
-      {MXN.format(Number(row.amountPaid))}
+      {mxn(Number(row.amountPaid))}
     </span>
   );
 }

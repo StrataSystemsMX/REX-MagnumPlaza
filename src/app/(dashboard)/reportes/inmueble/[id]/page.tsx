@@ -34,17 +34,12 @@ import type {
   UnitStatus,
 } from "@/generated/prisma/enums";
 import { capitalizeFirst } from "@/lib/utils";
+import { formatMXN } from "@/lib/format-currency";
 
 interface PageProps {
   params: Promise<{ id: string }>;
   searchParams: Promise<{ year?: string; from?: string }>;
 }
-
-const MXN = new Intl.NumberFormat("es-MX", {
-  style: "currency",
-  currency: "MXN",
-  maximumFractionDigits: 0,
-});
 
 const DATE = new Intl.DateTimeFormat("es-MX", {
   day: "2-digit",
@@ -57,7 +52,7 @@ const MONTH_NAMES = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Se
 
 function money(v: string | number): string {
   const n = Number(v);
-  return Number.isFinite(n) && n !== 0 ? MXN.format(n) : "—";
+  return Number.isFinite(n) && n !== 0 ? formatMXN(n) : "—";
 }
 
 export default async function PropertyReportPage({ params, searchParams }: PageProps) {

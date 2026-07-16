@@ -8,7 +8,7 @@ import {
   type DocumentTenantInfo,
 } from "./shared";
 import { formatMXN, formatPercent } from "@/lib/format-currency";
-import { formatPeriodLong } from "@/lib/format-date";
+import { formatDate, formatPeriodLong } from "@/lib/format-date";
 
 const styles = StyleSheet.create({
   kpiRow: {
@@ -107,7 +107,7 @@ export function DashboardSummaryPdf(props: DashboardSummaryPdfProps) {
 
         <Text style={sharedStyles.title}>Dashboard ejecutivo</Text>
         <Text style={sharedStyles.subtitle}>
-          {monthLabel(props.asOfMonth)} · Generado {props.generatedAt.toLocaleDateString("es-MX")}
+          {monthLabel(props.asOfMonth)} · Generado {formatDate(props.generatedAt)}
         </Text>
 
         {/* KPIs */}
