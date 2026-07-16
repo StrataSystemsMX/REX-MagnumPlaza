@@ -29,9 +29,9 @@ import {
 } from "@/lib/validators/cadastral";
 
 const CADASTRAL_PERM = {
-  create: "expense.create",
-  update: "expense.update",
-  delete: "expense.delete",
+  create: "cadastral.create",
+  update: "cadastral.update",
+  delete: "cadastral.delete",
 } as const;
 
 async function logAudit(

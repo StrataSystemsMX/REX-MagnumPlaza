@@ -19,6 +19,7 @@ const budgetLineMock = {
 };
 const legalEntityMock = { findFirstOrThrow: vi.fn(), findMany: vi.fn() };
 const propertyMock = { findFirstOrThrow: vi.fn() };
+const auditLogMock = { create: vi.fn() };
 
 vi.mock("next/cache", () => ({
   revalidatePath: (...args: unknown[]) => mockRevalidatePath(...args),
@@ -41,6 +42,7 @@ vi.mock("@/lib/prisma/client", () => ({
     budgetLine: budgetLineMock,
     legalEntity: legalEntityMock,
     property: propertyMock,
+    auditLog: auditLogMock,
   },
   prismaUnsafe: {},
 }));

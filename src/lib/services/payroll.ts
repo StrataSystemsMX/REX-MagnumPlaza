@@ -16,9 +16,9 @@ import {
 } from "@/lib/validators/payroll";
 
 const PAYROLL_PERM = {
-  create: "expense.create",
-  update: "expense.update",
-  delete: "expense.delete",
+  create: "payroll.create",
+  update: "payroll.update",
+  delete: "payroll.delete",
 } as const;
 
 async function logAudit(

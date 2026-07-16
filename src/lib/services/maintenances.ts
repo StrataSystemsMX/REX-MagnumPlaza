@@ -27,7 +27,7 @@ async function logAudit(
 
 export async function actionCreateMaintenance(input: CreateMaintenanceInput) {
   const { tenantId, dbUser } = await requireAuth();
-  await requirePermission(dbUser.id, "expense.create");
+  await requirePermission(dbUser.id, "maintenance.create");
 
   const data = createMaintenanceSchema.parse(input);
 
@@ -107,7 +107,7 @@ export async function actionCreateMaintenance(input: CreateMaintenanceInput) {
 
 export async function actionUpdateMaintenance(input: UpdateMaintenanceInput) {
   const { tenantId, dbUser } = await requireAuth();
-  await requirePermission(dbUser.id, "expense.update");
+  await requirePermission(dbUser.id, "maintenance.update");
 
   const data = updateMaintenanceSchema.parse(input);
 
@@ -160,7 +160,7 @@ export async function actionUpdateMaintenance(input: UpdateMaintenanceInput) {
 
 export async function actionUpdateMaintenanceStatus(input: UpdateMaintenanceStatusInput) {
   const { tenantId, dbUser } = await requireAuth();
-  await requirePermission(dbUser.id, "expense.update");
+  await requirePermission(dbUser.id, "maintenance.update");
 
   const data = updateMaintenanceStatusSchema.parse(input);
 

@@ -5,6 +5,7 @@ import { Prisma } from "@/generated/prisma/client";
 import { requireAuth } from "@/lib/auth/get-session";
 import { requirePermission } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/prisma/client";
+import { logAudit } from "@/lib/services/audit";
 import {
   createBudgetSchema,
   createBudgetsBatchSchema,
@@ -24,7 +25,7 @@ const INCOME_TYPES = new Set([
 
 export async function actionCreateBudget(input: CreateBudgetInput) {
   const { tenantId, dbUser } = await requireAuth();
-  await requirePermission(dbUser.id, "expense.create");
+  await requirePermission(dbUser.id, "budget.create");
 
   const data = createBudgetSchema.parse(input);
 
@@ -37,13 +38,22 @@ export async function actionCreateBudget(input: CreateBudgetInput) {
     data: { tenantId, legalEntityId: data.legalEntityId, year: data.year },
   });
 
+  await logAudit({
+    tenantId,
+    userId: dbUser.id,
+    action: "CREATE",
+    entityType: "Budget",
+    entityId: budget.id,
+    changes: { legalEntityId: data.legalEntityId, year: data.year },
+  });
+
   revalidatePath("/presupuesto");
   return budget;
 }
 
 export async function actionCreateBudgetsBatch(input: CreateBudgetsBatchInput) {
   const { tenantId, dbUser } = await requireAuth();
-  await requirePermission(dbUser.id, "expense.create");
+  await requirePermission(dbUser.id, "budget.create");
 
   const data = createBudgetsBatchSchema.parse(input);
 
@@ -74,7 +84,7 @@ export async function actionCreateBudgetsBatch(input: CreateBudgetsBatchInput) {
 
 export async function actionUpsertBudgetLine(input: UpsertBudgetLineInput) {
   const { tenantId, dbUser } = await requireAuth();
-  await requirePermission(dbUser.id, "expense.update");
+  await requirePermission(dbUser.id, "budget.update");
 
   const data = upsertBudgetLineSchema.parse(input);
 
@@ -128,13 +138,27 @@ export async function actionUpsertBudgetLine(input: UpsertBudgetLineInput) {
     });
   }
 
+  await logAudit({
+    tenantId,
+    userId: dbUser.id,
+    action: data.lineId ? "UPDATE" : "CREATE",
+    entityType: "BudgetLine",
+    entityId: data.lineId ?? data.budgetId,
+    changes: {
+      budgetId: data.budgetId,
+      conceptType: data.conceptType,
+      conceptLabel: data.conceptLabel,
+      months: data.months,
+    },
+  });
+
   revalidatePath("/presupuesto");
   revalidatePath("/presupuesto/comparativo");
 }
 
 export async function actionDeleteBudgetLine(lineId: string, budgetId: string) {
   const { tenantId, dbUser } = await requireAuth();
-  await requirePermission(dbUser.id, "expense.delete");
+  await requirePermission(dbUser.id, "budget.delete");
 
   const budget = await prisma.budget.findFirstOrThrow({
     where: { id: budgetId, tenantId },
@@ -151,6 +175,15 @@ export async function actionDeleteBudgetLine(lineId: string, budgetId: string) {
   if (count === 0) {
     throw new Error("Línea de presupuesto no encontrada.");
   }
+
+  await logAudit({
+    tenantId,
+    userId: dbUser.id,
+    action: "DELETE",
+    entityType: "BudgetLine",
+    entityId: lineId,
+    changes: { budgetId },
+  });
 
   revalidatePath("/presupuesto");
   revalidatePath("/presupuesto/comparativo");

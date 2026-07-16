@@ -671,4 +671,72 @@ export async function sendContractExpiringNotice(
   });
 }
 
+export interface ContractExpiringSweepResult {
+  candidates: number;
+  sent: number;
+  skipped: number;
+}
+
+/**
+ * Cron diario: avisa por WhatsApp los contratos ACTIVE sin autoRenew cuyo
+ * endDate cae dentro de la ventana (default 30 días). Idempotente: un solo
+ * aviso por contrato — se dedupe contra el AuditLog de NotificationLog que
+ * dejan tanto este sweep como el envío manual (changes.contractId).
+ */
+export async function sendContractExpiringNotices(
+  tenantId: string,
+  options: { now?: Date; windowDays?: number } = {},
+): Promise<ContractExpiringSweepResult> {
+  const now = options.now ?? new Date();
+  const windowDays = options.windowDays ?? 30;
+  const windowEnd = new Date(now.getTime() + windowDays * 24 * 60 * 60 * 1000);
+
+  const contracts = await prisma.contract.findMany({
+    where: {
+      tenantId,
+      status: "ACTIVE",
+      autoRenew: false,
+      endDate: { gte: now, lte: windowEnd },
+    },
+    select: { id: true },
+  });
+
+  let sent = 0;
+  let skipped = 0;
+  for (const c of contracts) {
+    const already = await prisma.auditLog.findFirst({
+      where: {
+        tenantId,
+        entityType: "NotificationLog",
+        changes: { path: ["contractId"], equals: c.id },
+      },
+      select: { id: true },
+    });
+    if (already) {
+      skipped += 1;
+      continue;
+    }
+
+    const result = await sendContractExpiringNotice(tenantId, c.id);
+    await prisma.auditLog.create({
+      data: {
+        tenantId,
+        userId: null,
+        action: "CREATE",
+        entityType: "NotificationLog",
+        entityId: result.notificationLogId,
+        changes: {
+          auto: true,
+          contractId: c.id,
+          templateCode: "CONTRACT_EXPIRING",
+          status: result.status,
+        },
+      },
+    });
+    if (result.status !== "FAILED") sent += 1;
+  }
+
+  return { candidates: contracts.length, sent, skipped };
+}
+
 export type NotificationLogRow = NotificationLogModel;

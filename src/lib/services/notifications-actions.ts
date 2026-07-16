@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { requireAuth } from "@/lib/auth/get-session";
-import { isMaster } from "@/lib/auth/permissions";
+import { isMaster, requirePermission } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/prisma/client";
 import {
   sendContractExpiringNotice,
@@ -127,7 +127,9 @@ export async function actionSendContractExpiringManual(
 export async function actionRetryNotification(
   notificationLogId: string,
 ): Promise<NotificationDispatchResult> {
-  const { tenantId } = await requireAuth();
+  const { tenantId, dbUser } = await requireAuth();
+  // Reenvía un WhatsApp real (cuesta dinero): requiere permiso explícito.
+  await requirePermission(dbUser.id, "notification.retry");
 
   const log = await prisma.notificationLog.findFirstOrThrow({
     where: { id: notificationLogId, tenantId },

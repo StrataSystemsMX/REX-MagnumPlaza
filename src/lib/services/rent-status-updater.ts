@@ -135,13 +135,37 @@ export async function updateRentStatuses(
     ).amount.toDecimalPlaces(2);
     const feeChanged = !newLateFee.eq(r.lateFeeAccrued);
 
+    const level = statusChanged ? OVERDUE_LEVEL[newStatus] : undefined;
+
+    // Update + AuditLog de la transición en UNA transacción por renta: si algo
+    // falla, no queda el estado avanzado sin su rastro de auditoría (ni al
+    // revés). La notificación se dispara DESPUÉS del commit.
     if (statusChanged || feeChanged) {
-      await prisma.rent.updateMany({
-        where: { id: r.id, tenantId },
-        data: {
-          ...(statusChanged ? { status: newStatus } : {}),
-          ...(feeChanged ? { lateFeeAccrued: newLateFee } : {}),
-        },
+      await prisma.$transaction(async (tx) => {
+        await tx.rent.updateMany({
+          where: { id: r.id, tenantId },
+          data: {
+            ...(statusChanged ? { status: newStatus } : {}),
+            ...(feeChanged ? { lateFeeAccrued: newLateFee } : {}),
+          },
+        });
+        if (level !== undefined) {
+          await tx.auditLog.create({
+            data: {
+              tenantId,
+              userId: null,
+              action: "UPDATE",
+              entityType: "Rent",
+              entityId: r.id,
+              changes: {
+                transition: { from: r.status, to: newStatus },
+                level,
+                triggeredBy: "rent-status-updater-cron",
+                at: now.toISOString(),
+              },
+            },
+          });
+        }
       });
     }
     if (feeChanged) lateFeesUpdated += 1;
@@ -150,32 +174,18 @@ export async function updateRentStatuses(
     rentsUpdated += 1;
     byNewStatus[newStatus] = (byNewStatus[newStatus] ?? 0) + 1;
 
-    const level = OVERDUE_LEVEL[newStatus];
     if (level !== undefined) {
       overdueTransitions += 1;
       // Protocolo de 2 meses: el recordatorio amable (1M) solo se manda si el
       // contrato lo habilitó; el aviso fuerte/desalojo (2M) es el detonante
       // automático; el 3M ya no auto-notifica (la cadencia mensual se retiró).
+      // Post-commit: si el envío falla, el estado ya quedó persistido y la
+      // siguiente corrida no re-notifica (se dispara por transición).
       const shouldNotify =
         (level === 1 && r.contract.friendlyReminderEnabled) || level === 2;
       if (shouldNotify) {
         await triggerOverdueNotification(tenantId, r.id, level);
       }
-      await prisma.auditLog.create({
-        data: {
-          tenantId,
-          userId: null,
-          action: "UPDATE",
-          entityType: "Rent",
-          entityId: r.id,
-          changes: {
-            transition: { from: r.status, to: newStatus },
-            level,
-            triggeredBy: "rent-status-updater-cron",
-            at: now.toISOString(),
-          },
-        },
-      });
     }
   }
 

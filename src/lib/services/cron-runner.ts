@@ -1,5 +1,6 @@
 import { prismaUnsafe } from "@/lib/prisma/client";
 import { recordMorosityDailySnapshot } from "@/lib/services/morosity-snapshot";
+import { sendContractExpiringNotices } from "@/lib/services/notifications";
 import { generateMonthlyRents } from "@/lib/services/rent-generation";
 import { updateRentStatuses } from "@/lib/services/rent-status-updater";
 import type { RentStatus } from "@/generated/prisma/enums";
@@ -10,6 +11,7 @@ export interface CronRunSummary {
   rentsUpdated: number;
   overdueTransitions: number;
   byNewStatus: Partial<Record<RentStatus, number>>;
+  contractExpiringSent: number;
   snapshotDate: string | null;
   runAt: string;
 }
@@ -31,6 +33,7 @@ export async function runDailyMorosityCron(
   let rentsGenerated = 0;
   let rentsUpdated = 0;
   let overdueTransitions = 0;
+  let contractExpiringSent = 0;
   const byNewStatus: Partial<Record<RentStatus, number>> = {};
   let snapshotDate: Date | null = null;
 
@@ -47,6 +50,15 @@ export async function runDailyMorosityCron(
     for (const [k, v] of Object.entries(u.byNewStatus) as [RentStatus, number][]) {
       byNewStatus[k] = (byNewStatus[k] ?? 0) + v;
     }
+    // Aviso de contratos por vencer (30 días, sin autoRenew, un aviso por
+    // contrato). Best-effort: un fallo aquí no debe tumbar el resto del cron.
+    try {
+      const exp = await sendContractExpiringNotices(t.id, { now });
+      contractExpiringSent += exp.sent;
+    } catch (err) {
+      console.error("[cron] contract-expiring sweep failed", { tenantId: t.id, err });
+    }
+
     const snap = await recordMorosityDailySnapshot(t.id, { now });
     snapshotDate = snap.date;
   }
@@ -57,6 +69,7 @@ export async function runDailyMorosityCron(
     rentsUpdated,
     overdueTransitions,
     byNewStatus,
+    contractExpiringSent,
     snapshotDate: snapshotDate ? snapshotDate.toISOString().slice(0, 10) : null,
     runAt: now.toISOString(),
   };

@@ -7,8 +7,13 @@ const rentMock = {
 };
 const auditLogMock = { create: vi.fn() };
 
+const txMock = { rent: rentMock, auditLog: auditLogMock };
 vi.mock("@/lib/prisma/client", () => ({
-  prisma: { rent: rentMock, auditLog: auditLogMock },
+  prisma: {
+    rent: rentMock,
+    auditLog: auditLogMock,
+    $transaction: async (fn: (tx: typeof txMock) => Promise<unknown>) => fn(txMock),
+  },
   prismaUnsafe: {},
 }));
 
