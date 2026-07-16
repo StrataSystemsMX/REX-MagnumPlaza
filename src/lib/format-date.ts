@@ -44,6 +44,16 @@ export function formatDate(date: DateInput): string {
   }).format(new Date(date));
 }
 
+/** "Mayo" — solo mes completo (encabezados de KPIs). */
+export function formatMonthLong(date: DateInput): string {
+  return capitalizeFirst(
+    new Intl.DateTimeFormat("es-MX", {
+      month: "long",
+      timeZone: "UTC",
+    }).format(new Date(date)),
+  );
+}
+
 /** "May" — solo mes abreviado (ejes de gráficas). */
 export function formatMonthShort(date: DateInput): string {
   return capitalizeFirst(
