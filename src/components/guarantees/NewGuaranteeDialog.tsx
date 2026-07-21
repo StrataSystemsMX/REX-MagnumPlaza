@@ -68,7 +68,7 @@ export function NewGuaranteeDialog({ contracts }: Props) {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger render={<Button />}>
-        Registrar fianza
+      + Registrar fianza
       </DialogTrigger>
       <DialogContent className="max-w-md">
         <DialogHeader>
