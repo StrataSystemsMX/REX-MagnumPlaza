@@ -34,7 +34,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <ClerkProvider localization={esMX}>
+    <ClerkProvider localization={esMX} afterSignOutUrl="/sign-in">
       <html lang="es-MX" className={`${outfit.variable} ${jakarta.variable} ${geistMono.variable}`}>
         <body className="antialiased">
           {children}
