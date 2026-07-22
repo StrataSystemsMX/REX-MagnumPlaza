@@ -13,6 +13,7 @@ import {
   serializeFields,
   DATE_KEYS,
 } from "@/lib/audit/field-types";
+import { describeAuditDetail } from "@/lib/audit/describe";
 
 // ============================================================================
 // Mocks (para audit-undo / audit-actions)
@@ -147,6 +148,145 @@ describe("categorías", () => {
     expect(auditCategoryLabel("EGRESOS")).toBe("Egresos");
     expect(entityTypeLabel("Lessee")).toBe("Inquilino");
     expect(entityTypesForCategory("INGRESOS").sort()).toEqual(["Payment", "Rent"]);
+  });
+});
+
+// ============================================================================
+// describeAuditDetail (detalle legible del historial)
+// ============================================================================
+
+describe("describeAuditDetail", () => {
+  it("Pago CREATE: incluye monto, método, fecha y estado de la renta", () => {
+    const txt = describeAuditDetail({
+      action: "CREATE",
+      entityType: "Payment",
+      changes: {
+        rentId: "r1",
+        amount: "2000",
+        method: "CASH",
+        paymentDate: "2026-06-10T00:00:00.000Z",
+        rentStatusAfter: "PAID",
+      },
+    });
+    expect(txt).toContain("Registró un pago");
+    expect(txt).toContain("$2,000.00");
+    expect(txt).toContain("efectivo");
+    expect(txt).toContain("junio");
+    expect(txt).toContain("Pagado");
+  });
+
+  it("Pago CREATE en cascada / bulk se distingue del pago normal", () => {
+    expect(
+      describeAuditDetail({
+        action: "CREATE",
+        entityType: "Payment",
+        changes: { amount: "500", cascadedFrom: "r0" },
+      }),
+    ).toContain("adelanto");
+    expect(
+      describeAuditDetail({
+        action: "CREATE",
+        entityType: "Payment",
+        changes: { amount: "500", bulk: true },
+      }),
+    ).toContain("agrupado");
+  });
+
+  it("Pago DELETE: incluye monto y fecha (antes decía solo 'Eliminó pago.')", () => {
+    const txt = describeAuditDetail({
+      action: "DELETE",
+      entityType: "Payment",
+      changes: { rentId: "r1", amount: "2000", paymentDate: "2026-07-15T00:00:00.000Z" },
+    });
+    expect(txt).toContain("Eliminó un pago");
+    expect(txt).toContain("$2,000.00");
+    expect(txt).toContain("julio");
+  });
+
+  it("Egreso CREATE/UPDATE: incluye monto y fecha", () => {
+    expect(
+      describeAuditDetail({
+        action: "CREATE",
+        entityType: "Expense",
+        changes: { amount: 1500, expenseDate: "2026-06-01T00:00:00.000Z" },
+      }),
+    ).toBe("Creó un egreso de $1,500.00 con fecha 01 de junio de 2026.");
+    expect(
+      describeAuditDetail({
+        action: "UPDATE",
+        entityType: "Expense",
+        changes: { amount: 1800, expenseDate: "2026-06-01T00:00:00.000Z" },
+      }),
+    ).toContain("Actualizó un egreso");
+  });
+
+  it("Egreso registrar pago: enriquece el marcador con monto y método", () => {
+    const txt = describeAuditDetail({
+      action: "UPDATE",
+      entityType: "Expense",
+      changes: { action: "REGISTER", amount: 900, paymentMethod: "TRANSFER" },
+    });
+    expect(txt).toContain("Registró el pago de egreso");
+    expect(txt).toContain("$900.00");
+    expect(txt).toContain("Transferencia");
+  });
+
+  it("Notificación: deduce el tipo de aviso y refleja el resultado del envío", () => {
+    expect(
+      describeAuditDetail({
+        action: "CREATE",
+        entityType: "NotificationLog",
+        changes: { manual: false, paymentId: "p1", status: "SENT" },
+      }),
+    ).toBe("Envió la confirmación de pago.");
+    expect(
+      describeAuditDetail({
+        action: "CREATE",
+        entityType: "NotificationLog",
+        changes: { manual: true, level: "2M", rentId: "r1", status: "SENT" },
+      }),
+    ).toBe("Envió el 2do aviso de mora (envío manual).");
+    expect(
+      describeAuditDetail({
+        action: "CREATE",
+        entityType: "NotificationLog",
+        changes: { manual: true, contractId: "c1", status: "FAILED" },
+      }),
+    ).toBe("Falló el envío del aviso de contrato por vencer (envío manual).");
+    expect(
+      describeAuditDetail({
+        action: "CREATE",
+        entityType: "NotificationLog",
+        changes: { manual: false, paymentId: "p1", status: "PENDING" },
+      }),
+    ).toContain("pendiente de envío");
+  });
+
+  it("Edición de pago sigue usando el bloque `after` genérico", () => {
+    const txt = describeAuditDetail({
+      action: "UPDATE",
+      entityType: "Payment",
+      changes: { before: { amount: "100" }, after: { amount: "150" } },
+    });
+    expect(txt).toContain("Actualizó pago");
+    expect(txt).toContain("$150.00");
+  });
+
+  it("mantiene los detalles ricos ya existentes (inmueble, unidad)", () => {
+    expect(
+      describeAuditDetail({
+        action: "UPDATE",
+        entityType: "Property",
+        changes: { after: { name: "Maria Escriba", notes: "algo" } },
+      }),
+    ).toBe("Actualizó inmueble: Nombre: Maria Escriba · Notas actualizadas.");
+    expect(
+      describeAuditDetail({
+        action: "CREATE",
+        entityType: "Unit",
+        changes: { auto: true },
+      }),
+    ).toBe("Creó automáticamente unidad.");
   });
 });
 
