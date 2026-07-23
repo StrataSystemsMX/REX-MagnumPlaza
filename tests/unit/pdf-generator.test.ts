@@ -11,6 +11,7 @@ const lesseeMock = { findFirstOrThrow: vi.fn() };
 const rentMock = { findFirstOrThrow: vi.fn(), findMany: vi.fn() };
 const documentMock = { create: vi.fn() };
 const notificationLogMock = { create: vi.fn() };
+const documentTemplateMock = { findUnique: vi.fn() };
 
 vi.mock("@/lib/prisma/client", () => ({
   prisma: {
@@ -19,6 +20,7 @@ vi.mock("@/lib/prisma/client", () => ({
     rent: rentMock,
     document: documentMock,
     notificationLog: notificationLogMock,
+    documentTemplate: documentTemplateMock,
   },
   prismaUnsafe: {},
 }));
@@ -49,6 +51,8 @@ beforeEach(() => {
     url: "https://r2.example.com/test.pdf",
     backend: "r2",
   });
+  // Sin plantilla personalizada → el generador usa el texto por defecto.
+  documentTemplateMock.findUnique.mockResolvedValue(null);
 });
 
 function fakeTenant() {
@@ -88,18 +92,21 @@ function fakeLesseeWithContracts() {
             period: utc(2026, 0, 1),
             amountDue: D(10530.85),
             amountPaid: D(10530.85),
+            amountWaived: D(0),
             status: "PAID" as const,
           },
           {
             period: utc(2026, 1, 1),
             amountDue: D(10530.85),
             amountPaid: D(5000),
+            amountWaived: D(0),
             status: "PARTIAL" as const,
           },
           {
             period: utc(2026, 2, 1),
             amountDue: D(10530.85),
             amountPaid: D(0),
+            amountWaived: D(0),
             status: "OVERDUE_1M" as const,
           },
         ],
@@ -161,6 +168,52 @@ describe("generateAccountStatement", () => {
     expect(documentMock.create).not.toHaveBeenCalled();
     expect(result.buffer.subarray(0, 4).toString()).toBe(PDF_HEADER);
   });
+
+  it("filtro de plazo: propaga where por period y agrega el rango al filename", async () => {
+    tenantMock.findUniqueOrThrow.mockResolvedValue(fakeTenant());
+    lesseeMock.findFirstOrThrow.mockResolvedValue(fakeLesseeWithContracts());
+    documentMock.create.mockResolvedValue({ id: "doc-1" });
+
+    const { generateAccountStatement } = await import("@/lib/pdf/generator");
+    const from = utc(2026, 0, 1); // Ene 2026
+    const to = utc(2026, 2, 1); // Mar 2026
+    const result = await generateAccountStatement(TENANT_ID, "lessee-1", {
+      from,
+      to,
+    });
+
+    // El filtro de period debe llegar a la query de Prisma (el filtrado real
+    // ocurre en la DB; aquí verificamos que el where se construye y propaga).
+    const arg = lesseeMock.findFirstOrThrow.mock.calls[0]?.[0] as {
+      include: {
+        contracts: {
+          include: { rents: { where?: { period?: { gte?: Date; lte?: Date } } } };
+        };
+      };
+    };
+    const periodWhere = arg.include.contracts.include.rents.where?.period;
+    expect(periodWhere?.gte).toEqual(from);
+    expect(periodWhere?.lte).toEqual(to);
+
+    // El nombre del archivo refleja el rango (YYYY-MM_YYYY-MM).
+    expect(result.filename).toMatch(
+      /^estado-de-cuenta-sushi-\d{4}-\d{2}-\d{2}-2026-01_2026-03\.pdf$/,
+    );
+  });
+
+  it("sin filtro de plazo: no pasa where a los rents", async () => {
+    tenantMock.findUniqueOrThrow.mockResolvedValue(fakeTenant());
+    lesseeMock.findFirstOrThrow.mockResolvedValue(fakeLesseeWithContracts());
+    documentMock.create.mockResolvedValue({ id: "doc-1" });
+
+    const { generateAccountStatement } = await import("@/lib/pdf/generator");
+    await generateAccountStatement(TENANT_ID, "lessee-1");
+
+    const arg = lesseeMock.findFirstOrThrow.mock.calls[0]?.[0] as {
+      include: { contracts: { include: { rents: { where?: unknown } } } };
+    };
+    expect(arg.include.contracts.include.rents.where).toBeUndefined();
+  });
 });
 
 // ============================================================================
@@ -178,6 +231,7 @@ function fakeRentForReminder(
     dueDate: utc(2026, 1, 1),
     amountDue: D(10000),
     amountPaid: D(0),
+    amountWaived: D(0),
     status,
     contract: {
       id: "contract-x",
@@ -261,6 +315,32 @@ describe("generateOverdueReminder", () => {
       data: { templateCode: string };
     };
     expect(logArg.data.templateCode).toBe("EVICTION_INITIATION");
+  });
+
+  it("usa la plantilla personalizada del tenant cuando existe (por tenant+nivel)", async () => {
+    tenantMock.findUniqueOrThrow.mockResolvedValue(fakeTenant());
+    rentMock.findFirstOrThrow.mockResolvedValue(fakeRentForReminder("OVERDUE_2M"));
+    rentMock.findMany.mockResolvedValue([]);
+    documentMock.create.mockResolvedValue({ id: "doc-9" });
+    notificationLogMock.create.mockResolvedValue({ id: "log-9" });
+    documentTemplateMock.findUnique.mockResolvedValue({
+      title: "Aviso personalizado",
+      greeting: "Estimado {lesseeName}",
+      body: "Cuerpo personalizado",
+      legalNote: "Nota legal personalizada",
+      closing: "Atentamente",
+    });
+
+    const { generateOverdueReminder } = await import("@/lib/pdf/generator");
+    const result = await generateOverdueReminder(TENANT_ID, "rent-x", "2M");
+
+    // Se consulta la plantilla por (tenantId, level) y el PDF se renderiza igual.
+    expect(documentTemplateMock.findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { tenantId_level: { tenantId: TENANT_ID, level: "2M" } },
+      }),
+    );
+    expect(result.buffer.subarray(0, 4).toString()).toBe(PDF_HEADER);
   });
 });
 

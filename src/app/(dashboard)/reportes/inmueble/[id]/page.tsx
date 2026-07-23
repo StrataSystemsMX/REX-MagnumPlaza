@@ -20,9 +20,19 @@ import {
 } from "@/components/ui/table";
 import { requireAuth } from "@/lib/auth/get-session";
 import { getUserRoleCodes } from "@/lib/auth/permissions";
-import { propertyTypeLabel, unitStatusLabel } from "@/lib/i18n/enums";
+import {
+  maintenanceStatusLabel,
+  maintenanceTypeLabel,
+  propertyTypeLabel,
+  unitStatusLabel,
+} from "@/lib/i18n/enums";
 import { getPropertyReport } from "@/lib/services/property-report-queries";
-import type { PropertyType, UnitStatus } from "@/generated/prisma/enums";
+import type {
+  MaintenanceStatus,
+  MaintenanceType,
+  PropertyType,
+  UnitStatus,
+} from "@/generated/prisma/enums";
 import { capitalizeFirst } from "@/lib/utils";
 
 interface PageProps {
@@ -57,7 +67,10 @@ export default async function PropertyReportPage({ params, searchParams }: PageP
   const { dbUser } = await requireAuth();
   const roles = await getUserRoleCodes(dbUser.id);
   const canSee =
-    roles.includes("MASTER") || roles.includes("ACCOUNTANT") || roles.includes("ADMIN");
+    roles.includes("MASTER") ||
+    roles.includes("ACCOUNTANT") ||
+    roles.includes("ADMIN") ||
+    roles.includes("OWNER");
   if (!canSee) redirect("/");
 
   const year = yearParam && /^\d{4}$/.test(yearParam) ? Number(yearParam) : undefined;
@@ -68,6 +81,12 @@ export default async function PropertyReportPage({ params, searchParams }: PageP
 
   const occupancyPct =
     data.totalUnits > 0 ? Math.round((data.occupiedUnits / data.totalUnits) * 100) : 0;
+
+  // Estado del seguro: días para vencer (negativo = ya vencido). La ventana de
+  // 60 días empata con la alerta del dashboard.
+  const insuranceDaysLeft = data.insuranceExpiresAt
+    ? Math.floor((data.insuranceExpiresAt.getTime() - Date.now()) / 86_400_000)
+    : null;
 
   return (
     <div className="space-y-6">
@@ -124,6 +143,188 @@ export default async function PropertyReportPage({ params, searchParams }: PageP
           </CardHeader>
         </Card>
       </div>
+
+      {/* Seguro del inmueble */}
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between gap-2">
+            <div>
+              <CardTitle className="text-base">Seguro</CardTitle>
+              <CardDescription>Póliza y vencimiento del inmueble</CardDescription>
+            </div>
+            {insuranceDaysLeft === null ? (
+              <Badge variant="outline">Sin registrar</Badge>
+            ) : insuranceDaysLeft < 0 ? (
+              <Badge variant="destructive">Vencido</Badge>
+            ) : insuranceDaysLeft <= 60 ? (
+              <Badge className="border-amber-300 bg-amber-100 text-amber-900">
+                Por vencer · {insuranceDaysLeft}d
+              </Badge>
+            ) : (
+              <Badge variant="secondary">Vigente</Badge>
+            )}
+          </div>
+        </CardHeader>
+        <CardContent>
+          {insuranceDaysLeft === null ? (
+            <p className="text-sm text-muted-foreground">
+              No se ha registrado el seguro de este inmueble. Agrégalo desde la
+              edición del inmueble para recibir avisos de vencimiento.
+            </p>
+          ) : (
+            <div className="grid grid-cols-1 gap-x-8 gap-y-2 text-sm sm:grid-cols-3">
+              <div>
+                <p className="text-xs text-muted-foreground">Aseguradora</p>
+                <p className="font-medium">{data.insuranceProvider || "—"}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Póliza</p>
+                <p className="font-medium">{data.insurancePolicyNumber || "—"}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Vence</p>
+                <p className="font-medium">
+                  {data.insuranceExpiresAt
+                    ? capitalizeFirst(DATE.format(data.insuranceExpiresAt))
+                    : "—"}
+                </p>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Predial */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">Predial</CardTitle>
+          <CardDescription>Pagos prediales registrados de este inmueble</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {data.cadastralPayments.length === 0 ? (
+            <p className="py-4 text-center text-sm text-muted-foreground">
+              Sin prediales registrados.
+            </p>
+          ) : (
+            <div className="overflow-x-auto">
+              <Table className="min-w-[640px]">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Año</TableHead>
+                    <TableHead className="text-right">Monto</TableHead>
+                    <TableHead className="text-right">Pagado</TableHead>
+                    <TableHead>Vence</TableHead>
+                    <TableHead>Estado</TableHead>
+                    <TableHead>Paga</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {data.cadastralPayments.map((c) => {
+                    const overdue = !c.isPaid && c.dueDate.getTime() < Date.now();
+                    return (
+                      <TableRow key={c.id}>
+                        <TableCell className="font-medium">{c.year}</TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {c.totalAmount ? money(c.totalAmount) : "—"}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {c.paidAmount ? money(c.paidAmount) : "—"}
+                        </TableCell>
+                        <TableCell className="whitespace-nowrap text-sm">
+                          {capitalizeFirst(DATE.format(c.dueDate))}
+                        </TableCell>
+                        <TableCell>
+                          {c.isPaid ? (
+                            <Badge variant="secondary">Pagado</Badge>
+                          ) : overdue ? (
+                            <Badge variant="destructive">Vencido</Badge>
+                          ) : (
+                            <Badge variant="outline">Pendiente</Badge>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground">
+                          {c.payerLabel ?? "Dueño"}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Mantenimiento */}
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <CardTitle className="text-base">Mantenimiento</CardTitle>
+              <CardDescription>Mantenimientos del inmueble — {data.year}</CardDescription>
+            </div>
+            <div className="text-right">
+              <p className="text-xs text-muted-foreground">Gasto del año</p>
+              <p className="text-lg font-semibold tabular-nums">
+                {money(data.maintenanceYearCost)}
+              </p>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {data.maintenances.length === 0 ? (
+            <p className="py-4 text-center text-sm text-muted-foreground">
+              Sin mantenimientos en {data.year}.
+            </p>
+          ) : (
+            <div className="overflow-x-auto">
+              <Table className="min-w-[820px]">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Fecha</TableHead>
+                    <TableHead>Local</TableHead>
+                    <TableHead>Concepto</TableHead>
+                    <TableHead>Tipo</TableHead>
+                    <TableHead>Estado</TableHead>
+                    <TableHead className="text-right">Costo</TableHead>
+                    <TableHead>Proveedor</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {data.maintenances.map((m) => {
+                    const date = m.completedDate ?? m.scheduledDate;
+                    return (
+                      <TableRow key={m.id}>
+                        <TableCell className="whitespace-nowrap text-sm">
+                          {date ? capitalizeFirst(DATE.format(date)) : "—"}
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground">
+                          {m.unitCode ?? "Inmueble"}
+                        </TableCell>
+                        <TableCell className="font-medium">{m.title}</TableCell>
+                        <TableCell className="text-sm">
+                          {maintenanceTypeLabel(m.type as MaintenanceType)}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline">
+                            {maintenanceStatusLabel(m.status as MaintenanceStatus)}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {m.cost ? money(m.cost) : "—"}
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground">
+                          {m.vendor ?? "—"}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Tabla mensual */}
       <Card>

@@ -6,6 +6,13 @@ import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Table,
   TableBody,
   TableCell,
@@ -21,26 +28,8 @@ import { RentStatusBadge } from "@/components/shared/RentStatusBadge";
 import { contractStatusLabel, paymentMethodLabel } from "@/lib/i18n/enums";
 import { isPlaza, unitWithProperty } from "@/lib/i18n/unit-label";
 import type { LesseeStatement as LesseeStatementData } from "@/lib/services/payments-queries";
-import { capitalizeFirst } from "@/lib/utils";
-
-const MXN = new Intl.NumberFormat("es-MX", {
-  style: "currency",
-  currency: "MXN",
-  maximumFractionDigits: 2,
-});
-
-const DATE = new Intl.DateTimeFormat("es-MX", {
-  year: "numeric",
-  month: "short",
-  day: "2-digit",
-  timeZone: "UTC",
-});
-
-const PERIOD = new Intl.DateTimeFormat("es-MX", {
-  month: "short",
-  year: "numeric",
-  timeZone: "UTC",
-});
+import { formatMXN } from "@/lib/format-currency";
+import { formatDate, formatPeriodShort } from "@/lib/format-date";
 
 interface LesseeStatementProps {
   data: LesseeStatementData;
@@ -50,6 +39,8 @@ export function LesseeStatement({ data }: LesseeStatementProps) {
   const [paymentContext, setPaymentContext] = useState<RegisterPaymentDialogContext | null>(
     null,
   );
+  // Plazo del estado de cuenta: "all" = todo el historial; "6"/"12" = ventana móvil.
+  const [statementMonths, setStatementMonths] = useState<string>("all");
   const { lessee, summary, lastPayment } = data;
 
   return (
@@ -57,7 +48,7 @@ export function LesseeStatement({ data }: LesseeStatementProps) {
       <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
         <SummaryCard label="Saldo total adeudado">
           <span className="text-2xl font-semibold tabular-nums text-destructive">
-            {MXN.format(Number(summary.total))}
+            {formatMXN(summary.total, 2)}
           </span>
         </SummaryCard>
         <SummaryCard label="Meses vencidos (≥30d)">
@@ -74,10 +65,10 @@ export function LesseeStatement({ data }: LesseeStatementProps) {
           {lastPayment ? (
             <>
               <span className="text-base font-semibold tabular-nums">
-                {MXN.format(Number(lastPayment.amount))}
+                {formatMXN(lastPayment.amount, 2)}
               </span>
               <p className="text-xs text-muted-foreground">
-                {capitalizeFirst(DATE.format(lastPayment.paymentDate))} ·{" "}
+                {formatDate(lastPayment.paymentDate)} ·{" "}
                 {paymentMethodLabel(lastPayment.method)}
               </p>
             </>
@@ -87,12 +78,33 @@ export function LesseeStatement({ data }: LesseeStatementProps) {
         </SummaryCard>
       </div>
 
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-muted-foreground">Plazo:</span>
+          <Select
+            value={statementMonths}
+            onValueChange={(v) => setStatementMonths(v ?? "all")}
+          >
+            <SelectTrigger className="w-[180px]" aria-label="Plazo del estado de cuenta">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todo el historial</SelectItem>
+              <SelectItem value="6">Últimos 6 meses</SelectItem>
+              <SelectItem value="12">Últimos 12 meses</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
         <Button
           variant="secondary"
           onClick={() => {
-            const url = `/api/documents/account-statement?lesseeId=${encodeURIComponent(lessee.id)}`;
-            window.open(url, "_blank", "noopener,noreferrer");
+            const params = new URLSearchParams({ lesseeId: lessee.id });
+            if (statementMonths !== "all") params.set("months", statementMonths);
+            window.open(
+              `/api/documents/account-statement?${params.toString()}`,
+              "_blank",
+              "noopener,noreferrer",
+            );
           }}
         >
           <FileDown className="size-4" />
@@ -132,8 +144,8 @@ export function LesseeStatement({ data }: LesseeStatementProps) {
               <div className="text-right text-sm">
                 <p className="text-xs text-muted-foreground">Cargado / Pagado</p>
                 <p className="tabular-nums">
-                  {MXN.format(totalDue)} /{" "}
-                  <span className="font-semibold">{MXN.format(totalPaid)}</span>
+                  {formatMXN(totalDue, 2)} /{" "}
+                  <span className="font-semibold">{formatMXN(totalPaid, 2)}</span>
                 </p>
               </div>
             </div>
@@ -159,17 +171,17 @@ export function LesseeStatement({ data }: LesseeStatementProps) {
                   return (
                     <TableRow key={r.id}>
                       <TableCell className="text-center text-sm">
-                        {capitalizeFirst(PERIOD.format(r.period))}
+                        {formatPeriodShort(r.period)}
                       </TableCell>
-                      <TableCell className="text-center text-xs">{capitalizeFirst(DATE.format(r.dueDate))}</TableCell>
+                      <TableCell className="text-center text-xs">{formatDate(r.dueDate)}</TableCell>
                       <TableCell className="text-right tabular-nums">
-                        {MXN.format(Number(r.amountDue))}
+                        {formatMXN(r.amountDue, 2)}
                       </TableCell>
                       <TableCell className="text-right tabular-nums text-muted-foreground">
-                        {MXN.format(Number(r.amountPaid))}
+                        {formatMXN(r.amountPaid, 2)}
                       </TableCell>
                       <TableCell className="text-right tabular-nums font-medium">
-                        {MXN.format(balance)}
+                        {formatMXN(balance, 2)}
                       </TableCell>
                       <TableCell className="text-center">
                         <RentStatusBadge status={r.status} />

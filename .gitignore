@@ -40,6 +40,9 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
+# database dumps (backups de prod — contienen datos reales del cliente, NUNCA commitear)
+*.dump
+
 # env files (NEVER commit secrets — use .env.example as template)
 .env
 .env.local

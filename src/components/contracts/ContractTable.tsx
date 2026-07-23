@@ -32,7 +32,9 @@ import type {
   ContractListItem,
 } from "@/lib/services/contracts-queries";
 import type { ContractStatus, PropertyType } from "@/generated/prisma/enums";
-import { capitalizeFirst, cn } from "@/lib/utils";
+import { cn } from "@/lib/utils";
+import { formatMXN } from "@/lib/format-currency";
+import { formatDate } from "@/lib/format-date";
 
 type StatusFilter = ContractStatus | "ALL";
 type ExpiryFilter = "ALL" | "30" | "60" | "90";
@@ -57,19 +59,6 @@ const expiryFilterItems: Record<string, string> = {
   "60": "Vence en ≤ 60 días",
   "90": "Vence en ≤ 90 días",
 };
-
-const MXN = new Intl.NumberFormat("es-MX", {
-  style: "currency",
-  currency: "MXN",
-  maximumFractionDigits: 2,
-});
-
-const DATE = new Intl.DateTimeFormat("es-MX", {
-  year: "numeric",
-  month: "short",
-  day: "2-digit",
-  timeZone: "UTC",
-});
 
 const TABLE_COLUMN_COUNT = 5;
 
@@ -377,14 +366,14 @@ function PropertyGroupRows({
             </TableCell>
             <TableCell className="py-3">
               <div className="text-center text-xs tabular-nums text-muted-foreground">
-                {capitalizeFirst(DATE.format(c.startDate))}
+                {formatDate(c.startDate)}
                 <span className="mx-1 text-foreground/30">→</span>
-                {capitalizeFirst(DATE.format(c.endDate))}
+                {formatDate(c.endDate)}
               </div>
             </TableCell>
             <TableCell className="py-3">
               <div className="text-right font-medium tabular-nums">
-                {MXN.format(Number(c.monthlyAmount))}
+                {formatMXN(c.monthlyAmount, 2)}
               </div>
             </TableCell>
             <TableCell className="py-3">

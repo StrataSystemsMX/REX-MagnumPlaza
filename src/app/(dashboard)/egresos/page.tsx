@@ -4,6 +4,7 @@ import { hasPermission } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/prisma/client";
 import {
   getExpenseCategories,
+  getManagedExpenseCategories,
   getPropertiesForExpenseForm,
   getYearlyExpensesMatrix,
 } from "@/lib/services/expenses-queries";
@@ -40,6 +41,7 @@ export default async function EgresosPage({ searchParams }: PageProps) {
     data,
     legalEntities,
     categories,
+    managedCategories,
     properties,
     canCreate,
     canUpdate,
@@ -47,6 +49,7 @@ export default async function EgresosPage({ searchParams }: PageProps) {
     getYearlyExpensesMatrix(year),
     getLegalEntities(),
     getExpenseCategories(),
+    getManagedExpenseCategories(),
     getPropertiesForExpenseForm(),
     hasPermission(dbUser.id, "expense.create"),
     hasPermission(dbUser.id, "expense.update"),
@@ -66,6 +69,7 @@ export default async function EgresosPage({ searchParams }: PageProps) {
         availableYears={availableYears}
         legalEntities={legalEntities}
         categories={categories}
+        managedCategories={managedCategories}
         properties={properties}
         canCreate={canCreate}
         canUpdate={canUpdate}

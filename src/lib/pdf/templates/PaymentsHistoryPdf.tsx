@@ -5,29 +5,8 @@ import {
   DocHeader,
   sharedStyles,
 } from "./shared";
-
-const MXN = new Intl.NumberFormat("es-MX", {
-  style: "currency",
-  currency: "MXN",
-  maximumFractionDigits: 2,
-});
-
-const DATE = new Intl.DateTimeFormat("es-MX", {
-  year: "numeric",
-  month: "short",
-  day: "2-digit",
-  timeZone: "UTC",
-});
-
-const PERIOD = new Intl.DateTimeFormat("es-MX", {
-  month: "short",
-  year: "numeric",
-  timeZone: "UTC",
-});
-
-function cap(s: string) {
-  return s.charAt(0).toUpperCase() + s.slice(1);
-}
+import { formatMXN } from "@/lib/format-currency";
+import { formatDate, formatPeriodShort } from "@/lib/format-date";
 
 const styles = StyleSheet.create({
   page: {
@@ -166,7 +145,7 @@ export function PaymentsHistoryPdf(props: PaymentsHistoryPdfProps) {
                 key={i}
                 style={[styles.tableRow, i % 2 === 1 ? styles.tableRowAlt : {}]}
               >
-                <Text style={styles.cFecha}>{cap(DATE.format(p.paymentDate))}</Text>
+                <Text style={styles.cFecha}>{formatDate(p.paymentDate)}</Text>
                 <Text style={styles.cInquilino}>{p.legalName}</Text>
                 <View style={styles.cInmueble}>
                   <Text>{p.propertyName}</Text>
@@ -174,10 +153,10 @@ export function PaymentsHistoryPdf(props: PaymentsHistoryPdfProps) {
                     <Text style={styles.cInmuebleSub}>{unitSub}</Text>
                   ) : null}
                 </View>
-                <Text style={styles.cPeriodo}>{cap(PERIOD.format(p.period))}</Text>
+                <Text style={styles.cPeriodo}>{formatPeriodShort(p.period)}</Text>
                 <Text style={styles.cMetodo}>{p.methodLabel}</Text>
                 <Text style={styles.cReferencia}>{p.reference ?? "—"}</Text>
-                <Text style={styles.cMonto}>{MXN.format(Number(p.amount))}</Text>
+                <Text style={styles.cMonto}>{formatMXN(p.amount, 2)}</Text>
               </View>
             );
           })
@@ -185,7 +164,7 @@ export function PaymentsHistoryPdf(props: PaymentsHistoryPdfProps) {
 
         <View style={styles.totalRow}>
           <Text style={{ width: "90%" }}>TOTAL</Text>
-          <Text style={styles.cMonto}>{MXN.format(Number(totalAmount))}</Text>
+          <Text style={styles.cMonto}>{formatMXN(totalAmount, 2)}</Text>
         </View>
 
         <DocFooter contactInfo={props.contactInfo} />

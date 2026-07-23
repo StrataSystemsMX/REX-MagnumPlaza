@@ -14,6 +14,7 @@ import {
 } from "@/lib/services/payments-queries";
 import { getRentasTableData } from "@/lib/services/rentas-queries";
 import { timed } from "@/lib/perf/timed";
+import { formatMXN } from "@/lib/format-currency";
 
 const VALID_TABS = ["mes", "por-cobrar", "historial"] as const;
 type CollectionsTab = (typeof VALID_TABS)[number];
@@ -32,12 +33,6 @@ function parsePeriod(periodo?: string): Date {
   const now = new Date();
   return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
 }
-
-const MXN = new Intl.NumberFormat("es-MX", {
-  style: "currency",
-  currency: "MXN",
-  maximumFractionDigits: 2,
-});
 
 export default async function CollectionsPage({
   searchParams,
@@ -134,14 +129,14 @@ export default async function CollectionsPage({
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-3">
         <MetricCard
           label="Cobrado este mes"
-          value={<span className="tabular-nums">{MXN.format(collectedThisMonth)}</span>}
+          value={<span className="tabular-nums">{formatMXN(collectedThisMonth, 2)}</span>}
           subValue="Pagos registrados"
           icon={CheckCircle2}
           color={collectedThisMonth > 0 ? "success" : "default"}
         />
         <MetricCard
           label="Saldo pendiente"
-          value={<span className="tabular-nums">{MXN.format(totalOutstanding)}</span>}
+          value={<span className="tabular-nums">{formatMXN(totalOutstanding, 2)}</span>}
           subValue={`${outstanding.length} renta${outstanding.length === 1 ? "" : "s"} por cobrar`}
           icon={AlertTriangle}
           color={totalOutstanding > 0 ? "danger" : "success"}
@@ -171,6 +166,7 @@ export default async function CollectionsPage({
         payments={payments}
         monthly={monthly}
         canDeletePayment={master}
+        canEditPayment={master}
         rentasData={rentasData}
         activeTab={activeTab}
         mesMode={mesMode}

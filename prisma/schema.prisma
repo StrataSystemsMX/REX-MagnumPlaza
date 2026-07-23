@@ -36,6 +36,10 @@ model Tenant {
   brandPrimaryColor String? @db.VarChar(6) // hex sin #
   brandLogoUrl      String? @db.VarChar(512)
   contactPhone      String? @db.VarChar(20) // teléfono para CTA WhatsApp en links públicos de promotores (E.164 sin "+")
+  // Contacto de la oficina (Eli): recibe COPIA de los avisos de cobranza
+  // (inquilino + oficina). officeWhatsapp en E.164 sin "+".
+  officeEmail       String? @db.VarChar(254)
+  officeWhatsapp    String? @db.VarChar(20)
   timezone          String  @default("America/Hermosillo") @db.VarChar(50)
   currency          String  @default("MXN") @db.VarChar(3)
 
@@ -70,6 +74,8 @@ model Tenant {
   loanPayments         LoanPayment[]
   investmentProjects   InvestmentProject[]
   investmentPayments   InvestmentPayment[]
+  leads                Lead[]
+  documentTemplates    DocumentTemplate[]
 
   @@map("tenants")
 }
@@ -123,6 +129,7 @@ enum RoleCode {
   MASTER // Juan Carlos. Ve todo, autoriza decisiones críticas.
   ADMIN // Eli, Leonardo. Operación completa con permisos granulares.
   ACCOUNTANT // Solo lectura financiera, exporta para despacho contable.
+  OWNER // Dueño: solo consulta (read-only) de vistas operativas, sin editar.
   PROMOTER // Externo, ve solo inmuebles asignados.
   LESSEE // Inquilino, ve su estado de cuenta (futuro).
 }
@@ -210,13 +217,18 @@ model Property {
   managerEntityId String // quién factura/administra (puede ser CRT)
   name            String         @db.VarChar(50) // "Plaza Magnum Progreso"
   type            PropertyType
-  status          PropertyStatus @default(ACTIVO) // BLOQUEADO = no se renta (ej. casa del dueño)
+  status          PropertyStatus @default(DISPONIBLE) // EN_RENTA con contrato; BLOQUEADO = solo administrado
   address         String         @db.VarChar(120)
   cadastralKey    String?        @db.VarChar(30) // clave catastral
   latitude        Float?
   longitude       Float?
   totalArea       Float? // m²
   notes           String?
+  // Seguro del inmueble (opcional). insuranceExpiresAt alimenta las alertas de
+  // vencimiento (dashboard + vista del inmueble).
+  insuranceProvider     String?   @db.VarChar(80) // aseguradora
+  insurancePolicyNumber String?   @db.VarChar(50) // número de póliza
+  insuranceExpiresAt    DateTime? // vencimiento de la póliza
   isActive        Boolean      @default(true)
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
@@ -234,6 +246,7 @@ model Property {
   @@index([tenantId])
   @@index([ownerEntityId])
   @@index([managerEntityId])
+  @@index([insuranceExpiresAt])
   @@map("properties")
 }
 
@@ -249,8 +262,9 @@ enum PropertyType {
 }
 
 enum PropertyStatus {
-  ACTIVO // estado normal: rentable / con contrato
-  BLOQUEADO // no se renta (ej. casa del dueño); UI oculta renta/inquilino
+  DISPONIBLE // genera egresos pero no ingresos (sin contrato activo)
+  EN_RENTA // genera ingresos y egresos (con contrato activo)
+  BLOQUEADO // solo administrado: no genera nada (ej. casa del dueño)
 }
 
 model Unit {
@@ -367,6 +381,10 @@ model Contract {
   paymentDay        Int      @default(1) // día del mes en que se cobra
   lateFeePercentage Decimal? @db.Decimal(5, 2) // interés moratorio
   autoRenew         Boolean  @default(false)
+  // Política de morosidad (protocolo de 2 meses): el aviso fuerte/desalojo a los
+  // 2 meses es el detonante automático. El recordatorio amable previo (1 mes) es
+  // OPCIONAL y se activa por contrato con este flag (default off).
+  friendlyReminderEnabled Boolean @default(false)
 
   // Casos especiales que detectamos en el Excel:
   paidInAdvance    Boolean   @default(false) // tipo Bluecell que pagó 6 meses
@@ -425,6 +443,10 @@ model Rent {
   amountDue     Decimal    @db.Decimal(12, 2)
   amountPaid    Decimal    @default(0) @db.Decimal(12, 2)
   amountWaived  Decimal    @default(0) @db.Decimal(12, 2) // monto condonado (parcial o total)
+  // Interés moratorio acumulado (snapshot). Lo recalcula el cron diario y cada
+  // pago vía recalcRentInTx, con calculateLateFee sobre el saldo de principal.
+  // Se suma al adeudo total (computeBalance) — política CRT: 5% mensual prorrateado.
+  lateFeeAccrued Decimal   @default(0) @db.Decimal(12, 2)
   status        RentStatus @default(PENDING)
   dueDate       DateTime
   notes         String?
@@ -539,6 +561,9 @@ model ExpenseCategory {
   name        String      @db.VarChar(120)
   type        ExpenseType
   isRecurring Boolean     @default(false)
+  // Archivar un concepto lo oculta de la captura de egresos sin borrar el
+  // historial: los egresos ya registrados bajo él siguen apareciendo en reportes.
+  isActive    Boolean     @default(true)
   parentId    String? // permite jerarquía (Servicios > CFE)
 
   tenant      Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
@@ -777,11 +802,62 @@ model PromoterLink {
   tenant   Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   promoter Promoter @relation(fields: [promoterId], references: [id])
   unit     Unit     @relation(fields: [unitId], references: [id])
+  leads    Lead[]
 
   @@index([tenantId])
   @@index([publicToken])
   @@index([expiresAt])
   @@map("promoter_links")
+}
+
+// Lead capturado desde la página pública de una vacante ("Me interesa").
+// Sin auth: lo crea un visitante anónimo; tenantId/promoterLinkId se derivan
+// del token de la liga en el servidor.
+enum LeadSource {
+  DIGITAL // liga compartida (WhatsApp, redes)
+  PHYSICAL // QR escaneado de una lona/impreso físico
+}
+
+model Lead {
+  id             String     @id @default(cuid())
+  tenantId       String
+  promoterLinkId String
+  name           String?    @db.VarChar(120)
+  email          String?    @db.VarChar(254)
+  phone          String?    @db.VarChar(20)
+  message        String?    @db.VarChar(500)
+  source         LeadSource @default(DIGITAL) // canal de origen del interesado
+  contacted      Boolean    @default(false) // el admin ya dio seguimiento
+  createdAt      DateTime   @default(now())
+
+  tenant       Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  promoterLink PromoterLink @relation(fields: [promoterLinkId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([promoterLinkId])
+  @@map("leads")
+}
+
+// Plantilla editable de aviso de mora por tenant y nivel ("1M"/"2M"/"3M").
+// Si existe una fila para (tenantId, level) se usa en vez del texto fijo de
+// template-config.ts (fallback). Los campos admiten tokens {lesseeName}, etc.
+model DocumentTemplate {
+  id        String   @id @default(cuid())
+  tenantId  String
+  level     String   @db.VarChar(4) // nivel de aviso: "1M" | "2M" | "3M"
+  title     String   @db.VarChar(120)
+  greeting  String   @db.VarChar(300)
+  body      String // largo; admite tokens
+  legalNote String // largo; admite tokens
+  closing   String   @db.VarChar(600)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, level])
+  @@index([tenantId])
+  @@map("document_templates")
 }
 
 // ============================================================================
@@ -942,6 +1018,7 @@ enum NotificationRecipientType {
   PROMOTER
   USER
   EXTERNAL
+  OFFICE // copia interna a la oficina (Eli)
 }
 
 enum NotificationStatus {

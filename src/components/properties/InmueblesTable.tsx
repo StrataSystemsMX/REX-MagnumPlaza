@@ -16,7 +16,7 @@ import {
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { toast } from "sonner";
 import {
   AlertDialog,
@@ -53,7 +53,6 @@ import type {
   LegalEntityOption,
   PropertyListItem,
 } from "@/lib/services/properties-queries";
-import type { PropertyType } from "@/generated/prisma/enums";
 
 const MXN = new Intl.NumberFormat("es-MX", {
   style: "currency",
@@ -79,6 +78,7 @@ export function InmueblesTable({
   const [photosTarget, setPhotosTarget] = useState<PropertyListItem | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<PropertyListItem | null>(null);
   const [deleteDeps, setDeleteDeps] = useState<DependentCounts | null>(null);
+  const [showBlocked, setShowBlocked] = useState(false);
   const [view, setView] = usePropertiesViewMode(initialView);
   const [pending, startTransition] = useTransition();
 
@@ -114,7 +114,12 @@ export function InmueblesTable({
     };
   }, [deleteTarget]);
 
-  const filtered = inmuebles;
+  // Las propiedades bloqueadas (solo administración) se ocultan por defecto;
+  // un toggle las muestra cuando hay alguna.
+  const blockedCount = inmuebles.filter((p) => p.status === "BLOQUEADO").length;
+  const filtered = showBlocked
+    ? inmuebles
+    : inmuebles.filter((p) => p.status !== "BLOQUEADO");
 
   function confirmDelete() {
     if (!deleteTarget) return;
@@ -156,6 +161,18 @@ export function InmueblesTable({
               <List className="size-4" />
             </Button>
           </div>
+          {blockedCount > 0 ? (
+            <Button
+              variant={showBlocked ? "secondary" : "ghost"}
+              size="sm"
+              onClick={() => setShowBlocked((v) => !v)}
+              aria-pressed={showBlocked}
+            >
+              {showBlocked
+                ? "Ocultar bloqueadas"
+                : `Mostrar bloqueadas (${blockedCount})`}
+            </Button>
+          ) : null}
         </div>
 
         <Dialog open={createOpen} onOpenChange={setCreateOpen}>
@@ -254,6 +271,9 @@ export function InmueblesTable({
                   longitude: editTarget.longitude,
                   totalArea: editTarget.totalArea,
                   notes: editTarget.notes,
+                  insuranceProvider: editTarget.insuranceProvider,
+                  insurancePolicyNumber: editTarget.insurancePolicyNumber,
+                  insuranceExpiresAt: editTarget.insuranceExpiresAt,
                 }}
                 onSuccess={() => {
                   const target = editTarget;

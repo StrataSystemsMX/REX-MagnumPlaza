@@ -26,6 +26,7 @@ interface CollectionsTabsProps {
   payments: ReadonlyArray<PaymentListItem>;
   monthly: MonthlyCollections;
   canDeletePayment: boolean;
+  canEditPayment: boolean;
   rentasData: RentasTableData;
   activeTab: CollectionsTopTab;
   mesMode: MesMode;
@@ -38,6 +39,7 @@ export function CollectionsTabs({
   payments,
   monthly,
   canDeletePayment,
+  canEditPayment,
   rentasData,
   activeTab,
   mesMode,
@@ -111,6 +113,7 @@ export function CollectionsTabs({
         <PaymentsTable
           payments={payments}
           canDelete={canDeletePayment}
+          canEdit={canEditPayment}
           activePlazaId={activePlazaId}
         />
       </TabsContent>

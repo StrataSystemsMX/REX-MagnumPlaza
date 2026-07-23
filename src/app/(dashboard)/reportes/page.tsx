@@ -50,7 +50,10 @@ export default async function ReportesPage({ searchParams }: PageProps) {
   if (isPromoter || isLessee) redirect(isPromoter ? "/promoter" : "/portal");
 
   const canSee =
-    roles.includes("MASTER") || roles.includes("ADMIN") || roles.includes("ACCOUNTANT");
+    roles.includes("MASTER") ||
+    roles.includes("ADMIN") ||
+    roles.includes("ACCOUNTANT") ||
+    roles.includes("OWNER");
   if (!canSee) redirect("/");
 
   const params = await searchParams;

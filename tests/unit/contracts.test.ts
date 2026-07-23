@@ -72,6 +72,7 @@ const VALID_INPUT = {
   paymentDay: 1,
   lateFeePercentage: 5,
   autoRenew: false,
+  friendlyReminderEnabled: false,
   paidInAdvance: false,
 };
 
@@ -108,7 +109,7 @@ describe("actionCreateContract", () => {
       code: "L1",
       status: "DISPONIBLE",
       // El código valida que el inmueble no esté BLOQUEADO antes de crear.
-      property: { status: "ACTIVO", name: "Plaza Test" },
+      property: { status: "EN_RENTA", name: "Plaza Test" },
     });
     lesseeMock.findFirst.mockResolvedValue({ id: "lessee-1" });
     contractMock.create.mockResolvedValue({

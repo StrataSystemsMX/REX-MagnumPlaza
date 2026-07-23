@@ -108,7 +108,7 @@ export async function getRentasTableData(period: Date): Promise<RentasTableData>
         },
         rents: {
           where: { period: periodStart },
-          select: { id: true, amountDue: true, amountPaid: true, status: true },
+          select: { id: true, amountDue: true, amountPaid: true, amountWaived: true, status: true },
           take: 1,
         },
       },
@@ -122,14 +122,19 @@ export async function getRentasTableData(period: Date): Promise<RentasTableData>
         status: { notIn: ["PAID", "WAIVED"] },
         contract: { unit: { property: propertyFilter } },
       },
-      _sum: { amountDue: true, amountPaid: true },
+      _sum: { amountDue: true, amountPaid: true, amountWaived: true },
     }),
   ]);
 
   const debtMap = new Map(
     debtByContract.map((d) => [
       d.contractId,
-      Math.max(0, Number(d._sum.amountDue ?? 0) - Number(d._sum.amountPaid ?? 0)),
+      Math.max(
+        0,
+        Number(d._sum.amountDue ?? 0) -
+          Number(d._sum.amountPaid ?? 0) -
+          Number(d._sum.amountWaived ?? 0),
+      ),
     ]),
   );
 
@@ -140,6 +145,7 @@ export async function getRentasTableData(period: Date): Promise<RentasTableData>
     const rent = c.rents[0] ?? null;
     const amountDue = rent ? Number(rent.amountDue) : Number(c.monthlyAmount);
     const amountPaid = rent ? Number(rent.amountPaid) : 0;
+    const amountWaived = rent ? Number(rent.amountWaived) : 0;
     const status = rent ? rent.status : "NOT_GENERATED";
 
     return {
@@ -158,7 +164,7 @@ export async function getRentasTableData(period: Date): Promise<RentasTableData>
       rentId: rent?.id ?? null,
       amountDue,
       amountPaid,
-      amountPending: Math.max(0, amountDue - amountPaid),
+      amountPending: Math.max(0, amountDue - amountPaid - amountWaived),
       status,
       accumulatedDebt: debtMap.get(c.id) ?? 0,
     };

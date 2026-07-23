@@ -9,8 +9,7 @@ import {
   getMaintenances,
   getPropertiesForMaintenanceForm,
 } from "@/lib/services/maintenances-queries";
-
-const MXN = new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" });
+import { formatMXN } from "@/lib/format-currency";
 
 export default async function MantenimientosPage() {
   const { dbUser } = await requireAuth();
@@ -55,7 +54,7 @@ export default async function MantenimientosPage() {
         />
         <MetricCard
           label="Costo total"
-          value={<span className="tabular-nums">{MXN.format(summary.totalCompletedCost)}</span>}
+          value={<span className="tabular-nums">{formatMXN(summary.totalCompletedCost, 2)}</span>}
           subValue="en mantenimientos completados"
           icon={Clock}
         />

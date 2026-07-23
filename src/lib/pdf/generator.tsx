@@ -8,6 +8,7 @@ import {
   reminderConfigByLevel,
   resolveTokens,
   type ReminderLevel,
+  type ReminderTextConfig,
 } from "@/lib/pdf/template-config";
 import { AccountStatementPdf } from "@/lib/pdf/templates/account-statement";
 import { DashboardSummaryPdf } from "@/lib/pdf/templates/dashboard-summary";
@@ -17,22 +18,16 @@ import {
   type DashboardOptions,
 } from "@/lib/services/dashboard-metrics";
 import { capitalizeFirst } from "@/lib/utils";
+import { computeBalance } from "@/lib/services/rent-status";
+import { formatMXN } from "@/lib/format-currency";
+import { formatPeriodLong } from "@/lib/format-date";
 
+// day+month:"long"+year → no mapea a formatDate (que usa month short). Inline.
 const DATE = new Intl.DateTimeFormat("es-MX", {
   day: "2-digit",
   month: "long",
   year: "numeric",
   timeZone: "UTC",
-});
-const PERIOD_LARGE = new Intl.DateTimeFormat("es-MX", {
-  month: "long",
-  year: "numeric",
-  timeZone: "UTC",
-});
-const MXN = new Intl.NumberFormat("es-MX", {
-  style: "currency",
-  currency: "MXN",
-  maximumFractionDigits: 2,
 });
 
 export interface GeneratedPdf {
@@ -50,6 +45,13 @@ export interface GenerateOptions {
   uploadedById?: string | null;
 }
 
+export interface AccountStatementOptions extends GenerateOptions {
+  /** Filtra rents con period >= from (inclusive). Sin valor = sin límite inferior. */
+  from?: Date;
+  /** Filtra rents con period <= to (inclusive). Sin valor = sin límite superior. */
+  to?: Date;
+}
+
 // ============================================================================
 // Estado de cuenta
 // ============================================================================
@@ -57,9 +59,20 @@ export interface GenerateOptions {
 export async function generateAccountStatement(
   tenantId: string,
   lesseeId: string,
-  options: GenerateOptions = {},
+  options: AccountStatementOptions = {},
 ): Promise<GeneratedPdf> {
   const persist = options.persist ?? true;
+
+  // Filtro opcional por periodo (plazo): solo rents dentro del rango pedido.
+  const periodWhere: Prisma.RentWhereInput | undefined =
+    options.from || options.to
+      ? {
+          period: {
+            ...(options.from ? { gte: options.from } : {}),
+            ...(options.to ? { lte: options.to } : {}),
+          },
+        }
+      : undefined;
 
   // Datos: tenant + lessee + sus contratos con rents.
   const [tenant, lessee] = await Promise.all([
@@ -85,6 +98,7 @@ export async function generateAccountStatement(
               },
             },
             rents: {
+              where: periodWhere,
               orderBy: { period: "asc" },
             },
           },
@@ -103,26 +117,42 @@ export async function generateAccountStatement(
 
   let totalDue = new Prisma.Decimal(0);
   let totalPaid = new Prisma.Decimal(0);
-  const contractBlocks = lessee.contracts.map((c) => {
-    for (const r of c.rents) {
-      totalDue = totalDue.plus(new Prisma.Decimal(r.amountDue));
-      totalPaid = totalPaid.plus(new Prisma.Decimal(r.amountPaid));
-    }
-    return {
-      contractId: c.id,
-      propertyName: c.unit.property.name,
-      unitCode: c.unit.code,
-      unitName: c.unit.name,
-      monthlyAmount: c.monthlyAmount.toString(),
-      rents: c.rents.map((r) => ({
-        period: r.period,
-        amountDue: r.amountDue.toString(),
-        amountPaid: r.amountPaid.toString(),
-        status: r.status,
-      })),
-    };
-  });
-  const balance = totalDue.minus(totalPaid);
+  let totalWaived = new Prisma.Decimal(0);
+  let totalLateFee = new Prisma.Decimal(0);
+  const contractBlocks = lessee.contracts
+    // Con filtro de plazo, un contrato puede no tener rents en el rango: se omite.
+    .filter((c) => c.rents.length > 0)
+    .map((c) => {
+      for (const r of c.rents) {
+        totalDue = totalDue.plus(new Prisma.Decimal(r.amountDue));
+        totalPaid = totalPaid.plus(new Prisma.Decimal(r.amountPaid));
+        totalWaived = totalWaived.plus(new Prisma.Decimal(r.amountWaived));
+        totalLateFee = totalLateFee.plus(new Prisma.Decimal(r.lateFeeAccrued ?? 0));
+      }
+      return {
+        contractId: c.id,
+        propertyName: c.unit.property.name,
+        unitCode: c.unit.code,
+        unitName: c.unit.name,
+        monthlyAmount: c.monthlyAmount.toString(),
+        rents: c.rents.map((r) => ({
+          period: r.period,
+          amountDue: r.amountDue.toString(),
+          amountPaid: r.amountPaid.toString(),
+          amountWaived: r.amountWaived.toString(),
+          status: r.status,
+        })),
+      };
+    });
+  const balance = computeBalance(totalDue, totalPaid, totalWaived, totalLateFee);
+
+  // Etiqueta del plazo cubierto, para que el PDF deje claro su alcance.
+  const periodLabel =
+    options.from || options.to
+      ? `${options.from ? formatPeriodLong(options.from) : "Inicio"} – ${
+          options.to ? formatPeriodLong(options.to) : "Actual"
+        }`
+      : "Todos los movimientos";
 
   const asOfDate = new Date();
   const tokens = {
@@ -145,10 +175,12 @@ export async function generateAccountStatement(
         rfc: lessee.rfc,
       }}
       asOfDate={asOfDate}
+      periodLabel={periodLabel}
       contracts={contractBlocks}
       totals={{
         totalDue: totalDue.toString(),
         totalPaid: totalPaid.toString(),
+        totalLateFee: totalLateFee.toString(),
         balance: balance.toString(),
       }}
       contactInfo={buildContactInfo(billingEntity)}
@@ -160,9 +192,16 @@ export async function generateAccountStatement(
     />,
   );
 
+  // Sufijo de rango en el nombre para distinguir estados de cuenta por plazo.
+  const rangeSuffix =
+    options.from || options.to
+      ? `-${options.from ? options.from.toISOString().slice(0, 7) : "inicio"}_${
+          options.to ? options.to.toISOString().slice(0, 7) : "actual"
+        }`
+      : "";
   const filename = `estado-de-cuenta-${slug(lessee.legalName)}-${asOfDate
     .toISOString()
-    .slice(0, 10)}.pdf`;
+    .slice(0, 10)}${rangeSuffix}.pdf`;
 
   if (!persist) {
     return { buffer, filename, mimeType: "application/pdf", url: null, documentId: null };
@@ -254,13 +293,28 @@ export async function generateOverdueReminder(
   const allRents = [rent, ...additional];
   const balance = allRents.reduce(
     (acc, r) =>
-      acc.plus(new Prisma.Decimal(r.amountDue).minus(new Prisma.Decimal(r.amountPaid))),
+      acc.plus(computeBalance(r.amountDue, r.amountPaid, r.amountWaived, r.lateFeeAccrued)),
+    new Prisma.Decimal(0),
+  );
+  const lateFeeTotal = allRents.reduce(
+    (acc, r) => acc.plus(new Prisma.Decimal(r.lateFeeAccrued ?? 0)),
     new Prisma.Decimal(0),
   );
 
   const billingEntity = rent.contract.unit.property.managerEntity;
   const lessee = rent.contract.lessee;
-  const config = reminderConfigByLevel(level);
+  // Plantilla editable por tenant+nivel; si no existe, el texto fijo por defecto.
+  const dbTemplate = await prisma.documentTemplate.findUnique({
+    where: { tenantId_level: { tenantId, level } },
+    select: {
+      title: true,
+      greeting: true,
+      body: true,
+      legalNote: true,
+      closing: true,
+    },
+  });
+  const config: ReminderTextConfig = dbTemplate ?? reminderConfigByLevel(level);
   const unitLabel = `${rent.contract.unit.property.name} ${rent.contract.unit.code}`;
   const contractSignedDate = rent.contract.signedDate
     ? capitalizeFirst(DATE.format(rent.contract.signedDate))
@@ -268,10 +322,11 @@ export async function generateOverdueReminder(
 
   const tokens: Record<string, string> = {
     lesseeName: lessee.legalName,
-    period: capitalizeFirst(PERIOD_LARGE.format(rent.period)),
+    period: formatPeriodLong(rent.period),
     unitLabel,
     daysOverdue: String(days(rent.dueDate)),
-    balance: MXN.format(Number(balance)),
+    balance: formatMXN(balance, 2),
+    lateFee: formatMXN(lateFeeTotal, 2),
     contractSignedDate,
     paymentDay: String(rent.contract.paymentDay),
     billingEntityName: billingEntity.legalName,
@@ -296,6 +351,7 @@ export async function generateOverdueReminder(
         period: rent.period,
         amountDue: rent.amountDue.toString(),
         amountPaid: rent.amountPaid.toString(),
+        amountWaived: rent.amountWaived.toString(),
         daysOverdue: days(rent.dueDate),
         status: rent.status,
       }}
@@ -303,6 +359,7 @@ export async function generateOverdueReminder(
         period: r.period,
         amountDue: r.amountDue.toString(),
         amountPaid: r.amountPaid.toString(),
+        amountWaived: r.amountWaived.toString(),
         daysOverdue: days(r.dueDate),
         status: r.status,
       }))}
@@ -346,7 +403,7 @@ export async function generateOverdueReminder(
       sizeBytes: buffer.byteLength,
       uploadedById: options.uploadedById ?? null,
       contractId: rent.contractId,
-      notes: `Aviso ${level} de ${lessee.legalName} — ${capitalizeFirst(PERIOD_LARGE.format(rent.period))}.`,
+      notes: `Aviso ${level} de ${lessee.legalName} — ${formatPeriodLong(rent.period)}.`,
     },
   });
 

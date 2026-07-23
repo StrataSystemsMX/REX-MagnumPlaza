@@ -15,6 +15,7 @@ import {
   ChevronRight,
   Download,
   FileDown,
+  Pencil,
   Search,
   Store,
   Trash2,
@@ -51,31 +52,22 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { INMUEBLES_TAB_VALUE } from "@/components/shared/property-filter-constants";
 import { paymentMethodLabel } from "@/lib/i18n/enums";
-import { actionDeletePayment } from "@/lib/services/payments";
+import { actionDeletePayment, actionEditPayment } from "@/lib/services/payments";
 import type { PaymentListItem } from "@/lib/services/payments-queries";
 import type { PaymentMethod } from "@/generated/prisma/enums";
-import { capitalizeFirst, cn } from "@/lib/utils";
-
-const MXN = new Intl.NumberFormat("es-MX", {
-  style: "currency",
-  currency: "MXN",
-  maximumFractionDigits: 2,
-});
-
-const DATE = new Intl.DateTimeFormat("es-MX", {
-  year: "numeric",
-  month: "short",
-  day: "2-digit",
-  timeZone: "UTC",
-});
-
-const PERIOD = new Intl.DateTimeFormat("es-MX", {
-  month: "short",
-  year: "numeric",
-  timeZone: "UTC",
-});
+import { cn } from "@/lib/utils";
+import { formatMXN } from "@/lib/format-currency";
+import { formatDate, formatPeriodShort } from "@/lib/format-date";
 
 const METHODS: ReadonlyArray<PaymentMethod> = [
   "TRANSFER",
@@ -95,13 +87,24 @@ interface PaymentsTableProps {
   payments: ReadonlyArray<PaymentListItem>;
   /** Si el usuario es MASTER, muestra el botón de borrar. */
   canDelete: boolean;
+  /** Si puede corregir pagos mal capturados (editar). */
+  canEdit: boolean;
   /** Filtro de plaza/inmueble desde el PropertyFilterTabs a nivel de página. */
   activePlazaId: string | null;
+}
+
+interface EditForm {
+  amount: string;
+  paymentDate: string; // YYYY-MM-DD
+  method: PaymentMethod;
+  reference: string;
+  notes: string;
 }
 
 export function PaymentsTable({
   payments,
   canDelete,
+  canEdit,
   activePlazaId,
 }: PaymentsTableProps) {
   const router = useRouter();
@@ -111,8 +114,21 @@ export function PaymentsTable({
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<PaymentListItem | null>(null);
+  const [editTarget, setEditTarget] = useState<PaymentListItem | null>(null);
+  const [editForm, setEditForm] = useState<EditForm | null>(null);
   const [pending, startTransition] = useTransition();
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+
+  function openEdit(p: PaymentListItem) {
+    setEditTarget(p);
+    setEditForm({
+      amount: String(p.amount),
+      paymentDate: p.paymentDate.toISOString().slice(0, 10),
+      method: p.method,
+      reference: p.reference ?? "",
+      notes: p.notes ?? "",
+    });
+  }
 
   function toggleGroup(unitId: string) {
     setCollapsed((prev) => {
@@ -232,7 +248,7 @@ export function PaymentsTable({
         header: "Fecha",
         cell: ({ row }) => (
           <div className="text-center text-xs tabular-nums text-muted-foreground">
-            {capitalizeFirst(DATE.format(row.original.paymentDate))}
+            {formatDate(row.original.paymentDate)}
           </div>
         ),
       },
@@ -241,7 +257,7 @@ export function PaymentsTable({
         header: "Periodo",
         cell: ({ row }) => (
           <div className="text-center text-xs tabular-nums text-muted-foreground">
-            {capitalizeFirst(PERIOD.format(row.original.rent.period))}
+            {formatPeriodShort(row.original.rent.period)}
           </div>
         ),
       },
@@ -250,7 +266,7 @@ export function PaymentsTable({
         header: "Monto",
         cell: ({ row }) => (
           <div className="text-right font-medium tabular-nums">
-            {MXN.format(Number(row.original.amount))}
+            {formatMXN(row.original.amount, 2)}
           </div>
         ),
       },
@@ -274,22 +290,35 @@ export function PaymentsTable({
         id: "actions",
         header: () => <span className="sr-only">Acciones</span>,
         cell: ({ row }) => {
-          if (!canDelete) return null;
+          if (!canDelete && !canEdit) return null;
           return (
-            <div className="text-right">
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setDeleteTarget(row.original)}
-              >
-                <Trash2 className="size-4 text-destructive" />
-              </Button>
+            <div className="flex justify-end gap-1">
+              {canEdit ? (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => openEdit(row.original)}
+                  title="Editar pago"
+                >
+                  <Pencil className="size-4 text-muted-foreground" />
+                </Button>
+              ) : null}
+              {canDelete ? (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setDeleteTarget(row.original)}
+                  title="Eliminar pago"
+                >
+                  <Trash2 className="size-4 text-destructive" />
+                </Button>
+              ) : null}
             </div>
           );
         },
       },
     ],
-    [canDelete],
+    [canDelete, canEdit],
   );
 
   const table = useReactTable({
@@ -335,6 +364,33 @@ export function PaymentsTable({
         router.refresh();
       } catch (e) {
         toast.error(e instanceof Error ? e.message : "Error al eliminar.");
+      }
+    });
+  }
+
+  function confirmEdit() {
+    if (!editTarget || !editForm) return;
+    const id = editTarget.id;
+    const amount = Number(editForm.amount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      toast.error("Monto inválido.");
+      return;
+    }
+    startTransition(async () => {
+      try {
+        await actionEditPayment(id, {
+          amount,
+          paymentDate: new Date(editForm.paymentDate),
+          method: editForm.method,
+          reference: editForm.reference.trim() || undefined,
+          notes: editForm.notes.trim() || undefined,
+        });
+        toast.success("Pago actualizado. Se recalculó el estado de la renta.");
+        setEditTarget(null);
+        setEditForm(null);
+        router.refresh();
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "Error al editar.");
       }
     });
   }
@@ -419,7 +475,7 @@ export function PaymentsTable({
               {filtered.length} pago{filtered.length === 1 ? "" : "s"}
             </p>
             <p className="text-lg font-semibold tabular-nums">
-              {MXN.format(totalAmount)}
+              {formatMXN(totalAmount, 2)}
             </p>
           </div>
           <Button variant="secondary" onClick={downloadCsv}>
@@ -559,6 +615,109 @@ export function PaymentsTable({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <Dialog
+        open={editTarget !== null}
+        onOpenChange={(o) => {
+          if (!o) {
+            setEditTarget(null);
+            setEditForm(null);
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Editar pago</DialogTitle>
+            <DialogDescription>
+              Corrige un pago mal capturado. Se recalcula el estado de la renta y
+              el cambio queda en el Historial de Cambios (con opción de deshacer).
+            </DialogDescription>
+          </DialogHeader>
+          {editForm ? (
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="space-y-1 text-sm">
+                <span className="text-xs text-muted-foreground">Monto (MXN)</span>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={editForm.amount}
+                  onChange={(e) =>
+                    setEditForm((f) => (f ? { ...f, amount: e.target.value } : f))
+                  }
+                />
+              </label>
+              <label className="space-y-1 text-sm">
+                <span className="text-xs text-muted-foreground">Fecha de pago</span>
+                <Input
+                  type="date"
+                  value={editForm.paymentDate}
+                  onChange={(e) =>
+                    setEditForm((f) => (f ? { ...f, paymentDate: e.target.value } : f))
+                  }
+                />
+              </label>
+              <label className="space-y-1 text-sm">
+                <span className="text-xs text-muted-foreground">Método</span>
+                <Select
+                  value={editForm.method}
+                  onValueChange={(v) =>
+                    v && setEditForm((f) => (f ? { ...f, method: v as PaymentMethod } : f))
+                  }
+                  items={Object.fromEntries(METHODS.map((m) => [m, paymentMethodLabel(m)]))}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {METHODS.map((m) => (
+                      <SelectItem key={m} value={m}>
+                        {paymentMethodLabel(m)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </label>
+              <label className="space-y-1 text-sm">
+                <span className="text-xs text-muted-foreground">Referencia</span>
+                <Input
+                  value={editForm.reference}
+                  onChange={(e) =>
+                    setEditForm((f) => (f ? { ...f, reference: e.target.value } : f))
+                  }
+                  placeholder="N° de transferencia, cheque…"
+                />
+              </label>
+              <label className="space-y-1 text-sm sm:col-span-2">
+                <span className="text-xs text-muted-foreground">Notas</span>
+                <textarea
+                  className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+                  rows={2}
+                  value={editForm.notes}
+                  onChange={(e) =>
+                    setEditForm((f) => (f ? { ...f, notes: e.target.value } : f))
+                  }
+                />
+              </label>
+            </div>
+          ) : null}
+          <DialogFooter>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setEditTarget(null);
+                setEditForm(null);
+              }}
+              disabled={pending}
+            >
+              Cancelar
+            </Button>
+            <Button onClick={confirmEdit} disabled={pending}>
+              {pending ? "Guardando..." : "Guardar cambios"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

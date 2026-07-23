@@ -18,6 +18,8 @@ import {
 } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 import { isPlaza } from "@/lib/i18n/unit-label";
+import { formatMXN } from "@/lib/format-currency";
+import { formatDate } from "@/lib/format-date";
 import type {
   MaintenanceRow,
   PropertyForMaintenance,
@@ -29,14 +31,6 @@ const TABS = [
 ] as const;
 
 type SourceTab = (typeof TABS)[number]["key"];
-
-const MXN = new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" });
-const DATE = new Intl.DateTimeFormat("es-MX", {
-  day: "2-digit",
-  month: "short",
-  year: "numeric",
-  timeZone: "UTC",
-});
 
 interface Props {
   maintenances: MaintenanceRow[];
@@ -143,9 +137,9 @@ export function MaintenancesTable({ maintenances, properties, canManage }: Props
               <TableBody>
                 {filtered.map((m) => {
                   const dateLabel = m.completedDate
-                    ? DATE.format(m.completedDate)
+                    ? formatDate(m.completedDate)
                     : m.scheduledDate
-                      ? DATE.format(m.scheduledDate)
+                      ? formatDate(m.scheduledDate)
                       : "—";
 
                   return (
@@ -184,7 +178,7 @@ export function MaintenancesTable({ maintenances, properties, canManage }: Props
                       </TableCell>
                       <TableCell className="text-right tabular-nums text-sm">
                         {m.cost !== null ? (
-                          <span className="font-medium">{MXN.format(m.cost)}</span>
+                          <span className="font-medium">{formatMXN(m.cost, 2)}</span>
                         ) : (
                           <span className="text-muted-foreground">—</span>
                         )}

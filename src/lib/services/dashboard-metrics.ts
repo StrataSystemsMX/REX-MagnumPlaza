@@ -75,6 +75,7 @@ const fetchDashboardMetricsImpl = async (
     units,
     activeContracts,
     expiringContracts,
+    expiringInsurance,
     paymentsThisMonth,
     outstandingRents,
     legalEntities,
@@ -106,6 +107,15 @@ const fetchDashboardMetricsImpl = async (
         endDate: { gte: now, lte: expiringEnd },
       },
     }),
+    // Pólizas de seguro vencidas o por vencer dentro de la misma ventana de 60d.
+    // (lte excluye nulls, así que solo cuenta inmuebles con fecha de seguro.)
+    prisma.property.count({
+      where: {
+        tenantId,
+        isActive: true,
+        insuranceExpiresAt: { lte: expiringEnd },
+      },
+    }),
     prisma.payment.findMany({
       where: {
         tenantId,
@@ -134,6 +144,8 @@ const fetchDashboardMetricsImpl = async (
         id: true,
         amountDue: true,
         amountPaid: true,
+        amountWaived: true,
+        lateFeeAccrued: true,
         status: true,
         dueDate: true,
         contract: {
@@ -223,6 +235,7 @@ const fetchDashboardMetricsImpl = async (
     occupiedUnits,
     activeContracts,
     expiringContracts,
+    expiringInsurance,
     paymentsThisMonth: paymentsThisMonth.map((p) => ({ amount: p.amount })),
     outstandingRents,
   });
@@ -236,7 +249,7 @@ const fetchDashboardMetricsImpl = async (
         status: { in: OUTSTANDING_STATUSES },
         ...rentLegalEntityFilter,
       },
-      select: { amountDue: true, amountPaid: true, status: true },
+      select: { amountDue: true, amountPaid: true, amountWaived: true, lateFeeAccrued: true, status: true },
     }),
     prisma.contract.findMany({
       where: {
@@ -253,6 +266,7 @@ const fetchDashboardMetricsImpl = async (
     occupiedUnits,
     activeContracts: prevContracts,
     expiringContracts: 0,
+    expiringInsurance: 0,
     paymentsThisMonth: [],
     outstandingRents: prevOutstanding,
   });
@@ -343,7 +357,10 @@ const fetchDashboardMetricsImpl = async (
   >();
   for (const r of outstandingRents) {
     const l = r.contract.lessee;
-    const balance = dec(r.amountDue).minus(dec(r.amountPaid));
+    const balance = dec(r.amountDue)
+      .plus(dec(r.lateFeeAccrued ?? 0))
+      .minus(dec(r.amountPaid))
+      .minus(dec(r.amountWaived));
     const days = Math.floor((now.getTime() - r.dueDate.getTime()) / (1000 * 60 * 60 * 24));
     const cur = overdueByLessee.get(l.id);
     if (cur) {

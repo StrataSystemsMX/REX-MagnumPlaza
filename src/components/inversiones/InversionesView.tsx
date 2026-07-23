@@ -7,7 +7,6 @@ import {
   Landmark,
   Percent,
   PlusCircle,
-  Target,
   Wallet,
 } from "lucide-react";
 import { useState } from "react";

@@ -11,12 +11,14 @@ import {
   deleteExpenseSchema,
   markExpenseNotRequiredSchema,
   registerExpenseSchema,
+  setExpenseCategoryActiveSchema,
   unmarkExpensePaidSchema,
   updateExpenseSchema,
   type CreateExpenseInput,
   type DeleteExpenseInput,
   type MarkExpenseNotRequiredInput,
   type RegisterExpenseInput,
+  type SetExpenseCategoryActiveInput,
   type UnmarkExpensePaidInput,
   type UpdateExpenseInput,
 } from "@/lib/validators/expense";
@@ -69,6 +71,28 @@ async function ensurePropertyInTenant(
     where: { id: propertyId, tenantId },
     select: { id: true },
   });
+}
+
+/**
+ * Archiva o restaura un concepto de egreso. Archivar lo oculta de la captura
+ * de egresos (getExpenseCategories) sin borrar el historial: los egresos ya
+ * registrados bajo el concepto siguen apareciendo en reportes.
+ */
+export async function actionSetExpenseCategoryActive(
+  input: SetExpenseCategoryActiveInput,
+): Promise<void> {
+  const { tenantId, dbUser } = await requireAuth();
+  await requirePermission(dbUser.id, EXPENSE_PERM.update);
+
+  const { categoryId, isActive } = setExpenseCategoryActiveSchema.parse(input);
+  await ensureCategoryInTenant(tenantId, categoryId);
+
+  await prisma.expenseCategory.update({
+    where: { id: categoryId },
+    data: { isActive },
+  });
+
+  revalidatePath("/egresos");
 }
 
 export async function actionCreateExpense(

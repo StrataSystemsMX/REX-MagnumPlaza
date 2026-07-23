@@ -17,20 +17,8 @@ import {
   getContractById,
 } from "@/lib/services/contracts-queries";
 import { timed } from "@/lib/perf/timed";
-import { capitalizeFirst } from "@/lib/utils";
-
-const MXN = new Intl.NumberFormat("es-MX", {
-  style: "currency",
-  currency: "MXN",
-  maximumFractionDigits: 2,
-});
-
-const DATE = new Intl.DateTimeFormat("es-MX", {
-  year: "numeric",
-  month: "short",
-  day: "2-digit",
-  timeZone: "UTC",
-});
+import { formatMXN } from "@/lib/format-currency";
+import { formatDate } from "@/lib/format-date";
 
 interface Params {
   id: string;
@@ -103,16 +91,16 @@ export default async function ContractDetailPage({
               <span className="inline-flex items-center gap-1.5">
                 <Wallet className="size-3.5" />
                 <span className="font-medium text-foreground tabular-nums">
-                  {MXN.format(Number(contract.monthlyAmount))}
+                  {formatMXN(contract.monthlyAmount, 2)}
                 </span>
                 /mes
               </span>
               <span className="inline-flex items-center gap-1.5">
                 <CalendarRange className="size-3.5" />
                 <span className="tabular-nums">
-                  {capitalizeFirst(DATE.format(contract.startDate))}
+                  {formatDate(contract.startDate)}
                   {" → "}
-                  {capitalizeFirst(DATE.format(contract.endDate))}
+                  {formatDate(contract.endDate)}
                 </span>
               </span>
             </div>
@@ -136,6 +124,7 @@ export default async function ContractDetailPage({
                     ? String(contract.lateFeePercentage)
                     : "",
                 autoRenew: contract.autoRenew,
+                friendlyReminderEnabled: contract.friendlyReminderEnabled,
                 paidInAdvance: contract.paidInAdvance,
                 advancePaidUntil: contract.advancePaidUntil
                   ? new Date(contract.advancePaidUntil).toISOString().slice(0, 10)

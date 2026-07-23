@@ -14,15 +14,10 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
+import { formatMXN, formatPercent } from "@/lib/format-currency";
 import { themeFor } from "@/components/cierres/MonthlyPivotTable";
 import { MONTH_KEYS } from "@/lib/services/budgets-types";
 import type { BudgetLineRow, EntityBudgetSummary } from "@/lib/services/budgets-types";
-
-const MXN = new Intl.NumberFormat("es-MX", {
-  style: "currency",
-  currency: "MXN",
-  maximumFractionDigits: 0,
-});
 
 const MONTH_SHORT = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
 
@@ -89,19 +84,19 @@ export function EntityBudgetCard({ entity, defaultExpanded = false }: Props) {
             <KpiChip
               icon={TrendingUp}
               label="Ingresos"
-              value={MXN.format(entity.annualIncome)}
+              value={formatMXN(entity.annualIncome)}
               tone="success"
             />
             <KpiChip
               icon={TrendingDown}
               label="Egresos"
-              value={MXN.format(entity.annualExpense)}
+              value={formatMXN(entity.annualExpense)}
               tone="danger"
             />
             <KpiChip
               icon={Wallet}
               label="Utilidad"
-              value={MXN.format(entity.annualProfit)}
+              value={formatMXN(entity.annualProfit)}
               tone={profitPositive ? "success" : "danger"}
               emphasize
             />
@@ -112,10 +107,7 @@ export function EntityBudgetCard({ entity, defaultExpanded = false }: Props) {
               <div className="flex items-center justify-between text-[11px] text-muted-foreground">
                 <span>Margen sobre ingresos</span>
                 <span className="font-medium tabular-nums">
-                  {new Intl.NumberFormat("es-MX", {
-                    style: "percent",
-                    maximumFractionDigits: 1,
-                  }).format(marginPct / 100)}
+                  {formatPercent(marginPct / 100)}
                 </span>
               </div>
               <Progress
@@ -188,7 +180,7 @@ export function EntityBudgetCard({ entity, defaultExpanded = false }: Props) {
                 profitPositive ? "text-emerald-700 dark:text-emerald-400" : "text-rose-700 dark:text-rose-400",
               )}
             >
-              {MXN.format(entity.annualProfit)}
+              {formatMXN(entity.annualProfit)}
             </span>
           </div>
         </CardContent>
@@ -301,10 +293,10 @@ function BudgetLinesSection({
                 {showMonths &&
                   monthlyTotal.map((v, i) => (
                     <td key={i} className="px-2 py-2 text-right text-xs tabular-nums">
-                      {v !== 0 ? MXN.format(v) : <span className="text-muted-foreground/50">—</span>}
+                      {v !== 0 ? formatMXN(v) : <span className="text-muted-foreground/50">—</span>}
                     </td>
                   ))}
-                <td className="px-3 py-2 text-right tabular-nums">{MXN.format(annualTotal)}</td>
+                <td className="px-3 py-2 text-right tabular-nums">{formatMXN(annualTotal)}</td>
               </tr>
             )}
           </tbody>
@@ -336,14 +328,14 @@ function LineRow({
         MONTH_KEYS.map((k) => (
           <td key={k} className="px-2 py-2.5 text-right text-xs tabular-nums">
             {line.months[k] > 0 ? (
-              MXN.format(line.months[k])
+              formatMXN(line.months[k])
             ) : (
               <span className="text-muted-foreground/40">—</span>
             )}
           </td>
         ))}
       <td className="px-3 py-2.5 text-right text-sm font-medium tabular-nums">
-        {MXN.format(line.annual)}
+        {formatMXN(line.annual)}
       </td>
     </tr>
   );

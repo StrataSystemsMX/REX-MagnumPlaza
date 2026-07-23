@@ -58,7 +58,9 @@ import type {
   CadastralStatus,
 } from "@/lib/services/cadastral-queries";
 import type { LegalEntityOption } from "@/lib/services/properties-queries";
-import { capitalizeFirst, cn } from "@/lib/utils";
+import { formatMXN } from "@/lib/format-currency";
+import { formatDate } from "@/lib/format-date";
+import { cn } from "@/lib/utils";
 
 type StatusFilter = "ALL" | CadastralStatus;
 
@@ -69,25 +71,6 @@ const STATUS_FILTER_ITEMS: Record<StatusFilter, string> = {
   PAID: "Pagado",
   PAID_BY_THIRD_PARTY: "Paga tercero",
 };
-
-const MXN = new Intl.NumberFormat("es-MX", {
-  style: "currency",
-  currency: "MXN",
-  maximumFractionDigits: 2,
-});
-
-const MXN_INT = new Intl.NumberFormat("es-MX", {
-  style: "currency",
-  currency: "MXN",
-  maximumFractionDigits: 0,
-});
-
-const DATE = new Intl.DateTimeFormat("es-MX", {
-  year: "numeric",
-  month: "short",
-  day: "2-digit",
-  timeZone: "UTC",
-});
 
 const ENTITY_THEME: Record<
   string,
@@ -397,13 +380,13 @@ export function PredialesTable({
         <KpiCard
           icon={<Landmark className="size-4" />}
           label="Total registrado"
-          value={MXN_INT.format(totals.total)}
+          value={formatMXN(totals.total)}
           sub={`${totalCount} predial${totalCount === 1 ? "" : "es"} · ${selectedYear}`}
         />
         <KpiCard
           icon={<CheckCircle2 className="size-4" />}
           label="Pagado"
-          value={MXN_INT.format(totals.paid)}
+          value={formatMXN(totals.paid)}
           sub={`${paidCount} de ${totalCount} · ${globalProgress.toFixed(0)}%`}
           valueClass="text-emerald-700 dark:text-emerald-300"
           progress={globalProgress}
@@ -411,14 +394,14 @@ export function PredialesTable({
         <KpiCard
           icon={<Hourglass className="size-4" />}
           label="Pendiente"
-          value={MXN_INT.format(totals.pending)}
+          value={formatMXN(totals.pending)}
           sub="Por liquidar este año"
           valueClass="text-amber-700 dark:text-amber-300"
         />
         <KpiCard
           icon={<Users className="size-4" />}
           label="Paga tercero"
-          value={MXN_INT.format(totals.thirdParty)}
+          value={formatMXN(totals.thirdParty)}
           sub="Cubierto por terceros"
           valueClass="text-rose-700 dark:text-rose-300"
         />
@@ -617,7 +600,7 @@ function OwnerSection({
             Total
           </div>
           <div className="font-mono text-sm font-semibold tabular-nums">
-            {MXN_INT.format(group.total)}
+            {formatMXN(group.total)}
           </div>
         </div>
         <div className="shrink-0 rounded p-1 text-muted-foreground">
@@ -704,15 +687,13 @@ function PredialRow({
         role="cell"
         className="px-3 py-2.5 text-right font-mono tabular-nums"
       >
-        {payment.totalAmount !== null ? MXN.format(payment.totalAmount) : "—"}
+        {payment.totalAmount !== null ? formatMXN(payment.totalAmount, 2) : "—"}
       </div>
       <div
         role="cell"
         className="px-3 py-2.5 text-center text-xs text-muted-foreground"
       >
-        {payment.paymentDate
-          ? capitalizeFirst(DATE.format(payment.paymentDate))
-          : "—"}
+        {payment.paymentDate ? formatDate(payment.paymentDate) : "—"}
       </div>
       <div role="cell" className="overflow-hidden flex justify-center px-3 py-2.5">
         {statusBadge(payment.status)}

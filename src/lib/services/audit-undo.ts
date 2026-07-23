@@ -194,6 +194,17 @@ async function revertContract(tx: TxClient, tenantId: string, id: string, before
   return { reconcileContractId: id };
 }
 
+async function revertPayment(tx: TxClient, tenantId: string, id: string, before: Record<string, unknown>) {
+  await tx.payment.updateMany({
+    where: { id, tenantId },
+    data: coerceFields(before) as unknown as Prisma.PaymentUpdateManyMutationInput,
+  });
+  // Restaurar montos/fecha del pago cambia el saldo de su renta → recalcular.
+  const payment = await tx.payment.findFirst({ where: { id, tenantId }, select: { rentId: true } });
+  if (payment?.rentId) await recalcRentInTx(tx, tenantId, payment.rentId, new Date());
+  return {};
+}
+
 // ----------------------------------------------------------------------------
 // Restauración de borrados lógicos (idempotente vía `isActive: false`)
 // ----------------------------------------------------------------------------
@@ -299,6 +310,7 @@ export const UNDO_HANDLERS: Record<string, UndoHandler> = {
     countDependents: countContractDeps,
   },
   Payment: {
+    revert: revertPayment,
     cascadeDelete: cascadeDeletePayment,
   },
 };

@@ -59,12 +59,13 @@ describe("computeSummary", () => {
         { monthlyAmount: dec(20000) },
       ],
       expiringContracts: 1,
+      expiringInsurance: 2,
       paymentsThisMonth: [{ amount: dec(10000) }, { amount: dec(5000) }],
       outstandingRents: [
-        { amountDue: dec(15000), amountPaid: dec(10000), status: "PARTIAL" },
-        { amountDue: dec(20000), amountPaid: dec(0), status: "OVERDUE_1M" },
-        { amountDue: dec(20000), amountPaid: dec(0), status: "OVERDUE_2M" },
-        { amountDue: dec(20000), amountPaid: dec(0), status: "OVERDUE_3M" },
+        { amountDue: dec(15000), amountPaid: dec(10000), amountWaived: dec(0), status: "PARTIAL" },
+        { amountDue: dec(20000), amountPaid: dec(0), amountWaived: dec(0), status: "OVERDUE_1M" },
+        { amountDue: dec(20000), amountPaid: dec(0), amountWaived: dec(0), status: "OVERDUE_2M" },
+        { amountDue: dec(20000), amountPaid: dec(0), amountWaived: dec(0), status: "OVERDUE_3M" },
       ],
     });
 
@@ -75,11 +76,31 @@ describe("computeSummary", () => {
     expect(r.occupancyRate).toBeCloseTo(0.8);
     expect(r.activeContracts).toBe(3);
     expect(r.contractsExpiringIn60Days).toBe(1);
+    expect(r.insurancePoliciesExpiringSoon).toBe(2);
     expect(r.totalMonthlyExpectedIncome).toBe("45000");
     expect(r.totalCollectedThisMonth).toBe("15000");
     // 5000 + 20000 + 20000 + 20000 = 65000
     expect(r.totalOutstanding).toBe("65000");
     expect(r.overdueByLevel).toEqual({ "1M": 1, "2M": 1, "3M": 1 });
+  });
+
+  it("resta amountWaived del saldo pendiente (condonaciones)", () => {
+    const r = computeSummary({
+      totalProperties: 1,
+      totalUnits: 2,
+      occupiedUnits: 2,
+      activeContracts: [{ monthlyAmount: dec(10000) }],
+      expiringContracts: 0,
+      expiringInsurance: 0,
+      paymentsThisMonth: [],
+      outstandingRents: [
+        // Condonación parcial: saldo = 10000 - 2000 - 3000 = 5000
+        { amountDue: dec(10000), amountPaid: dec(2000), amountWaived: dec(3000), status: "PARTIAL" },
+        // Condonación total: saldo = 0, no debe sumar al outstanding
+        { amountDue: dec(8000), amountPaid: dec(0), amountWaived: dec(8000), status: "PARTIAL" },
+      ],
+    });
+    expect(r.totalOutstanding).toBe("5000");
   });
 
   it("devuelve 0 de ocupación cuando no hay unidades", () => {
@@ -89,6 +110,7 @@ describe("computeSummary", () => {
       occupiedUnits: 0,
       activeContracts: [],
       expiringContracts: 0,
+      expiringInsurance: 0,
       paymentsThisMonth: [],
       outstandingRents: [],
     });
@@ -107,6 +129,7 @@ describe("detectAlerts", () => {
     occupancyRate: 0.8,
     activeContracts: 3,
     contractsExpiringIn60Days: 0,
+    insurancePoliciesExpiringSoon: 0,
     totalMonthlyExpectedIncome: "45000",
     totalCollectedThisMonth: "10000",
     totalOutstanding: "10000",
@@ -131,6 +154,15 @@ describe("detectAlerts", () => {
     const curr = { ...baseSummary, overdueByLevel: { "1M": 0, "2M": 0, "3M": 2 } };
     const alerts = detectAlerts(curr, baseSummary);
     expect(alerts.some((a) => a.level === "critical")).toBe(true);
+  });
+
+  it("alerta cuando hay pólizas de seguro por vencer", () => {
+    const curr = { ...baseSummary, insurancePoliciesExpiringSoon: 3 };
+    const alerts = detectAlerts(curr, baseSummary);
+    const insuranceAlert = alerts.find((a) => a.message.includes("seguro"));
+    expect(insuranceAlert).toBeDefined();
+    expect(insuranceAlert?.level).toBe("warning");
+    expect(insuranceAlert?.message).toContain("3");
   });
 
   it("no alerta cuando todo está estable", () => {
