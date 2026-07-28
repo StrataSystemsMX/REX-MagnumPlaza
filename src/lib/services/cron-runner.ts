@@ -1,3 +1,4 @@
+import { revalidateTag } from "next/cache";
 import { prismaUnsafe } from "@/lib/prisma/client";
 import { recordMorosityDailySnapshot } from "@/lib/services/morosity-snapshot";
 import { updateRentStatuses } from "@/lib/services/rent-status-updater";
@@ -39,6 +40,7 @@ export async function runDailyMorosityCron(
     }
     const snap = await recordMorosityDailySnapshot(t.id, { now });
     snapshotDate = snap.date;
+    revalidateTag(`kpi-${t.id}`);
   }
 
   return {

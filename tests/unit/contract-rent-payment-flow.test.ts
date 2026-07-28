@@ -45,6 +45,7 @@ const txPaymentMock = { payment: paymentMock, rent: rentMock };
 
 vi.mock("next/cache", () => ({
   revalidatePath: (...args: unknown[]) => mockRevalidatePath(...args),
+  revalidateTag: vi.fn(),
 }));
 vi.mock("@/lib/auth/get-session", () => ({
   requireAuth: () => mockRequireAuth(),

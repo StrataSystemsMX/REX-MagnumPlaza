@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { Prisma } from "@/generated/prisma/client";
 import { requireAuth } from "@/lib/auth/get-session";
 import { getUserRoleCodes, requirePermission } from "@/lib/auth/permissions";
@@ -283,6 +283,7 @@ export async function actionRegisterPayment(
 
   revalidatePath("/collections");
   revalidatePath("/ingresos");
+  revalidateTag(`kpi-${tenantId}`);
 
   return {
     payment: result.primary,
@@ -361,6 +362,7 @@ export async function actionRegisterBulkPayment(input: BulkPaymentInput): Promis
   }
 
   revalidatePath("/collections");
+  revalidateTag(`kpi-${tenantId}`);
   return { payments: result.payments, rentsUpdated: result.payments.length };
 }
 
@@ -395,6 +397,7 @@ export async function actionDeletePayment(id: string): Promise<void> {
   });
 
   revalidatePath("/collections");
+  revalidateTag(`kpi-${tenantId}`);
 }
 
 /**
@@ -451,6 +454,7 @@ export async function actionEditPayment(
   } as unknown as Prisma.InputJsonValue);
 
   revalidatePath("/collections");
+  revalidateTag(`kpi-${tenantId}`);
   return updated;
 }
 
@@ -631,6 +635,7 @@ export async function actionWaiveRents(input: WaiveRentsInput): Promise<{
   for (const cid of contractIds) {
     revalidatePath(`/contracts/${cid}`);
   }
+  revalidateTag(`kpi-${tenantId}`);
 
   return { affected, totalWaived };
 }

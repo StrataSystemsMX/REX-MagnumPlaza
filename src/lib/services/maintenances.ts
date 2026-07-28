@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { Prisma } from "@/generated/prisma/client";
 import { requireAuth } from "@/lib/auth/get-session";
 import { requirePermission } from "@/lib/auth/permissions";
@@ -102,6 +102,7 @@ export async function actionCreateMaintenance(input: CreateMaintenanceInput) {
 
   revalidatePath("/mantenimientos");
   revalidatePath("/egresos");
+  revalidateTag(`kpi-${tenantId}`);
   return maintenance;
 }
 
@@ -155,6 +156,7 @@ export async function actionUpdateMaintenance(input: UpdateMaintenanceInput) {
   });
 
   revalidatePath("/mantenimientos");
+  revalidateTag(`kpi-${tenantId}`);
   return updated;
 }
 
@@ -187,5 +189,6 @@ export async function actionUpdateMaintenanceStatus(input: UpdateMaintenanceStat
   });
 
   revalidatePath("/mantenimientos");
+  revalidateTag(`kpi-${tenantId}`);
   return updated;
 }

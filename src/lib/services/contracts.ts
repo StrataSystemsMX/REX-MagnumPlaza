@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { Prisma } from "@/generated/prisma/client";
 import { requireAuth } from "@/lib/auth/get-session";
 import { requirePermission } from "@/lib/auth/permissions";
@@ -124,6 +124,7 @@ export async function actionCreateContract(
 
   revalidatePath("/contracts");
   revalidatePath(`/properties/${unit.id}`);
+  revalidateTag(`kpi-${tenantId}`);
   return created;
 }
 
@@ -211,6 +212,7 @@ export async function actionUpdateContract(
   revalidatePath("/contracts");
   revalidatePath(`/contracts/${id}`);
   revalidatePath("/collections");
+  revalidateTag(`kpi-${tenantId}`);
   return { reconcile };
 }
 
@@ -250,6 +252,7 @@ export async function actionActivateContract(id: string): Promise<{
 
   revalidatePath("/contracts");
   revalidatePath(`/contracts/${id}`);
+  revalidateTag(`kpi-${tenantId}`);
   return { contract: updated, rentsCreated: result.created };
 }
 
@@ -303,6 +306,7 @@ export async function actionTerminateContract(
 
   revalidatePath("/contracts");
   revalidatePath(`/contracts/${id}`);
+  revalidateTag(`kpi-${tenantId}`);
   return updated;
 }
 
@@ -357,5 +361,6 @@ export async function actionRenewContract(
 
   revalidatePath("/contracts");
   revalidatePath(`/contracts/${id}`);
+  revalidateTag(`kpi-${tenantId}`);
   return child;
 }

@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { requireAuth } from "@/lib/auth/get-session";
 import { isMaster } from "@/lib/auth/permissions";
 import { recordMorosityDailySnapshot } from "@/lib/services/morosity-snapshot";
@@ -34,6 +34,7 @@ export async function actionRunMorosityCron(): Promise<ManualCronResult> {
   revalidatePath("/collections");
   revalidatePath("/collections/overdue");
   revalidatePath("/configuracion/sistema");
+  revalidateTag(`kpi-${tenantId}`);
 
   return {
     rentsUpdated: update.rentsUpdated,
