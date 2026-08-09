@@ -29,9 +29,9 @@ import {
 } from "@/lib/validators/cadastral";
 
 const CADASTRAL_PERM = {
-  create: "expense.create",
-  update: "expense.update",
-  delete: "expense.delete",
+  create: "cadastral.create",
+  update: "cadastral.update",
+  delete: "cadastral.delete",
 } as const;
 
 async function logAudit(
@@ -134,7 +134,7 @@ export async function actionUpdateCadastralPayment(
   });
 
   await prisma.cadastralPayment.update({
-    where: { id: data.id },
+    where: { id: data.id, tenantId },
     data: {
       propertyId: data.propertyId,
       year: data.year,
@@ -176,7 +176,7 @@ export async function actionRegisterCadastralPayment(
       : existing.notes;
 
   await prisma.cadastralPayment.update({
-    where: { id: data.id },
+    where: { id: data.id, tenantId },
     data: {
       paidAmount: decimal(data.paidAmount),
       paymentDate: data.paymentDate,
@@ -207,7 +207,7 @@ export async function actionUnmarkCadastralPayment(
   });
 
   await prisma.cadastralPayment.update({
-    where: { id },
+    where: { id, tenantId },
     data: {
       isPaid: false,
       paidAmount: null,
@@ -242,7 +242,7 @@ export async function actionDeleteCadastralPayment(
     },
   });
 
-  await prisma.cadastralPayment.delete({ where: { id } });
+  await prisma.cadastralPayment.delete({ where: { id, tenantId } });
 
   for (const doc of existing.documents) {
     try {
@@ -331,7 +331,7 @@ export async function actionDeleteCadastralReceipt(
     select: { id: true, url: true, cadastralPaymentId: true },
   });
 
-  await prisma.document.delete({ where: { id: documentId } });
+  await prisma.document.delete({ where: { id: documentId, tenantId } });
 
   try {
     await deleteFile(extractKeyFromUrl(doc.url));

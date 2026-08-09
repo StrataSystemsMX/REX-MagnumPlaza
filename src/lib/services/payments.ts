@@ -3,7 +3,7 @@
 import { revalidatePath, revalidateTag } from "next/cache";
 import { Prisma } from "@/generated/prisma/client";
 import { requireAuth } from "@/lib/auth/get-session";
-import { getUserRoleCodes, requirePermission } from "@/lib/auth/permissions";
+import { getUserRoleCodes, isMaster, PermissionError, requirePermission } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/prisma/client";
 import { logAudit as logAuditCore } from "@/lib/services/audit";
 import { serializeFields } from "@/lib/audit/field-types";
@@ -138,20 +138,19 @@ export async function actionRegisterPayment(
     ? Prisma.Decimal.max(balance, new Prisma.Decimal(0))
     : total;
 
-  // Si hay sobrante, prefetch de las demás rentas impagas del MISMO AÑO del mes
-  // seleccionado (no PAID/WAIVED), en orden cronológico ascendente. Así el
-  // excedente liquida primero los meses más antiguos —incluidos los anteriores
-  // al mes seleccionado— y solo después los siguientes.
-  // Incluimos amountWaived para calcular su saldo real al cascadear.
-  const yearStart = new Date(Date.UTC(rent.period.getUTCFullYear(), 0, 1));
-  const yearEnd = new Date(Date.UTC(rent.period.getUTCFullYear() + 1, 0, 1));
+  // Si hay sobrante, prefetch de las demás rentas impagas del contrato (no
+  // PAID/WAIVED), en orden cronológico ascendente y SIN límite de año —
+  // política CRT (docs/decisiones-negocio-pendientes.md #2): un adelanto
+  // liquida los meses que cubra aunque crucen al año siguiente (caso Bluecell
+  // paga 6 meses en noviembre). El excedente liquida primero los meses más
+  // antiguos —incluidos los anteriores al mes seleccionado— y luego los
+  // siguientes. Incluimos amountWaived para calcular su saldo real.
   const cascadeRents = excess.greaterThan(0)
     ? await prisma.rent.findMany({
         where: {
           tenantId,
           contractId: rent.contractId,
           id: { not: rent.id },
-          period: { gte: yearStart, lt: yearEnd },
           status: { notIn: ["PAID", "WAIVED"] },
         },
         orderBy: { period: "asc" },
@@ -223,12 +222,12 @@ export async function actionRegisterPayment(
       remaining = remaining.minus(apply);
     }
 
-    // 3. Si tras cubrir las mensualidades del año sigue sobrando, el remanente
-    //    queda como saldo a favor en la renta original.
+    // 3. Si tras cubrir TODAS las mensualidades pendientes del contrato sigue
+    //    sobrando, el remanente queda como saldo a favor en la renta original.
     let remainderAmount = new Prisma.Decimal(0);
     if (remaining.greaterThan(0)) {
       const remainderNote =
-        "Sobrante a favor: no hay más mensualidades pendientes del año en este contrato.";
+        "Sobrante a favor: no hay más mensualidades pendientes en este contrato.";
       await tx.payment.create({
         data: {
           tenantId,
@@ -367,13 +366,15 @@ export async function actionRegisterBulkPayment(input: BulkPaymentInput): Promis
 }
 
 /**
- * Sólo MASTER puede borrar pagos. Como no se siembra el permission
- * "payment.delete" para ningún rol, MASTER pasa por el bypass de
- * hasPermission y el resto cae con PermissionError.
+ * Sólo MASTER puede borrar pagos. Gate explícito por rol: el seed asigna
+ * ALL_CODES (incluido "payment.delete") a ADMIN, así que confiar en la
+ * ausencia del permission dejaría pasar a ADMIN.
  */
 export async function actionDeletePayment(id: string): Promise<void> {
   const { tenantId, dbUser } = await requireAuth();
-  await requirePermission(dbUser.id, "payment.delete");
+  if (!(await isMaster(dbUser.id))) {
+    throw new PermissionError("payment.delete");
+  }
 
   const payment = await prisma.payment.findFirst({
     where: { id, tenantId },
@@ -552,83 +553,87 @@ export async function actionWaiveRents(input: WaiveRentsInput): Promise<{
 
   const now = new Date();
 
-  for (const it of items) {
-    const r = byId.get(it.rentId);
-    if (!r) continue;
+  // Todo el lote en UNA transacción: un fallo a medio recorrido no debe dejar
+  // rentas condonadas parcialmente ni auditoría incompleta.
+  await prisma.$transaction(async (tx) => {
+    for (const it of items) {
+      const r = byId.get(it.rentId);
+      if (!r) continue;
 
-    const target = new Prisma.Decimal(it.amount.toFixed(2));
+      const target = new Prisma.Decimal(it.amount.toFixed(2));
 
-    // No-op: no había condonación y la nueva es 0.
-    if (target.eq(0) && r.amountWaived.eq(0)) continue;
+      // No-op: no había condonación y la nueva es 0.
+      if (target.eq(0) && r.amountWaived.eq(0)) continue;
 
-    const isRemoval = target.eq(0);
-    const isReplace = !isRemoval && !target.eq(r.amountWaived);
-    const delta = target.minus(r.amountWaived);
+      const isRemoval = target.eq(0);
+      const isReplace = !isRemoval && !target.eq(r.amountWaived);
+      const delta = target.minus(r.amountWaived);
 
-    const newBalance = r.amountDue.minus(r.amountPaid).minus(target);
+      const newBalance = r.amountDue.minus(r.amountPaid).minus(target);
 
-    // status: si saldo == 0 y no hubo pagos, marcamos WAIVED. Si hubo pagos
-    // parciales y la condonación cierra la deuda, queda PAID. Si la condonación
-    // es parcial, recalcular con el gradiente normal.
-    let newStatus: RentStatus;
-    if (newBalance.lte(0) && target.gt(0)) {
-      newStatus = r.amountPaid.eq(0) ? "WAIVED" : "PAID";
-    } else {
-      newStatus = computeRentStatus(
-        r.amountPaid,
-        r.amountDue,
-        r.dueDate,
-        now,
-        target,
-      );
-    }
+      // status: si saldo == 0 y no hubo pagos, marcamos WAIVED. Si hubo pagos
+      // parciales y la condonación cierra la deuda, queda PAID. Si la condonación
+      // es parcial, recalcular con el gradiente normal.
+      let newStatus: RentStatus;
+      if (newBalance.lte(0) && target.gt(0)) {
+        newStatus = r.amountPaid.eq(0) ? "WAIVED" : "PAID";
+      } else {
+        newStatus = computeRentStatus(
+          r.amountPaid,
+          r.amountDue,
+          r.dueDate,
+          now,
+          target,
+        );
+      }
 
-    const action = isRemoval
-      ? `Condonación REMOVIDA (era ${formatMXN(r.amountWaived, 2)})`
-      : isReplace
-        ? `Condonación ACTUALIZADA de ${formatMXN(r.amountWaived, 2)} a ${formatMXN(it.amount, 2)}`
-        : `Condonado ${formatMXN(it.amount, 2)}`;
-    const noteLine = `[${action} — ${stamp} por ${author}] ${reason}`;
-    const newNotes = r.notes ? `${r.notes}\n${noteLine}` : noteLine;
+      const action = isRemoval
+        ? `Condonación REMOVIDA (era ${formatMXN(r.amountWaived, 2)})`
+        : isReplace
+          ? `Condonación ACTUALIZADA de ${formatMXN(r.amountWaived, 2)} a ${formatMXN(it.amount, 2)}`
+          : `Condonado ${formatMXN(it.amount, 2)}`;
+      const noteLine = `[${action} — ${stamp} por ${author}] ${reason}`;
+      const newNotes = r.notes ? `${r.notes}\n${noteLine}` : noteLine;
 
-    await prisma.rent.updateMany({
-      where: { id: r.id, tenantId },
-      data: {
-        amountWaived: target,
+      await tx.rent.updateMany({
+        where: { id: r.id, tenantId },
+        data: {
+          amountWaived: target,
+          status: newStatus,
+          notes: newNotes,
+        },
+      });
+
+      await tx.auditLog.create({
+        data: {
+          tenantId,
+          userId: dbUser.id,
+          action: "UPDATE",
+          entityType: "Rent",
+          entityId: r.id,
+          changes: {
+            op: isRemoval ? "WAIVE_REMOVE" : isReplace ? "WAIVE_UPDATE" : "WAIVE",
+            reason,
+            previousWaived: r.amountWaived.toString(),
+            newWaived: target.toString(),
+            delta: delta.toString(),
+            previousStatus: r.status,
+            newStatus,
+            period: r.period.toISOString(),
+          } satisfies Prisma.InputJsonValue,
+        },
+      });
+
+      affected.push({
+        rentId: r.id,
+        period: r.period,
+        amountWaived: Number(target),
         status: newStatus,
-        notes: newNotes,
-      },
-    });
-
-    await prisma.auditLog.create({
-      data: {
-        tenantId,
-        userId: dbUser.id,
-        action: "UPDATE",
-        entityType: "Rent",
-        entityId: r.id,
-        changes: {
-          op: isRemoval ? "WAIVE_REMOVE" : isReplace ? "WAIVE_UPDATE" : "WAIVE",
-          reason,
-          previousWaived: r.amountWaived.toString(),
-          newWaived: target.toString(),
-          delta: delta.toString(),
-          previousStatus: r.status,
-          newStatus,
-          period: r.period.toISOString(),
-        } satisfies Prisma.InputJsonValue,
-      },
-    });
-
-    affected.push({
-      rentId: r.id,
-      period: r.period,
-      amountWaived: Number(target),
-      status: newStatus,
-    });
-    totalWaived += Number(target);
-    contractIds.add(r.contractId);
-  }
+      });
+      totalWaived += Number(target);
+      contractIds.add(r.contractId);
+    }
+  });
 
   revalidatePath("/ingresos");
   revalidatePath("/collections");

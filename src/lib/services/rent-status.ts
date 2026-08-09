@@ -41,6 +41,12 @@ export function computeRentStatus(
   }
   if (paid.gt(0)) return "PARTIAL";
 
+  // POLÍTICA DE ZONA HORARIA: todo el sistema opera en UTC puro. dueDate se
+  // materializa a medianoche UTC (rent-generation) y los umbrales 0/30/60/90
+  // se evalúan contra `now` UTC. Tenant.timezone NO participa: el cron corre a
+  // las 16:00 UTC (09:00 Hermosillo), así que los cruces de umbral se aplican
+  // efectivamente la mañana del día correcto en hora local. Si algún día se
+  // opera en otra TZ, revisar docs/decisiones-negocio-pendientes.md.
   const daysOverdue = Math.floor((now.getTime() - dueDate.getTime()) / MS_PER_DAY);
   if (daysOverdue < 0) return "PENDING";
   if (daysOverdue < 30) return "DUE";

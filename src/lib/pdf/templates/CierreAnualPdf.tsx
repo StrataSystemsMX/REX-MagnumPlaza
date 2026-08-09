@@ -9,6 +9,7 @@ import {
 } from "./shared";
 import type { AnnualClosing, Monthly12 } from "@/lib/services/cierres-queries";
 import { formatMXN } from "@/lib/format-currency";
+import { formatDate } from "@/lib/format-date";
 
 const MONTHS_SHORT = [
   "Ene", "Feb", "Mar", "Abr", "May", "Jun",
@@ -152,7 +153,7 @@ export function CierreAnualPdf(props: CierreAnualPdfProps) {
         <Text style={sharedStyles.title}>Cierre Anual {closing.year}</Text>
         <Text style={sharedStyles.subtitle}>
           Generado{" "}
-          {props.generatedAt.toLocaleDateString("es-MX", { timeZone: "UTC" })}
+          {formatDate(props.generatedAt)}
           {entityFilterCode ? ` · ${entityFilterCode}` : ""}
         </Text>
 

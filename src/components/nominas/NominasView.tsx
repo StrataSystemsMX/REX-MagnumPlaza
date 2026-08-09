@@ -54,6 +54,10 @@ import type { LegalEntityOption } from "@/lib/services/properties-queries";
 import { payrollTypeLabel } from "@/lib/i18n/enums";
 import type { PayrollType } from "@/generated/prisma/enums";
 import { cn } from "@/lib/utils";
+import { formatMXN } from "@/lib/format-currency";
+
+// Alias local: mismo output que la const Intl que existía aquí (2 decimales).
+const mxn = (v: number | string) => formatMXN(v, 2);
 
 // Clasificación contable: operativos (gente real) vs estrategia fiscal
 // (vehículos fiscales). Usado para sub-agrupar dentro de cada card.
@@ -64,12 +68,6 @@ const FISCAL_STRATEGY_TYPES: ReadonlySet<PayrollType> = new Set([
 function isFiscalStrategy(t: PayrollType): boolean {
   return FISCAL_STRATEGY_TYPES.has(t);
 }
-
-const MXN = new Intl.NumberFormat("es-MX", {
-  style: "currency",
-  currency: "MXN",
-  maximumFractionDigits: 2,
-});
 
 const MONTH_LABELS = [
   "Enero",
@@ -402,7 +400,7 @@ export function NominasView({
         <Stat
           icon={<Receipt className="size-4" />}
           label={`Nómina ${periodLabel().toLowerCase()}`}
-          value={MXN.format(periodOperationalTotal + periodFiscalTotal)}
+          value={mxn(periodOperationalTotal + periodFiscalTotal)}
           tone="primary"
         />
         <Stat
@@ -416,7 +414,7 @@ export function NominasView({
         <Stat
           icon={<Wallet className="size-4" />}
           label={`Total año ${selectedYear}`}
-          value={MXN.format(annualTotal)}
+          value={mxn(annualTotal)}
           tone="positive"
         />
       </div>
@@ -500,7 +498,7 @@ export function NominasView({
                         Total
                       </p>
                       <p className="text-lg font-semibold tabular-nums">
-                        {MXN.format(group.total)}
+                        {mxn(group.total)}
                       </p>
                     </div>
                   </div>
@@ -562,7 +560,7 @@ export function NominasView({
             <AlertDialogTitle>¿Eliminar pago de nómina?</AlertDialogTitle>
             <AlertDialogDescription>
               {deleteTarget
-                ? `Se borrará el pago de ${MXN.format(deleteTarget.amount)} de ${deleteTarget.legalEntity.code} (${MONTH_LABELS[deleteTarget.month - 1]} ${deleteTarget.year}). Esta acción no se puede deshacer.`
+                ? `Se borrará el pago de ${mxn(deleteTarget.amount)} de ${deleteTarget.legalEntity.code} (${MONTH_LABELS[deleteTarget.month - 1]} ${deleteTarget.year}). Esta acción no se puede deshacer.`
                 : ""}
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -750,20 +748,20 @@ function PayrollRow({
         className="px-3 py-2.5 text-right tabular-nums text-muted-foreground"
       >
         {item.amountWithoutTax !== null
-          ? MXN.format(item.amountWithoutTax)
+          ? mxn(item.amountWithoutTax)
           : "—"}
       </div>
       <div
         role="cell"
         className="px-3 py-2.5 text-right tabular-nums text-muted-foreground"
       >
-        {item.taxAmount !== null ? MXN.format(item.taxAmount) : "—"}
+        {item.taxAmount !== null ? mxn(item.taxAmount) : "—"}
       </div>
       <div
         role="cell"
         className="px-3 py-2.5 text-right font-semibold tabular-nums"
       >
-        {MXN.format(item.amount)}
+        {mxn(item.amount)}
       </div>
       <div role="cell" className="flex justify-end pr-1">
         <DropdownMenu>

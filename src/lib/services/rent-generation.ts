@@ -101,6 +101,10 @@ export async function generateRentsForContract(
   const toCreate: Prisma.RentCreateManyInput[] = [];
   let total = 0;
 
+  // Política CRT (decisión 2026-07-16, docs/decisiones-negocio-pendientes.md #3):
+  // NO se prorratea. El primer y último mes se cobran COMPLETOS aunque el
+  // contrato inicie o termine a media mes — práctica estándar del cliente en
+  // locales comerciales.
   for (const period of monthsBetween(startDate, endDate)) {
     total += 1;
     if (existingKeys.has(period.getTime())) continue;

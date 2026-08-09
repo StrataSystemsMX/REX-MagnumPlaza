@@ -1,7 +1,7 @@
 "use client";
 
 import { UserButton } from "@clerk/nextjs";
-import { History, Redo2, Search, Undo2 } from "lucide-react";
+import { History, Search } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import {
@@ -26,28 +26,26 @@ export function Topbar({ canViewHistory = false }: { canViewHistory?: boolean })
       {/* Izquierda — menú móvil + búsqueda (aún sin funcionalidad) */}
       <div className="flex min-w-0 items-center gap-2">
         <MobileSidebar />
-        {/* TODO: conectar búsqueda */}
-        <InputGroup className="w-full max-w-xs bg-background sm:w-72">
+        {/* Búsqueda global aún sin backend: deshabilitada para no engañar al
+            usuario con un control muerto. Al conectarla, quitar `disabled`. */}
+        <InputGroup className="w-full max-w-xs bg-background opacity-60 sm:w-72">
           <InputGroupAddon>
             <Search />
           </InputGroupAddon>
-          <InputGroupInput type="search" placeholder="Buscar…" aria-label="Buscar" />
+          <InputGroupInput
+            type="search"
+            placeholder="Buscar… (próximamente)"
+            aria-label="Buscar"
+            disabled
+          />
         </InputGroup>
       </div>
 
       {/* Centro — reservado para cambios posteriores */}
 
-      {/* Derecha — sesión e historial */}
+      {/* Derecha — sesión e historial. Los botones Deshacer/Rehacer que vivían
+          aquí eran stubs sin handler; el deshacer real vive en /historial. */}
       <div className="flex shrink-0 items-center gap-1.5">
-        {/* TODO: conectar deshacer */}
-        <Button variant="ghost" size="icon" aria-label="Deshacer cambios">
-          <Undo2 className="size-4" />
-        </Button>
-        {/* TODO: conectar rehacer */}
-        <Button variant="ghost" size="icon" aria-label="Rehacer cambios">
-          <Redo2 className="size-4" />
-        </Button>
-
         {/* Historial de cambios — sólo visible para MASTER/ADMIN. */}
         {canViewHistory && (
           <Button

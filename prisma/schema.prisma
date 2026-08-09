@@ -76,6 +76,7 @@ model Tenant {
   investmentPayments   InvestmentPayment[]
   leads                Lead[]
   documentTemplates    DocumentTemplate[]
+  cadastralPayments    CadastralPayment[]
 
   @@map("tenants")
 }
@@ -403,6 +404,7 @@ model Contract {
   documents  Document[]
 
   @@index([tenantId])
+  @@index([tenantId, status]) // listados/cron filtran ACTIVE por tenant
   @@index([unitId])
   @@index([lesseeId])
   @@index([endDate]) // para alertas de vencimiento
@@ -460,6 +462,8 @@ model Rent {
 
   @@unique([contractId, period])
   @@index([tenantId])
+  @@index([tenantId, status]) // cron de morosidad y cobranza filtran por ambos
+  @@index([tenantId, period]) // matrices anuales/mensuales de cobranza
   @@index([dueDate])
   @@index([status])
   @@map("rents")
@@ -618,6 +622,8 @@ model Expense {
 
   @@index([tenantId])
   @@index([legalEntityId])
+  @@index([categoryId]) // joins/filtros de reportes por concepto
+  @@index([propertyId]) // reportes por inmueble
   @@index([expenseDate])
   @@map("expenses")
 }
@@ -653,6 +659,7 @@ model CadastralPayment {
   createdAt            DateTime  @default(now())
   updatedAt            DateTime  @updatedAt
 
+  tenant      Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   property    Property     @relation(fields: [propertyId], references: [id], onDelete: Cascade)
   payerEntity LegalEntity? @relation("CadastralPayer", fields: [payerEntityId], references: [id])
   documents   Document[]

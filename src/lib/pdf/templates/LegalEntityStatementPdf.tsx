@@ -10,12 +10,8 @@ import {
 import { propertyTypeLabel } from "@/lib/i18n/enums";
 import type { PropertyType } from "@/generated/prisma/enums";
 import type { LegalEntityYearMetrics } from "@/lib/services/legal-entity-queries";
-
-const MXN = new Intl.NumberFormat("es-MX", {
-  style: "currency",
-  currency: "MXN",
-  maximumFractionDigits: 0,
-});
+import { formatMXN } from "@/lib/format-currency";
+import { formatDate } from "@/lib/format-date";
 
 const MONTHS_SHORT = [
   "Ene", "Feb", "Mar", "Abr", "May", "Jun",
@@ -24,7 +20,7 @@ const MONTHS_SHORT = [
 
 function money(v: string | number): string {
   const n = Number(v);
-  return Number.isFinite(n) && n !== 0 ? MXN.format(n) : "—";
+  return Number.isFinite(n) && n !== 0 ? formatMXN(n) : "—";
 }
 
 const styles = StyleSheet.create({
@@ -185,14 +181,14 @@ export function LegalEntityStatementPdf(props: LegalEntityStatementPdfProps) {
         <Text style={sharedStyles.subtitle}>
           {metrics.legalName}
           {metrics.rfc ? ` · RFC ${metrics.rfc}` : ""} · Ejercicio {metrics.year} ·
-          Generado {props.generatedAt.toLocaleDateString("es-MX", { timeZone: "UTC" })}
+          Generado {formatDate(props.generatedAt)}
         </Text>
 
         {/* KPIs — 5 tarjetas */}
         <View style={styles.kpiRow}>
           <View style={styles.kpiCard}>
             <Text style={styles.kpiLabel}>Ingresos del año</Text>
-            <Text style={styles.kpiValue}>{MXN.format(Number(metrics.totalIncome))}</Text>
+            <Text style={styles.kpiValue}>{formatMXN(Number(metrics.totalIncome))}</Text>
           </View>
           <View style={styles.kpiCard}>
             <Text style={styles.kpiLabel}>Renta esperada / mes</Text>
@@ -200,12 +196,12 @@ export function LegalEntityStatementPdf(props: LegalEntityStatementPdfProps) {
           </View>
           <View style={styles.kpiCard}>
             <Text style={styles.kpiLabel}>Egresos del año</Text>
-            <Text style={styles.kpiValue}>{MXN.format(Number(metrics.totalExpenses))}</Text>
+            <Text style={styles.kpiValue}>{formatMXN(Number(metrics.totalExpenses))}</Text>
           </View>
           <View style={[styles.kpiCard, { backgroundColor: profit >= 0 ? "#ecfdf5" : "#fef2f2", borderColor: profit >= 0 ? "#bbf7d0" : "#fecaca" }]}>
             <Text style={styles.kpiLabel}>Utilidad del año</Text>
             <Text style={[styles.kpiValue, { color: profit >= 0 ? "#047857" : "#b91c1c" }]}>
-              {MXN.format(profit)}
+              {formatMXN(profit)}
             </Text>
           </View>
           <View style={styles.kpiCard}>
@@ -242,7 +238,7 @@ export function LegalEntityStatementPdf(props: LegalEntityStatementPdfProps) {
               </Text>
             ))}
             <Text style={[styles.cellTotal, { color: profit >= 0 ? "#047857" : "#b91c1c" }]}>
-              {MXN.format(profit)}
+              {formatMXN(profit)}
             </Text>
           </View>
         </View>
@@ -261,14 +257,14 @@ export function LegalEntityStatementPdf(props: LegalEntityStatementPdfProps) {
               <View key={row.categoryName} style={styles.simpleRow}>
                 <Text style={{ flex: 4 }}>{row.categoryName}</Text>
                 <Text style={{ flex: 1, textAlign: "right" }}>
-                  {MXN.format(Number(row.amount))}
+                  {formatMXN(Number(row.amount))}
                 </Text>
               </View>
             ))}
             <View style={styles.simpleTotalRow}>
               <Text style={{ flex: 4 }}>TOTAL</Text>
               <Text style={{ flex: 1, textAlign: "right" }}>
-                {MXN.format(Number(metrics.totalExpenses))}
+                {formatMXN(Number(metrics.totalExpenses))}
               </Text>
             </View>
           </View>
@@ -288,14 +284,14 @@ export function LegalEntityStatementPdf(props: LegalEntityStatementPdfProps) {
               <View key={row.propertyId} style={styles.simpleRow}>
                 <Text style={{ flex: 4 }}>{row.propertyName}</Text>
                 <Text style={{ flex: 1, textAlign: "right" }}>
-                  {MXN.format(Number(row.amount))}
+                  {formatMXN(Number(row.amount))}
                 </Text>
               </View>
             ))}
             <View style={styles.simpleTotalRow}>
               <Text style={{ flex: 4 }}>TOTAL</Text>
               <Text style={{ flex: 1, textAlign: "right" }}>
-                {MXN.format(Number(metrics.totalIncome))}
+                {formatMXN(Number(metrics.totalIncome))}
               </Text>
             </View>
           </View>
@@ -359,7 +355,7 @@ function MonthlyRow({
       {monthly.map((v, i) => (
         <Text key={i} style={styles.cellMonth}>{money(v)}</Text>
       ))}
-      <Text style={styles.cellTotal}>{MXN.format(Number(total))}</Text>
+      <Text style={styles.cellTotal}>{formatMXN(Number(total))}</Text>
     </View>
   );
 }

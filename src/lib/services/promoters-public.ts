@@ -1,6 +1,7 @@
 import { cache } from "react";
 import type { IncludedService, PropertyType, UnitStatus } from "@/generated/prisma/enums";
 import { prisma, prismaUnsafe } from "@/lib/prisma/client";
+import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 
 // El token se genera con randomBytes(16).toString("hex") → 32 hex chars.
 const TOKEN_REGEX = /^[a-f0-9]{32}$/i;
@@ -187,6 +188,11 @@ export const getUnitByPromoterToken = cache(
  */
 export async function trackVacancyVisit(linkId: string, tenantId: string): Promise<void> {
   try {
+    // Dedupe best-effort por IP: la misma IP solo cuenta una visita por link
+    // por hora, para que un refresco en loop no infle la métrica.
+    const ip = await getClientIp();
+    if (!checkRateLimit(`visit:${linkId}:${ip}`, 1, 60 * 60 * 1000)) return;
+
     await prisma.promoterLink.updateMany({
       where: { id: linkId, tenantId },
       data: { visitCount: { increment: 1 } },

@@ -31,7 +31,6 @@ docker-compose.override.yml
 *.pem
 .idea/
 .vscode/*
-!.vscode/settings.json
 !.vscode/extensions.json
 
 # debug
@@ -42,6 +41,11 @@ yarn-error.log*
 
 # database dumps (backups de prod — contienen datos reales del cliente, NUNCA commitear)
 *.dump
+
+# hojas de cálculo del cliente (padrón de locatarios, presupuestos) — datos reales, NUNCA commitear
+*.xlsx
+*.xls
+*.csv
 
 # env files (NEVER commit secrets — use .env.example as template)
 .env

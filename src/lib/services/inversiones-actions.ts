@@ -1,105 +1,125 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { Prisma } from "@/generated/prisma/client";
 import { requireAuth } from "@/lib/auth/get-session";
 import { requirePermission } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/prisma/client";
-import type { InvestmentProjectStatus } from "@/generated/prisma/enums";
+import { logAudit } from "@/lib/services/audit";
+import {
+  createInvestmentProjectSchema,
+  registerInvestmentPaymentSchema,
+  type CreateInvestmentProjectInput,
+  type RegisterInvestmentPaymentInput,
+} from "@/lib/validators/investment";
 
-export async function actionCreateInvestmentProject(input: {
-  name: string;
-  description: string | null;
-  legalEntityId: string;
-  propertyId: string | null;
-  budgetAmount: number;
-  startDate: string;
-  endDate: string | null;
-  status: InvestmentProjectStatus;
-  notes: string | null;
-}): Promise<void> {
+export async function actionCreateInvestmentProject(
+  input: CreateInvestmentProjectInput,
+): Promise<void> {
   const { tenantId, dbUser } = await requireAuth();
-  await requirePermission(dbUser.id, "expense.create");
+  await requirePermission(dbUser.id, "investment.create");
 
-  if (!input.name.trim()) throw new Error("El nombre es requerido.");
-  if (!input.legalEntityId) throw new Error("La razón social es requerida.");
-  if (!Number.isFinite(input.budgetAmount) || input.budgetAmount < 0)
-    throw new Error("Presupuesto inválido.");
-  if (!input.startDate) throw new Error("La fecha de inicio es requerida.");
+  const data = createInvestmentProjectSchema.parse(input);
 
-  // Validate legalEntity belongs to tenant
   const le = await prisma.legalEntity.findFirst({
-    where: { id: input.legalEntityId, tenantId },
+    where: { id: data.legalEntityId, tenantId },
     select: { id: true },
   });
   if (!le) throw new Error("Razón social no encontrada.");
 
-  if (input.propertyId) {
+  if (data.propertyId) {
     const prop = await prisma.property.findFirst({
-      where: { id: input.propertyId, tenantId },
+      where: { id: data.propertyId, tenantId },
       select: { id: true },
     });
     if (!prop) throw new Error("Inmueble no encontrado.");
   }
 
-  await prisma.investmentProject.create({
+  const project = await prisma.investmentProject.create({
     data: {
       tenantId,
-      name: input.name.trim(),
-      description: input.description?.trim() || null,
-      legalEntityId: input.legalEntityId,
-      propertyId: input.propertyId || null,
-      budgetAmount: input.budgetAmount,
-      startDate: new Date(input.startDate),
-      endDate: input.endDate ? new Date(input.endDate) : null,
-      status: input.status,
-      notes: input.notes?.trim() || null,
+      name: data.name,
+      description: data.description || null,
+      legalEntityId: data.legalEntityId,
+      propertyId: data.propertyId || null,
+      budgetAmount: new Prisma.Decimal(data.budgetAmount.toFixed(2)),
+      startDate: new Date(data.startDate),
+      endDate: data.endDate ? new Date(data.endDate) : null,
+      status: data.status,
+      notes: data.notes || null,
+    },
+  });
+
+  await logAudit({
+    tenantId,
+    userId: dbUser.id,
+    action: "CREATE",
+    entityType: "InvestmentProject",
+    entityId: project.id,
+    changes: {
+      name: data.name,
+      legalEntityId: data.legalEntityId,
+      budgetAmount: data.budgetAmount,
+      status: data.status,
     },
   });
 
   revalidatePath("/inversiones");
 }
 
-export async function actionRegisterInvestmentPayment(input: {
-  projectId: string;
-  description: string;
-  amount: number;
-  paymentDate: string;
-  isPaid: boolean;
-  notes: string | null;
-}): Promise<void> {
+export async function actionRegisterInvestmentPayment(
+  input: RegisterInvestmentPaymentInput,
+): Promise<void> {
   const { tenantId, dbUser } = await requireAuth();
-  await requirePermission(dbUser.id, "expense.create");
+  await requirePermission(dbUser.id, "investment.update");
 
-  if (!input.description.trim()) throw new Error("La descripción es requerida.");
-  if (!Number.isFinite(input.amount) || input.amount <= 0) throw new Error("Monto inválido.");
-  if (!input.paymentDate) throw new Error("La fecha es requerida.");
+  const data = registerInvestmentPaymentSchema.parse(input);
 
   const project = await prisma.investmentProject.findFirst({
-    where: { id: input.projectId, tenantId },
+    where: { id: data.projectId, tenantId },
     select: { id: true },
   });
   if (!project) throw new Error("Proyecto no encontrado.");
 
-  await prisma.investmentPayment.create({
-    data: {
-      tenantId,
-      projectId: input.projectId,
-      description: input.description.trim(),
-      amount: input.amount,
-      paymentDate: new Date(input.paymentDate),
-      isPaid: input.isPaid,
-      notes: input.notes?.trim() || null,
-    },
+  // Pago + recálculo de executedAmount en una sola transacción: un fallo a
+  // medias no debe dejar el avance del proyecto desincronizado.
+  const payment = await prisma.$transaction(async (tx) => {
+    const created = await tx.investmentPayment.create({
+      data: {
+        tenantId,
+        projectId: data.projectId,
+        description: data.description,
+        amount: new Prisma.Decimal(data.amount.toFixed(2)),
+        paymentDate: new Date(data.paymentDate),
+        isPaid: data.isPaid,
+        notes: data.notes || null,
+      },
+    });
+
+    const paid = await tx.investmentPayment.aggregate({
+      where: { tenantId, projectId: data.projectId, isPaid: true },
+      _sum: { amount: true },
+    });
+    await tx.investmentProject.updateMany({
+      where: { id: data.projectId, tenantId },
+      data: { executedAmount: paid._sum.amount ?? new Prisma.Decimal(0) },
+    });
+
+    return created;
   });
 
-  // Recalculate executedAmount from all paid payments
-  const paid = await prisma.investmentPayment.aggregate({
-    where: { tenantId, projectId: input.projectId, isPaid: true },
-    _sum: { amount: true },
-  });
-  await prisma.investmentProject.updateMany({
-    where: { id: input.projectId, tenantId },
-    data: { executedAmount: paid._sum.amount ?? 0 },
+  await logAudit({
+    tenantId,
+    userId: dbUser.id,
+    action: "CREATE",
+    entityType: "InvestmentPayment",
+    entityId: payment.id,
+    changes: {
+      projectId: data.projectId,
+      description: data.description,
+      amount: data.amount,
+      isPaid: data.isPaid,
+    },
   });
 
   revalidatePath("/inversiones");

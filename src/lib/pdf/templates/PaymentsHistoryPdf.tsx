@@ -106,7 +106,7 @@ export function PaymentsHistoryPdf(props: PaymentsHistoryPdfProps) {
     dateRange,
     ...extraParts,
     `${payments.length} registro${payments.length === 1 ? "" : "s"}`,
-    `Generado ${props.generatedAt.toLocaleDateString("es-MX", { timeZone: "UTC" })}`,
+    `Generado ${formatDate(props.generatedAt)}`,
   ].filter(Boolean).join(" · ");
 
   return (

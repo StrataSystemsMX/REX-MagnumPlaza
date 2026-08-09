@@ -1,18 +1,8 @@
 "use client";
 
-import {
-  ChevronDown,
-  ChevronLeft,
-  ChevronRight,
-  TrendingDown,
-  Wallet,
-  AlertTriangle,
-  Percent,
-  Plus,
-} from "lucide-react";
+import { TrendingDown, Wallet, AlertTriangle, Percent, Plus } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import {
   Select,
   SelectContent,
@@ -26,6 +16,14 @@ import {
   RegisterExpenseDialog,
   type RegisterExpenseContext,
 } from "@/components/egresos/RegisterExpenseDialog";
+import {
+  EntityBreakdownCard,
+  EntitySectionHeader,
+  KpiCard,
+  MonthlyTotalsBar,
+  YearNavigator,
+} from "@/components/shared/yearly-matrix/YearlyMatrixParts";
+import { MONTHS_SHORT, compactMxn } from "@/components/shared/yearly-matrix/theme";
 import { cn } from "@/lib/utils";
 import { formatMXN } from "@/lib/format-currency";
 import { formatPeriodLong } from "@/lib/format-date";
@@ -41,32 +39,6 @@ import type {
 } from "@/lib/services/expenses-queries";
 import type { LegalEntityOption } from "@/lib/services/properties-queries";
 
-const MONTHS_SHORT = [
-  "Ene", "Feb", "Mar", "Abr", "May", "Jun",
-  "Jul", "Ago", "Sep", "Oct", "Nov", "Dic",
-];
-
-const ENTITY_THEME: Record<
-  string,
-  { dot: string; ring: string; bg: string; text: string }
-> = {
-  CRT: { dot: "bg-orange-500", ring: "ring-orange-200", bg: "bg-orange-50 dark:bg-orange-950/30", text: "text-orange-700 dark:text-orange-300" },
-  TSR: { dot: "bg-blue-500", ring: "ring-blue-200", bg: "bg-blue-50 dark:bg-blue-950/30", text: "text-blue-700 dark:text-blue-300" },
-  QHS: { dot: "bg-emerald-500", ring: "ring-emerald-200", bg: "bg-emerald-50 dark:bg-emerald-950/30", text: "text-emerald-700 dark:text-emerald-300" },
-  JCL: { dot: "bg-violet-500", ring: "ring-violet-200", bg: "bg-violet-50 dark:bg-violet-950/30", text: "text-violet-700 dark:text-violet-300" },
-};
-
-const DEFAULT_THEME = {
-  dot: "bg-slate-500",
-  ring: "ring-slate-200",
-  bg: "bg-slate-50 dark:bg-slate-900/30",
-  text: "text-slate-700 dark:text-slate-300",
-};
-
-function themeFor(code: string) {
-  return ENTITY_THEME[code] ?? DEFAULT_THEME;
-}
-
 interface EgresosYearlyViewProps {
   data: YearlyExpenses;
   availableYears: ReadonlyArray<number>;
@@ -76,6 +48,10 @@ interface EgresosYearlyViewProps {
   properties: ReadonlyArray<ExpensePropertyOption>;
   canCreate: boolean;
   canUpdate: boolean;
+}
+
+function entityMeta(g: YearlyExpenseEntityGroup): string {
+  return `${g.conceptCount} ${g.conceptCount === 1 ? "concepto" : "conceptos"}`;
 }
 
 export function EgresosYearlyView({
@@ -103,11 +79,6 @@ export function EgresosYearlyView({
       return next;
     });
   }
-
-  const yearItems = useMemo<Record<string, string>>(
-    () => Object.fromEntries(availableYears.map((y) => [String(y), String(y)])),
-    [availableYears],
-  );
 
   const entityItems = useMemo<Record<string, string>>(
     () => ({
@@ -159,19 +130,6 @@ export function EgresosYearlyView({
     return { expected, paid, balance: expected - paid, pct, concepts };
   }, [visibleEntities]);
 
-  function navigateYear(delta: number) {
-    const target = data.year + delta;
-    const url = new URL(window.location.href);
-    url.searchParams.set("year", String(target));
-    window.location.href = url.toString();
-  }
-
-  function selectYear(year: string) {
-    const url = new URL(window.location.href);
-    url.searchParams.set("year", year);
-    window.location.href = url.toString();
-  }
-
   function openRegister(
     entity: YearlyExpenseEntityGroup,
     row: YearlyExpenseRow,
@@ -194,40 +152,7 @@ export function EgresosYearlyView({
     <div className="space-y-6">
       {/* Toolbar */}
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => navigateYear(-1)}
-            aria-label="Año anterior"
-          >
-            <ChevronLeft className="size-4" />
-          </Button>
-          <Select
-            value={String(data.year)}
-            onValueChange={(v) => v && selectYear(v)}
-            items={yearItems}
-          >
-            <SelectTrigger className="w-28">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {availableYears.map((y) => (
-                <SelectItem key={y} value={String(y)}>
-                  {y}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => navigateYear(1)}
-            aria-label="Año siguiente"
-          >
-            <ChevronRight className="size-4" />
-          </Button>
-        </div>
+        <YearNavigator year={data.year} availableYears={availableYears} />
 
         <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap sm:items-center">
           <Select
@@ -307,12 +232,18 @@ export function EgresosYearlyView({
       </div>
 
       {/* Desglose por razón social */}
-      <EntityBreakdown
-        groups={data.entities}
-        totalExpected={data.entities.reduce(
-          (acc, g) => acc + g.expectedTotal,
-          0,
-        )}
+      <EntityBreakdownCard
+        items={data.entities.map((g) => ({
+          code: g.entityCode,
+          total: g.expectedTotal,
+          meta: entityMeta(g),
+          paidPct:
+            g.expectedTotal > 0
+              ? Math.round((g.paidTotal / g.expectedTotal) * 100)
+              : 0,
+        }))}
+        totalExpected={data.entities.reduce((acc, g) => acc + g.expectedTotal, 0)}
+        paidWord="pagado"
       />
 
       <Legend />
@@ -337,7 +268,21 @@ export function EgresosYearlyView({
         )}
       </div>
 
-      <MonthlyTotalsBar totals={data.monthlyTotals} />
+      <MonthlyTotalsBar
+        rows={data.monthlyTotals.map((t) => ({
+          period: t.period,
+          expected: t.expected,
+          paid: t.paid,
+          paidCount: t.paidCount,
+          lastCount: t.pendingCount,
+        }))}
+        subtitle="12 meses · estimado vs. pagado"
+        expectedHeader="Estimado"
+        paidHeader="Pagado"
+        pctHeader="% Pagado"
+        lastHeader="Pendientes"
+        lastAccentClass="text-amber-700 dark:text-amber-300"
+      />
 
       <RegisterExpenseDialog
         target={registerTarget}
@@ -358,132 +303,6 @@ export function EgresosYearlyView({
         onClose={() => setFormMode(null)}
       />
     </div>
-  );
-}
-
-// ----------------------------------------------------------------------------
-// KPI Card
-// ----------------------------------------------------------------------------
-
-interface KpiCardProps {
-  icon: React.ReactNode;
-  label: string;
-  value: string;
-  accent: string;
-  progress?: number;
-}
-
-function KpiCard({ icon, label, value, accent, progress }: KpiCardProps) {
-  return (
-    <Card size="sm">
-      <CardContent className="space-y-2">
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <span className="text-muted-foreground/70">{icon}</span>
-          {label}
-        </div>
-        <p
-          className={cn(
-            "text-xl font-semibold tabular-nums leading-none",
-            accent,
-          )}
-        >
-          {value}
-        </p>
-        {typeof progress === "number" && (
-          <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
-            <div
-              className={cn(
-                "h-full rounded-full transition-all",
-                progress >= 80
-                  ? "bg-green-500"
-                  : progress >= 50
-                    ? "bg-amber-500"
-                    : "bg-red-500",
-              )}
-              style={{ width: `${Math.min(100, Math.max(0, progress))}%` }}
-            />
-          </div>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-
-// ----------------------------------------------------------------------------
-// Entity breakdown — desglose horizontal por razón social
-// ----------------------------------------------------------------------------
-
-function EntityBreakdown({
-  groups,
-  totalExpected,
-}: {
-  groups: ReadonlyArray<YearlyExpenseEntityGroup>;
-  totalExpected: number;
-}) {
-  if (groups.length === 0) return null;
-  return (
-    <Card size="sm">
-      <CardContent className="space-y-3">
-        <div className="flex items-center justify-between">
-          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            Desglose por razón social
-          </p>
-          <p className="text-xs text-muted-foreground">
-            Total:{" "}
-            <span className="font-semibold tabular-nums text-foreground">
-              {formatMXN(totalExpected)}
-            </span>
-          </p>
-        </div>
-        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-          {groups.map((g) => {
-            const t = themeFor(g.entityCode);
-            const sharePct =
-              totalExpected > 0
-                ? Math.round((g.expectedTotal / totalExpected) * 100)
-                : 0;
-            const paidPct =
-              g.expectedTotal > 0
-                ? Math.round((g.paidTotal / g.expectedTotal) * 100)
-                : 0;
-            return (
-              <div
-                key={g.entityCode}
-                className={cn("rounded-lg border p-3 ring-1", t.bg, t.ring)}
-              >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className={cn("size-2.5 rounded-full", t.dot)} />
-                    <span className={cn("font-semibold", t.text)}>
-                      {g.entityCode}
-                    </span>
-                  </div>
-                  <span className="text-xs text-muted-foreground">
-                    {g.conceptCount}{" "}
-                    {g.conceptCount === 1 ? "concepto" : "conceptos"}
-                  </span>
-                </div>
-                <p className="mt-2 text-lg font-semibold tabular-nums">
-                  {formatMXN(g.expectedTotal)}
-                </p>
-                <div className="mt-1 flex items-center justify-between text-[11px] text-muted-foreground">
-                  <span>{sharePct}% del total</span>
-                  <span className="text-green-700 dark:text-green-300">
-                    {paidPct}% pagado
-                  </span>
-                </div>
-                <div className="mt-1.5 h-1 w-full overflow-hidden rounded-full bg-background/60">
-                  <div
-                    className={cn("h-full rounded-full", t.dot)}
-                    style={{ width: `${Math.min(100, paidPct)}%` }}
-                  />
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </CardContent>
-    </Card>
   );
 }
 
@@ -528,7 +347,6 @@ interface EntitySectionProps {
 }
 
 function EntitySection({ group, canUpdate, onCellClick, collapsed, onToggle }: EntitySectionProps) {
-  const theme = themeFor(group.entityCode);
   const paidPct =
     group.expectedTotal > 0
       ? Math.round((group.paidTotal / group.expectedTotal) * 100)
@@ -536,71 +354,30 @@ function EntitySection({ group, canUpdate, onCellClick, collapsed, onToggle }: E
 
   return (
     <section className="space-y-3">
-      <button
-        type="button"
-        onClick={onToggle}
-        aria-expanded={!collapsed}
-        className={cn(
-          "flex w-full flex-wrap items-center justify-between gap-3 rounded-lg border px-4 py-2.5 text-left ring-1 transition-colors hover:brightness-[0.98]",
-          theme.bg,
-          theme.ring,
-        )}
-      >
-        <div className="flex items-center gap-3">
-          <ChevronDown
-            className={cn(
-              "size-4 shrink-0 text-muted-foreground transition-transform",
-              collapsed && "-rotate-90",
-            )}
-          />
-          <span
-            className={cn(
-              "inline-flex size-7 items-center justify-center rounded-md text-xs font-bold text-white",
-              theme.dot,
-            )}
-          >
-            {group.entityCode.slice(0, 1)}
-          </span>
-          <div>
-            <h2
-              className={cn("text-sm font-semibold leading-tight", theme.text)}
-            >
-              {group.entityCode}
-            </h2>
-            <p className="text-[11px] text-muted-foreground">
-              {group.conceptCount}{" "}
-              {group.conceptCount === 1 ? "concepto" : "conceptos"}
-            </p>
-          </div>
-        </div>
-        <div className="flex items-center gap-6 text-xs">
-          <div className="text-right">
-            <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
-              Estimado
-            </p>
-            <p className="font-semibold tabular-nums">
-              {formatMXN(group.expectedTotal)}
-            </p>
-          </div>
-          <div className="text-right">
-            <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
-              Pagado
-            </p>
-            <p className="font-semibold tabular-nums text-green-700 dark:text-green-300">
-              {formatMXN(group.paidTotal)}
-              <span className="ml-1 text-muted-foreground">({paidPct}%)</span>
-            </p>
-          </div>
-          <div className="text-right">
-            <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
-              Por pagar
-            </p>
-            <p className="font-semibold tabular-nums text-destructive">
-              {formatMXN(group.expectedTotal - group.paidTotal)}
-            </p>
-          </div>
-        </div>
-      </button>
+      <EntitySectionHeader
+        code={group.entityCode}
+        meta={entityMeta(group)}
+        collapsed={collapsed}
+        onToggle={onToggle}
+        stats={[
+          { label: "Estimado", value: formatMXN(group.expectedTotal) },
+          {
+            label: "Pagado",
+            value: (
+              <>
+                {formatMXN(group.paidTotal)}
+                <span className="ml-1 text-muted-foreground">({paidPct}%)</span>
+              </>
+            ),
+            className: "text-green-700 dark:text-green-300",
+          },
+          {
+            label: "Por pagar",
+            value: formatMXN(group.expectedTotal - group.paidTotal),
+            className: "text-destructive",
+          },
+        ]}
+      />
 
       {!collapsed && (
         <ConceptMatrix
@@ -711,12 +488,6 @@ function ConceptMatrix({ group, canUpdate, onCellClick }: ConceptMatrixProps) {
       </div>
     </div>
   );
-}
-
-function compactMxn(n: number): string {
-  if (n === 0) return "—";
-  if (n >= 1000) return `$${(n / 1000).toFixed(1)}k`;
-  return `$${Math.round(n)}`;
 }
 
 // ----------------------------------------------------------------------------
@@ -870,98 +641,4 @@ function buildTooltip(cell: YearlyExpenseCell, head: string): string {
     default:
       return head;
   }
-}
-
-// ----------------------------------------------------------------------------
-// Monthly totals bar (footer)
-// ----------------------------------------------------------------------------
-
-function MonthlyTotalsBar({
-  totals,
-}: {
-  totals: YearlyExpenses["monthlyTotals"];
-}) {
-  const peakExpected = Math.max(...totals.map((t) => t.expected), 1);
-  return (
-    <div className="overflow-hidden rounded-lg border bg-card shadow-sm">
-      <div className="flex items-center justify-between border-b bg-muted/30 px-4 py-2.5">
-        <h3 className="text-sm font-semibold">Totales mensuales</h3>
-        <p className="text-xs text-muted-foreground">
-          12 meses · estimado vs. pagado
-        </p>
-      </div>
-      <div className="overflow-x-auto">
-        <table className="w-full text-xs">
-          <thead>
-            <tr className="border-b bg-muted/10">
-              <th className="px-3 py-2 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Mes</th>
-              <th className="px-3 py-2 text-right text-xs font-medium uppercase tracking-wide text-muted-foreground">Estimado</th>
-              <th className="px-3 py-2 text-right text-xs font-medium uppercase tracking-wide text-muted-foreground">Pagado</th>
-              <th className="px-3 py-2 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">% Pagado</th>
-              <th className="px-3 py-2 text-right text-xs font-medium uppercase tracking-wide text-muted-foreground">Pagados</th>
-              <th className="px-3 py-2 text-right text-xs font-medium uppercase tracking-wide text-muted-foreground">Pendientes</th>
-            </tr>
-          </thead>
-          <tbody>
-            {totals.map((t, i) => {
-              const pct =
-                t.expected > 0 ? Math.round((t.paid / t.expected) * 100) : 0;
-              const barWidth = (t.expected / peakExpected) * 100;
-              const fillWidth =
-                t.expected > 0 ? (t.paid / t.expected) * 100 : 0;
-              return (
-                <tr key={i} className="border-b last:border-b-0">
-                  <td className="px-3 py-1.5">
-                    {formatPeriodLong(t.period)}
-                  </td>
-                  <td className="px-3 py-1.5 text-right tabular-nums">
-                    {formatMXN(t.expected)}
-                  </td>
-                  <td className="px-3 py-1.5 text-right tabular-nums text-green-700 dark:text-green-300">
-                    {formatMXN(t.paid)}
-                  </td>
-                  <td className="px-3 py-1.5">
-                    <div className="flex items-center gap-2">
-                      <div
-                        className="relative h-2 overflow-hidden rounded-full bg-muted"
-                        style={{ width: `${Math.max(20, barWidth)}%` }}
-                      >
-                        <div
-                          className={cn(
-                            "h-full rounded-full",
-                            pct >= 80
-                              ? "bg-green-500"
-                              : pct >= 50
-                                ? "bg-amber-500"
-                                : pct > 0
-                                  ? "bg-red-500"
-                                  : "bg-transparent",
-                          )}
-                          style={{ width: `${Math.min(100, fillWidth)}%` }}
-                        />
-                      </div>
-                      <span className="tabular-nums text-muted-foreground">
-                        {pct}%
-                      </span>
-                    </div>
-                  </td>
-                  <td className="px-3 py-1.5 text-right tabular-nums">
-                    {t.paidCount}
-                  </td>
-                  <td
-                    className={cn(
-                      "px-3 py-1.5 text-right tabular-nums",
-                      t.pendingCount > 0 && "text-amber-700 dark:text-amber-300",
-                    )}
-                  >
-                    {t.pendingCount}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
 }

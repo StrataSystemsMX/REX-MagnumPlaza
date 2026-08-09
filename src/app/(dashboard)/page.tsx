@@ -10,14 +10,10 @@ import { requireAuth } from "@/lib/auth/get-session";
 import { getUserRoleCodes } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/prisma/client";
 import { timed } from "@/lib/perf/timed";
+import { formatMXN } from "@/lib/format-currency";
 
 // ─── Formatters ──────────────────────────────────────────────────────────────
 
-const MXN = new Intl.NumberFormat("es-MX", {
-  style: "currency",
-  currency: "MXN",
-  maximumFractionDigits: 0,
-});
 const PCT = new Intl.NumberFormat("es-MX", {
   style: "percent",
   minimumFractionDigits: 1,
@@ -78,7 +74,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
 
   const canSeeAll =
     roles.includes("MASTER") || roles.includes("ADMIN") ||
-    roles.includes("ACCOUNTANT") || roles.includes("OWNER") || roles.length === 0;
+    roles.includes("ACCOUNTANT") || roles.includes("OWNER");
   if (!canSeeAll) redirect("/portal");
 
   const legalEntityParam = params.legalEntity ?? (await getActiveLegalEntityId()) ?? undefined;
@@ -421,19 +417,19 @@ export default async function DashboardPage({ searchParams }: PageProps) {
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-3">
         <MetricCard
           label="Ventas con IVA"
-          value={<span className="tabular-nums">{MXN.format(ventasTotal)}</span>}
+          value={<span className="tabular-nums">{formatMXN(ventasTotal)}</span>}
           subValue="Ingresos cobrados"
           icon={TrendingUp}
         />
         <MetricCard
           label="Costo de Operación"
-          value={<span className="tabular-nums">{MXN.format(egresosTotal)}</span>}
+          value={<span className="tabular-nums">{formatMXN(egresosTotal)}</span>}
           subValue="Egresos pagados"
           icon={TrendingDown}
         />
         <MetricCard
           label="Utilidad Bruta"
-          value={<span className="tabular-nums">{MXN.format(utilidad)}</span>}
+          value={<span className="tabular-nums">{formatMXN(utilidad)}</span>}
           subValue={`Rentabilidad ${PCT.format(rentabilidad)}`}
           icon={BarChart2}
           color={utilidad >= 0 ? "success" : "danger"}
@@ -464,7 +460,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
         <CardContent>
           <div className="flex items-center justify-between gap-3">
             <p className="text-xs text-muted-foreground">
-              {MXN.format(cobranzaCollected)} cobrados de {MXN.format(cobranzaExpected)} esperados
+              {formatMXN(cobranzaCollected)} cobrados de {formatMXN(cobranzaExpected)} esperados
             </p>
             <p className={`text-4xl font-bold tabular-nums ${cobranzaToneText[cobranzaTone]}`}>
               {cobranzaPct}%
@@ -551,7 +547,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
                     >
                       <span className="min-w-0 flex-1 truncate font-medium">{row.legalName}</span>
                       <div className="flex items-center justify-between gap-3 sm:justify-end">
-                        <span className="shrink-0 tabular-nums font-semibold text-rose-600">{MXN.format(row.total)}</span>
+                        <span className="shrink-0 tabular-nums font-semibold text-rose-600">{formatMXN(row.total)}</span>
                         <span className="shrink-0 text-right text-xs text-muted-foreground sm:w-16">
                           {row.count} {row.count === 1 ? "renta" : "rentas"}
                         </span>
@@ -583,7 +579,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
                   <div className="mb-1 flex items-center justify-between text-sm">
                     <span className="truncate font-medium">{p.name}</span>
                     <span className="ml-2 shrink-0 tabular-nums text-xs text-muted-foreground">
-                      {MXN.format(p.expectedMonthly)}
+                      {formatMXN(p.expectedMonthly)}
                     </span>
                   </div>
                   <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
@@ -615,7 +611,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
                   <div key={item.type}>
                     <div className="mb-1 flex items-center justify-between text-sm">
                       <span>{item.label}</span>
-                      <span className="tabular-nums text-xs text-muted-foreground">{MXN.format(item.total)}</span>
+                      <span className="tabular-nums text-xs text-muted-foreground">{formatMXN(item.total)}</span>
                     </div>
                     <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
                       <div

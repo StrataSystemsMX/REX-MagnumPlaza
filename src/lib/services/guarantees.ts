@@ -25,7 +25,7 @@ async function logAudit(
 
 export async function actionCreateGuarantee(input: CreateGuaranteeInput) {
   const { tenantId, dbUser } = await requireAuth();
-  await requirePermission(dbUser.id, "expense.create");
+  await requirePermission(dbUser.id, "guarantee.create");
 
   const data = createGuaranteeSchema.parse(input);
 
@@ -57,7 +57,7 @@ export async function actionCreateGuarantee(input: CreateGuaranteeInput) {
 
 export async function actionReturnGuarantee(input: ReturnGuaranteeInput) {
   const { tenantId, dbUser } = await requireAuth();
-  await requirePermission(dbUser.id, "expense.update");
+  await requirePermission(dbUser.id, "guarantee.update");
 
   const data = returnGuaranteeSchema.parse(input);
 
@@ -70,63 +70,71 @@ export async function actionReturnGuarantee(input: ReturnGuaranteeInput) {
     select: { id: true, amount: true, contractId: true },
   });
 
-  const depositAmount = guarantee.amount.toNumber();
-  if (data.returnedAmount > depositAmount) {
+  // Comparaciones en Decimal (no float) — dinero real.
+  const returned = new Prisma.Decimal(data.returnedAmount.toFixed(2));
+  if (returned.gt(guarantee.amount)) {
     throw new Error(
-      `El monto devuelto no puede exceder el depósito original ($${depositAmount.toFixed(2)}).`,
+      `El monto devuelto no puede exceder el depósito original ($${guarantee.amount.toFixed(2)}).`,
     );
   }
 
-  const totalDeductions = data.deductions.reduce((acc, d) => acc + d.amount, 0);
-  const newStatus =
-    data.returnedAmount >= depositAmount - totalDeductions
-      ? "RETURNED"
-      : "PARTIALLY_RETURNED";
+  const totalDeductions = data.deductions.reduce(
+    (acc, d) => acc.plus(new Prisma.Decimal(d.amount.toFixed(2))),
+    new Prisma.Decimal(0),
+  );
+  const newStatus = returned.gte(guarantee.amount.minus(totalDeductions))
+    ? "RETURNED"
+    : "PARTIALLY_RETURNED";
 
-  await prisma.guarantee.updateMany({
-    where: { id: data.guaranteeId, tenantId },
-    data: {
-      status: newStatus,
-      returnedDate: data.returnedDate,
-      returnedAmount: new Prisma.Decimal(data.returnedAmount),
-      deductions:
-        data.deductions.length > 0
-          ? (data.deductions as Prisma.InputJsonValue)
-          : Prisma.JsonNull,
-      notes: data.notes ?? null,
-    },
-  });
-
-  // Sincroniza las deducciones por daños como mantenimientos correctivos
-  // (responsabilidad del inquilino, marcados completados). Los identificamos
-  // con un marcador en `notes` para regenerarlos limpiamente si la devolución
-  // se edita más adelante.
-  const deductionMarker = `[deposit:${guarantee.id}]`;
-  await prisma.maintenance.deleteMany({
-    where: { tenantId, notes: { contains: deductionMarker } },
-  });
-
-  if (data.deductions.length > 0) {
-    const contract = await prisma.contract.findFirstOrThrow({
-      where: { id: guarantee.contractId, tenantId },
-      select: { unit: { select: { id: true, propertyId: true } } },
+  // Devolución + regeneración de mantenimientos por deducciones en UNA
+  // transacción: un fallo a medias no debe dejar la fianza devuelta sin sus
+  // mantenimientos (o viceversa).
+  await prisma.$transaction(async (tx) => {
+    await tx.guarantee.updateMany({
+      where: { id: data.guaranteeId, tenantId },
+      data: {
+        status: newStatus,
+        returnedDate: data.returnedDate,
+        returnedAmount: returned,
+        deductions:
+          data.deductions.length > 0
+            ? (data.deductions as Prisma.InputJsonValue)
+            : Prisma.JsonNull,
+        notes: data.notes ?? null,
+      },
     });
 
-    await prisma.maintenance.createMany({
-      data: data.deductions.map((d) => ({
-        tenantId,
-        propertyId: contract.unit.propertyId,
-        unitId: contract.unit.id,
-        title: d.concept,
-        type: "CORRECTIVE" as const,
-        responsibility: "LESSEE" as const,
-        status: "COMPLETED" as const,
-        completedDate: data.returnedDate,
-        cost: new Prisma.Decimal(d.amount),
-        notes: `Generado desde devolución de fianza ${deductionMarker}`,
-      })),
+    // Sincroniza las deducciones por daños como mantenimientos correctivos
+    // (responsabilidad del inquilino, marcados completados). Los identificamos
+    // con un marcador en `notes` para regenerarlos limpiamente si la devolución
+    // se edita más adelante.
+    const deductionMarker = `[deposit:${guarantee.id}]`;
+    await tx.maintenance.deleteMany({
+      where: { tenantId, notes: { contains: deductionMarker } },
     });
-  }
+
+    if (data.deductions.length > 0) {
+      const contract = await tx.contract.findFirstOrThrow({
+        where: { id: guarantee.contractId, tenantId },
+        select: { unit: { select: { id: true, propertyId: true } } },
+      });
+
+      await tx.maintenance.createMany({
+        data: data.deductions.map((d) => ({
+          tenantId,
+          propertyId: contract.unit.propertyId,
+          unitId: contract.unit.id,
+          title: d.concept,
+          type: "CORRECTIVE" as const,
+          responsibility: "LESSEE" as const,
+          status: "COMPLETED" as const,
+          completedDate: data.returnedDate,
+          cost: new Prisma.Decimal(d.amount),
+          notes: `Generado desde devolución de fianza ${deductionMarker}`,
+        })),
+      });
+    }
+  });
 
   await logAudit(tenantId, dbUser.id, "UPDATE", guarantee.id, {
     action: "RETURN",

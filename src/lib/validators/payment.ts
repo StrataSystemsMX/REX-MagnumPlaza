@@ -1,19 +1,23 @@
 import { z } from "zod";
-
-const PAYMENT_METHOD_VALUES = [
-  "CASH",
-  "TRANSFER",
-  "CHECK",
-  "DEPOSIT",
-  "CARD",
-  "OTHER",
-] as const;
+import { PaymentMethod } from "@/generated/prisma/enums";
 
 const dateLike = z.preprocess((v) => {
   if (v instanceof Date) return v;
   if (typeof v === "string" && v.length > 0) return new Date(v);
   return v;
 }, z.date({ message: "Fecha inválida." }));
+
+// Rango sano para fechas de pago: ni anteriores al año 2000 ni más de un año
+// en el futuro (atrapa typos de año sin estorbar capturas retroactivas).
+const paymentDateLike = dateLike
+  .refine((d) => d.getTime() >= Date.UTC(2000, 0, 1), "Fecha demasiado antigua.")
+  .refine(
+    (d) => d.getTime() <= Date.now() + 366 * 24 * 60 * 60 * 1000,
+    "La fecha no puede estar más de un año en el futuro.",
+  );
+
+// Tope anti-typo (un cero de más). La renta más alta del piloto es ~200k MXN.
+const MAX_PAYMENT_AMOUNT = 10_000_000;
 
 const optionalString = (max: number, message: string) =>
   z
@@ -27,9 +31,10 @@ export const registerPaymentSchema = z.object({
   rentId: z.string().min(1, "Selecciona la renta a pagar."),
   amount: z
     .number({ message: "Monto inválido." })
-    .positive("El monto debe ser mayor a 0."),
-  paymentDate: dateLike,
-  method: z.enum(PAYMENT_METHOD_VALUES, { message: "Método inválido." }),
+    .positive("El monto debe ser mayor a 0.")
+    .max(MAX_PAYMENT_AMOUNT, "Monto fuera de rango."),
+  paymentDate: paymentDateLike,
+  method: z.nativeEnum(PaymentMethod, { message: "Método inválido." }),
   reference: optionalString(120, "Máximo 120 caracteres."),
   notes: optionalString(2000, "Máximo 2000 caracteres."),
 });
@@ -44,9 +49,10 @@ export type RegisterPaymentInput = z.infer<typeof registerPaymentSchema>;
 export const editPaymentSchema = z.object({
   amount: z
     .number({ message: "Monto inválido." })
-    .positive("El monto debe ser mayor a 0."),
-  paymentDate: dateLike,
-  method: z.enum(PAYMENT_METHOD_VALUES, { message: "Método inválido." }),
+    .positive("El monto debe ser mayor a 0.")
+    .max(MAX_PAYMENT_AMOUNT, "Monto fuera de rango."),
+  paymentDate: paymentDateLike,
+  method: z.nativeEnum(PaymentMethod, { message: "Método inválido." }),
   reference: optionalString(120, "Máximo 120 caracteres."),
   notes: optionalString(2000, "Máximo 2000 caracteres."),
 });
@@ -85,7 +91,7 @@ export const bulkPaymentSchema = z
       .number({ message: "Monto inválido." })
       .positive("El monto debe ser mayor a 0."),
     paymentDate: dateLike,
-    method: z.enum(PAYMENT_METHOD_VALUES, { message: "Método inválido." }),
+    method: z.nativeEnum(PaymentMethod, { message: "Método inválido." }),
     reference: optionalString(120, "Máximo 120 caracteres."),
     notes: optionalString(2000, "Máximo 2000 caracteres."),
     splitByRent: z

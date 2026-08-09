@@ -385,6 +385,7 @@ export async function getRealConsolidatedBudgetForYear(
   for (const agg of incomeAgg.values()) {
     const entity = byEntity.get(agg.legalEntityId);
     if (!entity) continue;
+    roundMonths(agg.months);
     const annual = sumMonthValues(agg.months);
     entity.incomeLines.push({
       id: `income::${agg.legalEntityId}::${agg.propertyId ?? "none"}`,
@@ -434,6 +435,7 @@ export async function getRealConsolidatedBudgetForYear(
   for (const agg of expenseAgg.values()) {
     const entity = byEntity.get(agg.legalEntityId);
     if (!entity) continue;
+    roundMonths(agg.months);
     const annual = sumMonthValues(agg.months);
     entity.expenseLines.push({
       id: `expense::${agg.legalEntityId}::${agg.categoryId}`,
@@ -527,7 +529,7 @@ export async function getRealConsolidatedBudgetForYear(
       propertyName: null,
       categoryId: null,
       categoryName: null,
-      months: agg.months,
+      months: roundMonths(agg.months),
       annual: sumMonthValues(agg.months),
     }))
     .sort((a, b) => b.annual - a.annual);
@@ -541,6 +543,7 @@ export async function getRealConsolidatedBudgetForYear(
       const mk = MONTH_KEYS[monthIdx];
       if (mk) months[mk] += Number(pay.amount);
     }
+    roundMonths(months);
     const annual = sumMonthValues(months);
     if (annual === 0) continue; // skip Loans sin pagos en el año
     debtLines.push({
@@ -607,8 +610,18 @@ function zeroMonths(): Record<MonthKey, number> {
   return Object.fromEntries(MONTH_KEYS.map((k) => [k, 0])) as Record<MonthKey, number>;
 }
 
+/**
+ * Redondea cada mes a centavos tras acumular. Las sumas se hacen en float
+ * (los `months` viajan a Client Components, que no serializan Decimal); el
+ * redondeo al emitir evita que se arrastren fracciones de centavo a la UI.
+ */
+function roundMonths(months: Record<MonthKey, number>): Record<MonthKey, number> {
+  for (const k of MONTH_KEYS) months[k] = Math.round(months[k] * 100) / 100;
+  return months;
+}
+
 function sumMonthValues(months: Record<MonthKey, number>): number {
-  return MONTH_KEYS.reduce((acc, k) => acc + months[k], 0);
+  return Math.round(MONTH_KEYS.reduce((acc, k) => acc + months[k], 0) * 100) / 100;
 }
 
 type LineWithRels = {

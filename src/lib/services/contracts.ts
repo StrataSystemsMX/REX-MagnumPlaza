@@ -195,8 +195,17 @@ export async function actionUpdateContract(
     data.paidInAdvance !== undefined ||
     data.advancePaidUntil !== undefined;
 
+  // Transición a ACTIVE por esta vía (p.ej. DRAFT→ACTIVE desde el formulario
+  // de edición): materializar el calendario de rentas igual que
+  // actionActivateContract. generateRentsForContract es idempotente (unique
+  // [contractId, period]), así que no duplica cargos ya existentes.
+  const becameActive = prev.status !== "ACTIVE" && updated.status === "ACTIVE";
+
   let reconcile: ReconcileRentsResult | null = null;
-  if (updated.status === "ACTIVE" && rentAffecting) {
+  let rentsCreated = 0;
+  if (becameActive) {
+    rentsCreated = (await generateRentsForContract(tenantId, id)).created;
+  } else if (updated.status === "ACTIVE" && rentAffecting) {
     reconcile = await reconcileRentsForContract(tenantId, id);
   }
 
@@ -207,6 +216,9 @@ export async function actionUpdateContract(
     ) as Prisma.InputJsonValue,
     after: data as unknown as Prisma.InputJsonValue,
     ...(reconcile ? { reconcile: reconcile as unknown as Prisma.InputJsonValue } : {}),
+    ...(becameActive
+      ? { transition: { from: prev.status, to: "ACTIVE" }, rentsCreated }
+      : {}),
   });
 
   revalidatePath("/contracts");

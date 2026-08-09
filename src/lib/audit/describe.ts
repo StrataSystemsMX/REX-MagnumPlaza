@@ -7,7 +7,10 @@ import {
   auditActionLabel,
   contractStatusLabel,
   contractTypeLabel,
+  paymentMethodLabel,
+  rentStatusLabel,
 } from "@/lib/i18n/enums";
+import type { PaymentMethod, RentStatus } from "@/generated/prisma/enums";
 import { capitalizeFirst } from "@/lib/utils";
 import { entityTypeLabel, type AuditEntryLike } from "@/lib/audit/categories";
 import { DATE_KEYS, MONEY_KEYS } from "@/lib/audit/field-types";
@@ -62,6 +65,24 @@ function safeContractStatus(s: string): string {
     return contractStatusLabel(s as ContractStatus);
   } catch {
     return s;
+  }
+}
+
+function safePaymentMethod(v: unknown): string | null {
+  if (typeof v !== "string") return null;
+  try {
+    return paymentMethodLabel(v as PaymentMethod);
+  } catch {
+    return v;
+  }
+}
+
+function safeRentStatus(v: unknown): string | null {
+  if (typeof v !== "string") return null;
+  try {
+    return rentStatusLabel(v as RentStatus);
+  } catch {
+    return v;
   }
 }
 
@@ -187,11 +208,18 @@ function describeContract(c: Record<string, unknown>): string | null {
 }
 
 /** Marcadores de acción guardados dentro de `changes.action`. null si no aplica. */
-function describeMarker(marker: string, noun: string): string | null {
+function describeMarker(
+  marker: string,
+  noun: string,
+  c: Record<string, unknown>,
+): string | null {
   switch (marker) {
     case "REGISTER":
-    case "REGISTER_PAYMENT":
-      return `Registró el pago de ${noun}.`;
+    case "REGISTER_PAYMENT": {
+      const monto = c.amount != null ? ` por ${fmtMoney(c.amount)}` : "";
+      const metodo = safePaymentMethod(c.paymentMethod);
+      return `Registró el pago de ${noun}${monto}${metodo ? ` (${metodo})` : ""}.`;
+    }
     case "UNMARK_PAID":
     case "UNMARK_PAYMENT":
       return `Quitó la marca de pagado de ${noun}.`;
@@ -204,6 +232,98 @@ function describeMarker(marker: string, noun: string): string | null {
     default:
       return null;
   }
+}
+
+/**
+ * Detalle de un Payment a partir de las llaves de nivel superior que
+ * `payments.ts` ya guarda (monto, método, fecha, estado de la renta). Cubre
+ * CREATE y DELETE; la edición (UPDATE) usa el bloque `after` genérico.
+ */
+function describePayment(
+  action: AuditAction,
+  c: Record<string, unknown>,
+): string | null {
+  const monto = c.amount != null ? fmtMoney(c.amount) : null;
+  const fecha = c.paymentDate != null ? fmtDate(c.paymentDate) : null;
+
+  if (action === "DELETE") {
+    const partes = [monto && `de ${monto}`, fecha && `del ${fecha}`].filter(Boolean);
+    return partes.length ? `Eliminó un pago ${partes.join(" ")}.` : null;
+  }
+
+  if (action === "CREATE" && monto) {
+    const metodo = safePaymentMethod(c.method);
+    const detalles = [
+      metodo && `por ${metodo.toLowerCase()}`,
+      fecha && `el ${fecha}`,
+    ].filter(Boolean);
+    // Distingue el tipo de captura para dar contexto al monto.
+    const tipo = c.cascadedFrom
+      ? " aplicado como adelanto"
+      : c.bulk === true
+        ? " dentro de un pago agrupado"
+        : "";
+    const estado = safeRentStatus(c.rentStatusAfter);
+    const cola = estado ? ` (renta: ${estado})` : "";
+    return `Registró un pago de ${monto}${detalles.length ? ` ${detalles.join(" ")}` : ""}${tipo}${cola}.`;
+  }
+
+  return null;
+}
+
+/**
+ * Detalle de un Expense (creación/edición general) a partir de monto y fecha.
+ * Los marcadores (registrar pago, "sin egreso", etc.) los cubre describeMarker.
+ */
+function describeExpense(
+  action: AuditAction,
+  c: Record<string, unknown>,
+): string | null {
+  const monto = c.amount != null ? fmtMoney(c.amount) : null;
+  const fecha = c.expenseDate != null ? fmtDate(c.expenseDate) : null;
+  if (!monto && !fecha) return null;
+
+  if (action === "CREATE") {
+    const partes = [monto && `de ${monto}`, fecha && `con fecha ${fecha}`].filter(Boolean);
+    return `Creó un egreso ${partes.join(" ")}.`;
+  }
+  if (action === "UPDATE") {
+    const partes = [monto && `monto ${monto}`, fecha && `fecha ${fecha}`].filter(Boolean);
+    return `Actualizó un egreso: ${partes.join(", ")}.`;
+  }
+  return null;
+}
+
+/**
+ * Detalle de un NotificationLog. Deduce el tipo de aviso según la referencia
+ * que trae el log (pago, renta morosa, contrato) y refleja el resultado del
+ * envío (enviado / pendiente / fallido) y si fue manual.
+ */
+function describeNotification(c: Record<string, unknown>): string {
+  let tipo: string;
+  if (typeof c.level === "string" && c.rentId != null) {
+    const ordinal =
+      c.level === "1M" ? "1er" : c.level === "2M" ? "2do" : c.level === "3M" ? "3er" : null;
+    tipo = ordinal ? `el ${ordinal} aviso de mora` : "un aviso de mora";
+  } else if (c.paymentId != null) {
+    tipo = "la confirmación de pago";
+  } else if (c.contractId != null) {
+    tipo = "el aviso de contrato por vencer";
+  } else {
+    tipo = "una notificación";
+  }
+
+  const manual = c.manual === true ? " (envío manual)" : "";
+  const status = typeof c.status === "string" ? c.status : null;
+  if (status === "FAILED" || status === "BOUNCED") {
+    // Contrae "de el" → "del" para que la frase suene natural.
+    const de = tipo.startsWith("el ") ? `del ${tipo.slice(3)}` : `de ${tipo}`;
+    return `Falló el envío ${de}${manual}.`;
+  }
+  if (status === "PENDING") {
+    return `Preparó ${tipo}, pendiente de envío${manual}.`;
+  }
+  return `Envió ${tipo}${manual}.`;
 }
 
 /** Frase de respaldo cuando no hay detalle estructurado. */
@@ -231,8 +351,22 @@ export function describeAuditDetail(entry: AuditEntryLike): string {
   }
 
   if (typeof c.action === "string") {
-    const marker = describeMarker(c.action, noun);
+    const marker = describeMarker(c.action, noun, c);
     if (marker) return marker;
+  }
+
+  // Detalle específico por tipo de entidad usando las llaves de nivel superior
+  // que cada servicio ya guarda (monto, método, fecha, estado, tipo de aviso…).
+  if (entityType === "Payment") {
+    const detail = describePayment(action, c);
+    if (detail) return detail;
+  }
+  if (entityType === "Expense") {
+    const detail = describeExpense(action, c);
+    if (detail) return detail;
+  }
+  if (entityType === "NotificationLog") {
+    return describeNotification(c);
   }
 
   if (isRecord(c.after)) {

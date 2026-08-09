@@ -29,12 +29,19 @@ vi.mock("@/lib/auth/permissions", async () => {
     requirePermission: (...args: [string, string]) => mockRequirePermission(...args),
   };
 });
+const txMock = {
+  guarantee: guaranteeMock,
+  contract: contractMock,
+  maintenance: maintenanceMock,
+  auditLog: auditLogMock,
+};
 vi.mock("@/lib/prisma/client", () => ({
   prisma: {
     guarantee: guaranteeMock,
     contract: contractMock,
     maintenance: maintenanceMock,
     auditLog: auditLogMock,
+    $transaction: async (fn: (tx: typeof txMock) => Promise<unknown>) => fn(txMock),
   },
   prismaUnsafe: {},
 }));

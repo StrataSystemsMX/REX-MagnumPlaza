@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { PropertyStatus, PropertyType } from "@/generated/prisma/enums";
 import { ADDRESS_TEXT, CADASTRAL_KEY, SPANISH_TEXT } from "./patterns";
 
 /** Acepta Date (input nativo), string ISO o vacío. Coerciona a Date u undefined. */
@@ -14,25 +15,13 @@ const optionalDateLike = z
   )
   .optional();
 
-const PROPERTY_TYPE_VALUES = [
-  "PLAZA_COMERCIAL",
-  "TERRENO_RENTADO",
-  "EDIFICIO",
-  "OFICINA",
-  "CASA",
-  "BODEGA",
-  "ESPECTACULAR",
-  "OTRO",
-] as const;
-
-const PROPERTY_STATUS_VALUES = ["DISPONIBLE", "EN_RENTA", "BLOQUEADO"] as const;
 
 export const createPropertySchema = z.object({
   name: z.string().trim().min(1, "El nombre es requerido.").max(50, "Máximo 50 caracteres.").regex(SPANISH_TEXT, "Solo letras, números y puntuación básica."),
-  type: z.enum(PROPERTY_TYPE_VALUES, {
+  type: z.nativeEnum(PropertyType, {
     message: "Selecciona el tipo de inmueble.",
   }),
-  status: z.enum(PROPERTY_STATUS_VALUES).optional(),
+  status: z.nativeEnum(PropertyStatus).optional(),
   address: z.string().trim().min(1, "La dirección es requerida.").max(120, "Máximo 120 caracteres.").regex(ADDRESS_TEXT, "Solo letras, números y puntuación de dirección (#, °, etc.)."),
   ownerEntityId: z.string().min(1, "Selecciona la razón social dueña."),
   managerEntityId: z.string().min(1, "Selecciona la razón social administradora."),

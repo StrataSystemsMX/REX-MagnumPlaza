@@ -4,6 +4,7 @@ const mockRequireAuth = vi.fn();
 const mockRequirePermission = vi.fn();
 const mockRevalidatePath = vi.fn();
 const mockGenerateRents = vi.fn();
+const mockReconcileRents = vi.fn();
 
 const contractMock = {
   create: vi.fn(),
@@ -48,6 +49,7 @@ vi.mock("@/lib/auth/permissions", async () => {
 
 vi.mock("@/lib/services/rent-generation", () => ({
   generateRentsForContract: (...args: unknown[]) => mockGenerateRents(...args),
+  reconcileRentsForContract: (...args: unknown[]) => mockReconcileRents(...args),
 }));
 
 vi.mock("@/lib/prisma/client", () => ({
@@ -147,6 +149,55 @@ describe("actionCreateContract", () => {
     };
     expect(auditArg.data.entityType).toBe("Contract");
     expect(auditArg.data.action).toBe("CREATE");
+  });
+});
+
+describe("actionUpdateContract", () => {
+  it("DRAFT→ACTIVE vía edición genera las rentas del contrato", async () => {
+    contractMock.findFirst.mockResolvedValue({ id: "contract-1", status: "DRAFT" });
+    contractMock.updateMany.mockResolvedValue({ count: 1 });
+    contractMock.findFirstOrThrow.mockResolvedValue({ status: "ACTIVE" });
+    mockGenerateRents.mockResolvedValue({ created: 12, skipped: 0, total: 12 });
+
+    const { actionUpdateContract } = await import("@/lib/services/contracts");
+    await actionUpdateContract("contract-1", { status: "ACTIVE" });
+
+    expect(mockGenerateRents).toHaveBeenCalledWith("tenant-1", "contract-1");
+    expect(mockReconcileRents).not.toHaveBeenCalled();
+
+    const aArg = auditLogMock.create.mock.calls[0]?.[0] as {
+      data: { changes: { transition?: { from: string; to: string }; rentsCreated?: number } };
+    };
+    expect(aArg.data.changes.transition).toEqual({ from: "DRAFT", to: "ACTIVE" });
+    expect(aArg.data.changes.rentsCreated).toBe(12);
+  });
+
+  it("contrato ya ACTIVE + cambio de términos re-sincroniza (no re-genera)", async () => {
+    contractMock.findFirst.mockResolvedValue({ id: "contract-1", status: "ACTIVE" });
+    contractMock.updateMany.mockResolvedValue({ count: 1 });
+    contractMock.findFirstOrThrow.mockResolvedValue({ status: "ACTIVE" });
+    mockReconcileRents.mockResolvedValue({
+      created: 1, removed: 0, resynced: 3, keptWithPayments: 0,
+    });
+
+    const { actionUpdateContract } = await import("@/lib/services/contracts");
+    const result = await actionUpdateContract("contract-1", { monthlyAmount: 15000 });
+
+    expect(mockReconcileRents).toHaveBeenCalledWith("tenant-1", "contract-1");
+    expect(mockGenerateRents).not.toHaveBeenCalled();
+    expect(result.reconcile).toMatchObject({ resynced: 3 });
+  });
+
+  it("edición sin activar ni tocar términos no genera ni re-sincroniza", async () => {
+    contractMock.findFirst.mockResolvedValue({ id: "contract-1", status: "DRAFT" });
+    contractMock.updateMany.mockResolvedValue({ count: 1 });
+    contractMock.findFirstOrThrow.mockResolvedValue({ status: "DRAFT" });
+
+    const { actionUpdateContract } = await import("@/lib/services/contracts");
+    await actionUpdateContract("contract-1", { notes: "nota interna" });
+
+    expect(mockGenerateRents).not.toHaveBeenCalled();
+    expect(mockReconcileRents).not.toHaveBeenCalled();
   });
 });
 

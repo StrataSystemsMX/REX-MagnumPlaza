@@ -1,11 +1,18 @@
 "use server";
 
 import { prisma, prismaUnsafe } from "@/lib/prisma/client";
+import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 import {
   getResendClient,
   getResendFromAddress,
 } from "@/lib/services/email/resend-client";
 import { captureLeadSchema, type CaptureLeadInput } from "@/lib/validators/promoter";
+
+// Anti-abuso de la captura pública: pocas capturas por IP en ventana corta,
+// y un tope duro por link contra la DB (cross-instancia).
+const IP_LIMIT = 5;
+const IP_WINDOW_MS = 10 * 60 * 1000;
+const LINK_HOURLY_CAP = 20;
 
 /**
  * Captura pública de un interesado desde la página de la vacante ("Me interesa").
@@ -17,6 +24,11 @@ import { captureLeadSchema, type CaptureLeadInput } from "@/lib/validators/promo
 export async function actionCaptureLead(input: CaptureLeadInput): Promise<void> {
   const { token, name, phone, email, message, source } =
     captureLeadSchema.parse(input);
+
+  const ip = await getClientIp();
+  if (!checkRateLimit(`lead:${ip}`, IP_LIMIT, IP_WINDOW_MS)) {
+    throw new Error("Demasiados intentos. Espera unos minutos e inténtalo de nuevo.");
+  }
 
   const link = await prismaUnsafe.promoterLink.findUnique({
     where: { publicToken: token },
@@ -33,6 +45,33 @@ export async function actionCaptureLead(input: CaptureLeadInput): Promise<void> 
 
   if (!link || !link.isActive || link.expiresAt.getTime() <= Date.now()) {
     throw new Error("Esta liga ya no está disponible.");
+  }
+
+  const hourAgo = new Date(Date.now() - 60 * 60 * 1000);
+
+  // Dedupe: mismo teléfono (o email) en el mismo link en la última hora →
+  // aceptar en silencio sin crear otro Lead ni re-enviar el correo.
+  const duplicate = await prisma.lead.findFirst({
+    where: {
+      tenantId: link.tenantId,
+      promoterLinkId: link.id,
+      createdAt: { gte: hourAgo },
+      OR: [{ phone }, ...(email ? [{ email }] : [])],
+    },
+    select: { id: true },
+  });
+  if (duplicate) return;
+
+  // Tope duro por link contra la DB (funciona aunque haya varias instancias).
+  const recentCount = await prisma.lead.count({
+    where: {
+      tenantId: link.tenantId,
+      promoterLinkId: link.id,
+      createdAt: { gte: hourAgo },
+    },
+  });
+  if (recentCount >= LINK_HOURLY_CAP) {
+    throw new Error("No pudimos registrar tu interés en este momento. Intenta más tarde.");
   }
 
   await prisma.lead.create({

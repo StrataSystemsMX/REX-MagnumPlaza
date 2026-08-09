@@ -28,18 +28,10 @@ import type {
 import type { LegalEntityOption } from "@/lib/services/properties-queries";
 import { NewInvestmentProjectDialog } from "./NewInvestmentProjectDialog";
 import { RegisterInvestmentPaymentDialog } from "./RegisterInvestmentPaymentDialog";
+import { formatMXN } from "@/lib/format-currency";
 
-const MXN = new Intl.NumberFormat("es-MX", {
-  style: "currency",
-  currency: "MXN",
-  maximumFractionDigits: 2,
-});
-
-const MXN_INT = new Intl.NumberFormat("es-MX", {
-  style: "currency",
-  currency: "MXN",
-  maximumFractionDigits: 0,
-});
+// Alias local: mismo output que la const Intl que existía aquí (2 decimales).
+const mxn = (v: number | string) => formatMXN(v, 2);
 
 const DATE_MED = new Intl.DateTimeFormat("es-MX", {
   day: "2-digit",
@@ -96,14 +88,14 @@ function KpiCards({ kpis }: { kpis: InversionesKpis }) {
       <KpiCard
         icon={<Landmark className="size-4" />}
         label="Inversión total"
-        value={MXN_INT.format(kpis.totalProjectBudget)}
+        value={formatMXN(kpis.totalProjectBudget)}
         sub="Suma contratada"
       />
       <KpiCard
         icon={<Wallet className="size-4" />}
         label="Ejecutado"
-        value={MXN_INT.format(kpis.totalProjectExecuted)}
-        sub={`${MXN_INT.format(remaining)} por entregar`}
+        value={formatMXN(kpis.totalProjectExecuted)}
+        sub={`${formatMXN(remaining)} por entregar`}
         valueClass="text-green-700 dark:text-green-300"
       />
       <KpiCard
@@ -267,12 +259,12 @@ function ProjectCard({ project, canCreate }: { project: InvestmentProjectListIte
           <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
             <div>
               <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Total contratado</div>
-              <div className="font-mono text-sm font-semibold">{MXN_INT.format(project.budgetAmount)}</div>
+              <div className="font-mono text-sm font-semibold">{formatMXN(project.budgetAmount)}</div>
             </div>
             <div>
               <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Entregado</div>
               <div className="font-mono text-sm font-semibold text-green-700 dark:text-green-300">
-                {MXN_INT.format(project.executedAmount)}
+                {formatMXN(project.executedAmount)}
               </div>
             </div>
             <div>
@@ -281,7 +273,7 @@ function ProjectCard({ project, canCreate }: { project: InvestmentProjectListIte
                 "font-mono text-sm font-semibold",
                 remaining < 0 ? "text-destructive" : "text-amber-700 dark:text-amber-300",
               )}>
-                {MXN_INT.format(remaining)}
+                {formatMXN(remaining)}
               </div>
             </div>
             <div className="col-span-2 sm:col-span-1">
@@ -329,7 +321,7 @@ function ProjectCard({ project, canCreate }: { project: InvestmentProjectListIte
                     {DATE_MED.format(new Date(pay.paymentDate))}
                   </TableCell>
                   <TableCell className="text-right font-mono text-sm">
-                    {MXN.format(pay.amount)}
+                    {mxn(pay.amount)}
                   </TableCell>
                   <TableCell className="text-center">
                     <Badge variant={pay.isPaid ? "secondary" : "outline"} className="text-xs">

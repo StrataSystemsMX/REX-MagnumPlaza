@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { renderToBuffer } from "@react-pdf/renderer";
 import { requireAuth } from "@/lib/auth/get-session";
-import { getUserRoleCodes } from "@/lib/auth/permissions";
+import { canExportFinancials } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/prisma/client";
 import { getPayments } from "@/lib/services/payments-queries";
 import { paymentMethodLabel } from "@/lib/i18n/enums";
@@ -11,13 +11,7 @@ import type { PaymentMethod } from "@/generated/prisma/enums";
 
 export async function GET(request: Request): Promise<Response> {
   const { tenantId, dbUser } = await requireAuth();
-  const roles = await getUserRoleCodes(dbUser.id);
-  const canExport =
-    roles.includes("MASTER") ||
-    roles.includes("ADMIN") ||
-    roles.includes("ACCOUNTANT") ||
-    roles.length === 0;
-  if (!canExport) {
+  if (!(await canExportFinancials(dbUser.id))) {
     return NextResponse.json(
       { error: "No tienes permiso para exportar." },
       { status: 403 },
@@ -123,7 +117,8 @@ export async function GET(request: Request): Promise<Response> {
       },
     });
   } catch (e) {
-    const message = e instanceof Error ? e.message : "Error al generar el PDF.";
-    return NextResponse.json({ error: message }, { status: 500 });
+    // Detalle solo al log del servidor; mensaje genérico al cliente.
+    console.error("[api/documents/payments-history] PDF generation failed", e);
+    return NextResponse.json({ error: "Error al generar el PDF." }, { status: 500 });
   }
 }

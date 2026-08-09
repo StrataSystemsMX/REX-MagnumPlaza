@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prismaUnsafe } from "@/lib/prisma/client";
+import { secureCompare } from "@/lib/secure-compare";
 import {
   parseStatusEvents,
   verifyWhatsAppSignature,
@@ -41,7 +42,7 @@ export async function GET(request: Request): Promise<Response> {
       { status: 500 },
     );
   }
-  if (mode === "subscribe" && token === expected && challenge) {
+  if (mode === "subscribe" && token && secureCompare(token, expected) && challenge) {
     return new Response(challenge, {
       status: 200,
       headers: { "Content-Type": "text/plain" },

@@ -234,6 +234,7 @@ export async function actionUngroupUnit(childUnitId: string): Promise<void> {
  */
 export async function actionEnsureInmuebleUnit(propertyId: string): Promise<string> {
   const { tenantId, dbUser } = await requireAuth();
+  await requirePermission(dbUser.id, "unit.create");
 
   const property = await prisma.property.findFirst({
     where: { id: propertyId, tenantId, isActive: true },

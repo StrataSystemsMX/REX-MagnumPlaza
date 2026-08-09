@@ -107,9 +107,11 @@ rex/
 │   │   └── layout.tsx
 │   ├── components/
 │   │   ├── ui/                  # shadcn (NO MODIFICAR sin razón)
-│   │   ├── forms/               # formularios reutilizables
-│   │   ├── tables/              # tablas con TanStack Table
-│   │   └── shared/              # otros componentes compartidos
+│   │   ├── shared/              # componentes compartidos entre features
+│   │   ├── forms/               # (histórico) pocos forms genéricos viven aquí
+│   │   └── <feature>/           # convención real: co-ubicación por feature
+│   │                            # (collections/, properties/, egresos/, ...)
+│   │                            # con sus tablas, forms y dialogs adentro
 │   ├── lib/
 │   │   ├── prisma/              # cliente y middleware
 │   │   ├── auth/                # helpers de Clerk
@@ -136,7 +138,9 @@ rex/
 ### Componentes
 - **Server Components por defecto.** Solo agregar `"use client"` cuando sea estrictamente necesario (interactividad, hooks, browser APIs).
 - **Forms**: usar `react-hook-form` + `zodResolver`. Los schemas Zod viven en `src/lib/validators/`.
-- **Tablas**: TanStack Table v8 con shadcn `Table` como base.
+- **Tablas**: shadcn `Table` como base. TanStack Table v8 solo cuando la tabla necesita sorting/filtering/paginación compleja (ej. `collections/PaymentsTable.tsx`); las tablas simples se escriben directas sobre shadcn.
+- **Formato de moneda/fecha**: SIEMPRE `formatMXN`/`formatMXNCompact` de `@/lib/format-currency` y `formatDate`/`formatPeriod*` de `@/lib/format-date`. Prohibido crear `new Intl.NumberFormat` o usar `toLocaleDateString` inline (las fechas de dominio son date-only UTC; los helpers ya fijan `timeZone: "UTC"`).
+- **Saldos**: usar `computeBalance` de `@/lib/services/rent-status` (resta `amountWaived`), nunca aritmética inline.
 - **Toasts/notificaciones**: `sonner` (ya viene con shadcn).
 
 ### Server Actions

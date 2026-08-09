@@ -14,10 +14,12 @@ const budgetMock = {
 const budgetLineMock = {
   create: vi.fn(),
   update: vi.fn(),
-  delete: vi.fn(),
+  findFirstOrThrow: vi.fn(),
+  deleteMany: vi.fn(),
 };
 const legalEntityMock = { findFirstOrThrow: vi.fn(), findMany: vi.fn() };
 const propertyMock = { findFirstOrThrow: vi.fn() };
+const auditLogMock = { create: vi.fn() };
 
 vi.mock("next/cache", () => ({
   revalidatePath: (...args: unknown[]) => mockRevalidatePath(...args),
@@ -40,6 +42,7 @@ vi.mock("@/lib/prisma/client", () => ({
     budgetLine: budgetLineMock,
     legalEntity: legalEntityMock,
     property: propertyMock,
+    auditLog: auditLogMock,
   },
   prismaUnsafe: {},
 }));
@@ -207,6 +210,7 @@ describe("actionUpsertBudgetLine", () => {
 
   it("actualiza línea existente cuando se pasa lineId", async () => {
     budgetMock.findFirstOrThrow.mockResolvedValue({ id: "budget-1", isLocked: false });
+    budgetLineMock.findFirstOrThrow.mockResolvedValue({ id: "line-1" });
     budgetLineMock.update.mockResolvedValue({ id: "line-1" });
 
     const { actionUpsertBudgetLine } = await import("@/lib/services/budgets");
@@ -221,6 +225,29 @@ describe("actionUpsertBudgetLine", () => {
 
     expect(budgetLineMock.update).toHaveBeenCalledOnce();
     expect(budgetLineMock.create).not.toHaveBeenCalled();
+    // Verifica pertenencia de la línea al budget/tenant antes de mutar (anti-IDOR).
+    const guardArg = budgetLineMock.findFirstOrThrow.mock.calls[0]?.[0] as {
+      where: { id: string; budget: { id: string; tenantId: string } };
+    };
+    expect(guardArg.where.budget).toEqual({ id: "budget-1", tenantId: TENANT });
+  });
+
+  it("rechaza lineId que no pertenece al budget (IDOR)", async () => {
+    budgetMock.findFirstOrThrow.mockResolvedValue({ id: "budget-1", isLocked: false });
+    budgetLineMock.findFirstOrThrow.mockRejectedValue(new Error("Not found"));
+
+    const { actionUpsertBudgetLine } = await import("@/lib/services/budgets");
+    await expect(
+      actionUpsertBudgetLine({
+        budgetId: "budget-1",
+        lineId: "line-ajena",
+        conceptType: "EXPENSE",
+        conceptLabel: "CFE",
+        propertyId: null,
+        months: ALL_MONTHS,
+      }),
+    ).rejects.toThrow();
+    expect(budgetLineMock.update).not.toHaveBeenCalled();
   });
 
   it("guarda los 12 meses como Decimals", async () => {
@@ -267,17 +294,36 @@ describe("actionUpsertBudgetLine", () => {
 // ============================================================================
 
 describe("actionDeleteBudgetLine", () => {
-  it("elimina la línea después de verificar que el budget pertenece al tenant", async () => {
-    budgetMock.findFirstOrThrow.mockResolvedValue({ id: "budget-1" });
-    budgetLineMock.delete.mockResolvedValue({ id: "line-1" });
+  it("elimina la línea acotando el where al budget del tenant (anti-IDOR)", async () => {
+    budgetMock.findFirstOrThrow.mockResolvedValue({ id: "budget-1", isLocked: false });
+    budgetLineMock.deleteMany.mockResolvedValue({ count: 1 });
 
     const { actionDeleteBudgetLine } = await import("@/lib/services/budgets");
     await actionDeleteBudgetLine("line-1", "budget-1");
 
-    expect(budgetLineMock.delete).toHaveBeenCalledOnce();
-    const arg = budgetLineMock.delete.mock.calls[0]?.[0] as {
-      where: { id: string };
+    expect(budgetLineMock.deleteMany).toHaveBeenCalledOnce();
+    const arg = budgetLineMock.deleteMany.mock.calls[0]?.[0] as {
+      where: { id: string; budget: { id: string; tenantId: string } };
     };
     expect(arg.where.id).toBe("line-1");
+    expect(arg.where.budget).toEqual({ id: "budget-1", tenantId: TENANT });
+  });
+
+  it("falla si la línea no pertenece al budget (count 0)", async () => {
+    budgetMock.findFirstOrThrow.mockResolvedValue({ id: "budget-1", isLocked: false });
+    budgetLineMock.deleteMany.mockResolvedValue({ count: 0 });
+
+    const { actionDeleteBudgetLine } = await import("@/lib/services/budgets");
+    await expect(actionDeleteBudgetLine("line-ajena", "budget-1")).rejects.toThrow(
+      /no encontrada/i,
+    );
+  });
+
+  it("falla si el presupuesto está cerrado", async () => {
+    budgetMock.findFirstOrThrow.mockResolvedValue({ id: "budget-1", isLocked: true });
+
+    const { actionDeleteBudgetLine } = await import("@/lib/services/budgets");
+    await expect(actionDeleteBudgetLine("line-1", "budget-1")).rejects.toThrow(/cerrado/i);
+    expect(budgetLineMock.deleteMany).not.toHaveBeenCalled();
   });
 });
