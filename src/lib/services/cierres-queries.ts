@@ -1,5 +1,6 @@
 import { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/lib/prisma/client";
+import { getOperatingExpenseRows } from "@/lib/services/consolidated-expenses";
 
 // ============================================================================
 // Cierres Mensuales y Anuales — bundle de datos para la pantalla tipo Excel
@@ -156,131 +157,72 @@ export async function getAnnualClosingBundle(
   const yearStart = new Date(Date.UTC(year, 0, 1));
   const yearEnd = new Date(Date.UTC(year + 1, 0, 1));
 
-  const [
-    legalEntities,
-    properties,
-    expenseCategories,
-    payments,
-    expenses,
-    payrolls,
-    cadastrals,
-    loanPayments,
-    investmentPayments,
-  ] = await Promise.all([
-    prisma.legalEntity.findMany({
-      where: { tenantId, isActive: true },
-      orderBy: [{ isOperator: "desc" }, { code: "asc" }],
-      select: { id: true, code: true, legalName: true, isOperator: true },
-    }),
-    prisma.property.findMany({
-      where: { tenantId, isActive: true },
-      select: { id: true, name: true, managerEntityId: true },
-    }),
-    prisma.expenseCategory.findMany({
-      where: { tenantId },
-      select: { id: true, name: true, code: true, type: true },
-    }),
-    prisma.payment.findMany({
-      where: {
-        tenantId,
-        paymentDate: { gte: yearStart, lt: yearEnd },
-      },
-      select: {
-        amount: true,
-        paymentDate: true,
-        rent: {
-          select: {
-            contract: {
-              select: { unit: { select: { propertyId: true } } },
+  const [legalEntities, properties, payments, operatingExpenseRows, strategyPayrolls, nonVehicleLoanPayments, investmentPayments] =
+    await Promise.all([
+      prisma.legalEntity.findMany({
+        where: { tenantId, isActive: true },
+        orderBy: [{ isOperator: "desc" }, { code: "asc" }],
+        select: { id: true, code: true, legalName: true, isOperator: true },
+      }),
+      prisma.property.findMany({
+        where: { tenantId, isActive: true },
+        select: { id: true, name: true, managerEntityId: true },
+      }),
+      prisma.payment.findMany({
+        where: {
+          tenantId,
+          paymentDate: { gte: yearStart, lt: yearEnd },
+        },
+        select: {
+          amount: true,
+          paymentDate: true,
+          rent: {
+            select: {
+              contract: {
+                select: { unit: { select: { propertyId: true } } },
+              },
             },
           },
         },
-      },
-    }),
-    prisma.expense.findMany({
-      where: {
-        tenantId,
-        expenseDate: { gte: yearStart, lt: yearEnd },
-        category: { type: { not: "PAYROLL" } },
-      },
-      select: {
-        amount: true,
-        expenseDate: true,
-        legalEntityId: true,
-        categoryId: true,
-      },
-    }),
-    prisma.payroll.findMany({
-      where: {
-        tenantId,
-        period: { gte: yearStart, lt: yearEnd },
-      },
-      select: {
-        amount: true,
-        period: true,
-        type: true,
-        legalEntityId: true,
-        description: true,
-      },
-    }),
-    prisma.cadastralPayment.findMany({
-      where: {
-        tenantId,
-        OR: [
-          { paymentDate: { gte: yearStart, lt: yearEnd } },
-          { dueDate: { gte: yearStart, lt: yearEnd } },
-        ],
-      },
-      select: {
-        paidAmount: true,
-        totalAmount: true,
-        paymentDate: true,
-        dueDate: true,
-        isPaid: true,
-        propertyId: true,
-        payerEntityId: true,
-      },
-    }),
-    prisma.loanPayment.findMany({
-      where: {
-        tenantId,
-        period: { gte: yearStart, lt: yearEnd },
-      },
-      select: {
-        amount: true,
-        period: true,
-        loan: {
-          select: {
-            id: true,
-            name: true,
-            type: true,
-            legalEntityId: true,
+      }),
+      // Egresos operativos (Expense + Payroll + CadastralPayment + Loan-VEHICLE):
+      // misma fuente que usan legal-entity-queries.ts y reports-queries.ts.
+      getOperatingExpenseRows(tenantId, yearStart, yearEnd),
+      // Estrategia Fiscal: solo Payroll tipo STRATEGY_NOMINA (fuera del egreso operativo).
+      prisma.payroll.findMany({
+        where: { tenantId, period: { gte: yearStart, lt: yearEnd }, type: "STRATEGY_NOMINA" },
+        select: { amount: true, period: true, legalEntityId: true, description: true },
+      }),
+      // Inversiones: créditos que NO son VEHICLE (MORTGAGE/PERSONAL/OTHER).
+      prisma.loanPayment.findMany({
+        where: { tenantId, period: { gte: yearStart, lt: yearEnd }, loan: { type: { not: "VEHICLE" } } },
+        select: {
+          amount: true,
+          period: true,
+          loan: { select: { id: true, name: true, type: true, legalEntityId: true } },
+        },
+      }),
+      prisma.investmentPayment.findMany({
+        where: {
+          tenantId,
+          paymentDate: { gte: yearStart, lt: yearEnd },
+        },
+        select: {
+          amount: true,
+          paymentDate: true,
+          description: true,
+          project: {
+            select: {
+              id: true,
+              name: true,
+              legalEntityId: true,
+            },
           },
         },
-      },
-    }),
-    prisma.investmentPayment.findMany({
-      where: {
-        tenantId,
-        paymentDate: { gte: yearStart, lt: yearEnd },
-      },
-      select: {
-        amount: true,
-        paymentDate: true,
-        description: true,
-        project: {
-          select: {
-            id: true,
-            name: true,
-            legalEntityId: true,
-          },
-        },
-      },
-    }),
-  ]);
+      }),
+    ]);
 
   const propertyById = new Map(properties.map((p) => [p.id, p]));
-  const categoryById = new Map(expenseCategories.map((c) => [c.id, c]));
 
   // ==========================================================================
   // INGRESOS por entidad → propiedad → mes
@@ -345,59 +287,12 @@ export async function getAnnualClosingBundle(
     return row;
   };
 
-  // Expenses operativos (excluye PAYROLL — se gestiona en Payroll model)
-  for (const exp of expenses) {
-    const cat = categoryById.get(exp.categoryId);
-    const label = cat?.name ?? "Otros egresos";
-    const row = ensureRow(exp.legalEntityId, `cat-${exp.categoryId}`, label);
+  // Egresos operativos: Expense + Payroll + CadastralPayment + Loan-VEHICLE,
+  // ya consolidados por getOperatingExpenseRows.
+  for (const r of operatingExpenseRows) {
+    const row = ensureRow(r.legalEntityId, r.categoryKey, r.categoryLabel, r.categorySublabel);
     if (!row) continue;
-    addToBucket(row.bucket, exp.expenseDate.getUTCMonth(), dec(exp.amount));
-  }
-
-  // Payrolls (excluyendo STRATEGY_NOMINA, que va al bloque "Estrategia Fiscal")
-  const payrollLabel: Record<string, string> = {
-    DIRECT_PAYROLL: "Nómina Directa",
-    ADMIN_SERVICE_INVOICE: "Nómina (Servicios Admin)",
-    COMMISSION: "Comisiones",
-    BONUS: "Bonos",
-    STRATEGY_NOMINA: "Estrategia Nómina",
-  };
-  for (const pr of payrolls) {
-    if (pr.type === "STRATEGY_NOMINA") continue;
-    const label = payrollLabel[pr.type] ?? pr.type;
-    const row = ensureRow(pr.legalEntityId, `payroll-${pr.type}`, label);
-    if (!row) continue;
-    addToBucket(row.bucket, pr.period.getUTCMonth(), dec(pr.amount));
-  }
-
-  // Prediales (CadastralPayment). Si tienen paymentDate y paidAmount, los
-  // imputamos a esa fecha; si no, usamos dueDate y totalAmount.
-  for (const cp of cadastrals) {
-    const date = cp.paymentDate ?? cp.dueDate;
-    if (!date) continue;
-    if (date < yearStart || date >= yearEnd) continue;
-    const amount = cp.paidAmount ?? cp.totalAmount;
-    if (!amount) continue;
-    const property = propertyById.get(cp.propertyId);
-    if (!property) continue;
-    const payerId = cp.payerEntityId ?? property.managerEntityId;
-    const row = ensureRow(payerId, "predial", "Predial Impuestos");
-    if (!row) continue;
-    addToBucket(row.bucket, date.getUTCMonth(), dec(amount));
-  }
-
-  // Loan payments tipo VEHICLE → egresos operativos.
-  // Tipos MORTGAGE/PERSONAL/OTHER → bloque "Inversiones" más abajo.
-  for (const lp of loanPayments) {
-    if (lp.loan.type !== "VEHICLE") continue;
-    const row = ensureRow(
-      lp.loan.legalEntityId,
-      `loan-${lp.loan.id}`,
-      `Financiamiento ${lp.loan.name}`,
-      "VEHICLE",
-    );
-    if (!row) continue;
-    addToBucket(row.bucket, lp.period.getUTCMonth(), dec(lp.amount));
+    addToBucket(row.bucket, r.date.getUTCMonth(), r.amount);
   }
 
   const expensesByEntity: Record<string, MonthlyMatrix> = {};
@@ -445,8 +340,7 @@ export async function getAnnualClosingBundle(
   // ESTRATEGIA FISCAL — Payroll tipo STRATEGY_NOMINA agrupado por descripción.
   // ==========================================================================
   const strategyMap = new Map<string, { label: string; bucket: Prisma.Decimal[] }>();
-  for (const pr of payrolls) {
-    if (pr.type !== "STRATEGY_NOMINA") continue;
+  for (const pr of strategyPayrolls) {
     const label = pr.description?.trim() || "Estrategia Fiscal";
     let row = strategyMap.get(label);
     if (!row) {
@@ -467,8 +361,7 @@ export async function getAnnualClosingBundle(
   // INVERSIONES — Loan MORTGAGE/PERSONAL + InvestmentPayment
   // ==========================================================================
   const investmentMap = new Map<string, { label: string; sublabel?: string; bucket: Prisma.Decimal[] }>();
-  for (const lp of loanPayments) {
-    if (lp.loan.type === "VEHICLE") continue;
+  for (const lp of nonVehicleLoanPayments) {
     const key = `loan-${lp.loan.id}`;
     let row = investmentMap.get(key);
     if (!row) {

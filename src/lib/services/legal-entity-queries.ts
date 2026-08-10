@@ -1,5 +1,6 @@
 import { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/lib/prisma/client";
+import { getOperatingExpenseRows } from "@/lib/services/consolidated-expenses";
 
 const ZERO = new Prisma.Decimal(0);
 const dec = (v: Prisma.Decimal | number | string | null | undefined) =>
@@ -119,7 +120,7 @@ export async function getLegalEntityMetrics(
   ];
   const propertyIds = allPropsRaw.map((p) => p.id);
 
-  const [paymentsRaw, expensesRaw, recentExpenses, arRents, expiringRaw, expectedRentAgg] =
+  const [paymentsRaw, operatingExpenseRowsAll, recentExpenses, arRents, expiringRaw, expectedRentAgg] =
     await Promise.all([
       prisma.payment.findMany({
         where: {
@@ -141,10 +142,11 @@ export async function getLegalEntityMetrics(
           },
         },
       }),
-      prisma.expense.findMany({
-        where: { tenantId, legalEntityId, expenseDate: { gte: yearStart, lt: yearEnd } },
-        select: { amount: true, expenseDate: true, category: { select: { name: true } } },
-      }),
+      // Egresos operativos consolidados (Expense + Payroll + CadastralPayment +
+      // Loan-VEHICLE) de TODO el tenant — se filtra a esta entidad abajo. Misma
+      // fuente que usa Cierres Anuales: totalExpenses/totalProfit no pueden
+      // salir solo de la tabla Expense o quedan subestimados.
+      getOperatingExpenseRows(tenantId, yearStart, yearEnd),
       prisma.expense.findMany({
         where: { tenantId, legalEntityId, expenseDate: { gte: yearStart, lt: yearEnd } },
         orderBy: { expenseDate: "desc" },
@@ -205,6 +207,8 @@ export async function getLegalEntityMetrics(
       }),
     ]);
 
+  const operatingExpenseRows = operatingExpenseRowsAll.filter((r) => r.legalEntityId === legalEntityId);
+
   // Monthly income/expenses
   const monthlyIncome = Array.from({ length: 12 }, () => ZERO);
   const monthlyExpenses = Array.from({ length: 12 }, () => ZERO);
@@ -212,9 +216,9 @@ export async function getLegalEntityMetrics(
     const idx = p.paymentDate.getUTCMonth();
     monthlyIncome[idx] = (monthlyIncome[idx] ?? ZERO).plus(dec(p.amount));
   }
-  for (const e of expensesRaw) {
-    const idx = e.expenseDate.getUTCMonth();
-    monthlyExpenses[idx] = (monthlyExpenses[idx] ?? ZERO).plus(dec(e.amount));
+  for (const e of operatingExpenseRows) {
+    const idx = e.date.getUTCMonth();
+    monthlyExpenses[idx] = (monthlyExpenses[idx] ?? ZERO).plus(e.amount);
   }
 
   const totalIncome = monthlyIncome.reduce((a, b) => a.plus(b), ZERO);
@@ -222,9 +226,9 @@ export async function getLegalEntityMetrics(
 
   // Expenses by category
   const byCategory = new Map<string, Prisma.Decimal>();
-  for (const e of expensesRaw) {
-    const k = e.category.name;
-    byCategory.set(k, (byCategory.get(k) ?? ZERO).plus(dec(e.amount)));
+  for (const e of operatingExpenseRows) {
+    const k = e.categoryLabel;
+    byCategory.set(k, (byCategory.get(k) ?? ZERO).plus(e.amount));
   }
   const expensesByCategory = Array.from(byCategory.entries())
     .map(([categoryName, amount]) => ({ categoryName, amount: amount.toString() }))

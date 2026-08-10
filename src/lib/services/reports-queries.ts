@@ -1,6 +1,7 @@
 import { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/lib/prisma/client";
 import { computeBalance } from "@/lib/services/rent-status";
+import { getOperatingExpenseRows } from "@/lib/services/consolidated-expenses";
 import type {
   ContractStatus,
   ContractType,
@@ -454,23 +455,15 @@ async function buildExpensesByCategoryReport(
   const yearStart = new Date(Date.UTC(year, 0, 1));
   const yearEnd = new Date(Date.UTC(year + 1, 0, 1));
 
-  const [legalEntities, expenses] = await Promise.all([
+  const [legalEntities, operatingExpenseRows] = await Promise.all([
     prisma.legalEntity.findMany({
       where: { tenantId, isActive: true },
       select: { id: true, code: true },
       orderBy: { code: "asc" },
     }),
-    prisma.expense.findMany({
-      where: {
-        tenantId,
-        expenseDate: { gte: yearStart, lt: yearEnd },
-      },
-      select: {
-        amount: true,
-        legalEntityId: true,
-        category: { select: { code: true, name: true } },
-      },
-    }),
+    // Consolidado (Expense + Payroll + CadastralPayment + Loan-VEHICLE) —
+    // misma fuente que Cierres Anuales, no solo la tabla Expense.
+    getOperatingExpenseRows(tenantId, yearStart, yearEnd),
   ]);
 
   const leCodeById = new Map(legalEntities.map((le) => [le.id, le.code]));
@@ -487,19 +480,19 @@ async function buildExpensesByCategoryReport(
   const totalsByLE = new Map<string, Prisma.Decimal>();
   let grand = ZERO;
 
-  for (const e of expenses) {
-    const code = e.category.code;
+  for (const e of operatingExpenseRows) {
+    const code = e.categoryKey;
     let bucket = byCategory.get(code);
     if (!bucket) {
       bucket = {
-        categoryName: e.category.name,
+        categoryName: e.categoryLabel,
         categoryCode: code,
         total: ZERO,
         byLegalEntity: new Map(),
       };
       byCategory.set(code, bucket);
     }
-    const amount = dec(e.amount);
+    const amount = e.amount;
     bucket.total = bucket.total.plus(amount);
 
     const leCode = leCodeById.get(e.legalEntityId) ?? "—";
