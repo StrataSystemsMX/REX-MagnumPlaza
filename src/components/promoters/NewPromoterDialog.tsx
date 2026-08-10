@@ -23,9 +23,9 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { actionCreatePromoter } from "@/lib/services/promoters";
+import { actionCreatePromoter } from "@/server/services/promoters";
 import { CharacterCount } from "@/components/ui/character-count";
-import { createPromoterSchema, type CreatePromoterInput } from "@/lib/validators/promoter";
+import { createPromoterSchema, type CreatePromoterInput } from "@/shared/validators/promoter";
 
 export function NewPromoterDialog() {
   const [open, setOpen] = useState(false);

@@ -1,6 +1,6 @@
 import { ImageOff } from "lucide-react";
 import Image from "next/image";
-import { cn } from "@/lib/utils";
+import { cn } from "@/shared/utils";
 
 interface PropertyThumbnailProps {
   url: string | null;

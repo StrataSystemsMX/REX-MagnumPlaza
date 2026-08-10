@@ -3,7 +3,7 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { BarChart3, Building2, ChevronLeft, ChevronRight, Layers, MapPin, Store } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+import { cn } from "@/shared/utils";
 
 export type ScopeType = "tenant" | "entity" | "property" | "unit" | "detail";
 

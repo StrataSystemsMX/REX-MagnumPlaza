@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { Prisma } from "@/generated/prisma/client";
-import { formatMXN, formatMXNCompact, formatPercent } from "@/lib/format-currency";
+import { formatMXN, formatMXNCompact, formatPercent } from "@/shared/format-currency";
 
 // El espacio entre el símbolo y el número que produce Intl en es-MX es un
 // NBSP ( ), no un espacio normal. Normalizamos para aserciones legibles.

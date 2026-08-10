@@ -3,7 +3,7 @@ import { MetricCard } from "@/components/shared/metric-card";
 import { PropertyFilterTabs } from "@/components/shared/PropertyFilterTabs";
 import { INMUEBLES_TAB_VALUE } from "@/components/shared/property-filter-constants";
 import { LesseeTable } from "@/components/lessees/LesseeTable";
-import { getLessees } from "@/lib/services/lessees-queries";
+import { getLessees } from "@/server/services/lessees-queries";
 
 export default async function LesseesPage({
   searchParams,

@@ -2,12 +2,12 @@ import { Link2, Star, UserCheck, Users } from "lucide-react";
 import { NewPromoterDialog } from "@/components/promoters/NewPromoterDialog";
 import { PromotersTable } from "@/components/promoters/PromotersTable";
 import { MetricCard } from "@/components/shared/metric-card";
-import { requireAuth } from "@/lib/auth/get-session";
-import { hasPermission } from "@/lib/auth/permissions";
+import { requireAuth } from "@/server/auth/get-session";
+import { hasPermission } from "@/server/auth/permissions";
 import {
   getAvailableUnitsForPromoterLink,
   getPromoters,
-} from "@/lib/services/promoters-queries";
+} from "@/server/services/promoters-queries";
 
 export default async function PromotoresPage() {
   const { dbUser } = await requireAuth();

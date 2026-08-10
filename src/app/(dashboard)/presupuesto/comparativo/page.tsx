@@ -10,11 +10,11 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { requireAuth } from "@/lib/auth/get-session";
-import { getActiveLegalEntityId } from "@/lib/auth/active-legal-entity";
-import { getBudgetForYear, MONTH_KEYS } from "@/lib/services/budgets-queries";
-import { prisma } from "@/lib/prisma/client";
-import { formatMXN, formatPercent } from "@/lib/format-currency";
+import { requireAuth } from "@/server/auth/get-session";
+import { getActiveLegalEntityId } from "@/server/auth/active-legal-entity";
+import { getBudgetForYear, MONTH_KEYS } from "@/server/services/budgets-queries";
+import { prisma } from "@/server/prisma/client";
+import { formatMXN, formatPercent } from "@/shared/format-currency";
 
 interface SearchParams { year?: string }
 

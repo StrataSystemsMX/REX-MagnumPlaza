@@ -24,9 +24,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { actionCreateLoan } from "@/lib/services/prestamos-actions";
+import { actionCreateLoan } from "@/server/services/prestamos-actions";
 import type { LoanStatus } from "@/generated/prisma/enums";
-import type { LegalEntityOption } from "@/lib/services/properties-queries";
+import type { LegalEntityOption } from "@/server/services/properties-queries";
 
 const LOAN_STATUSES: { value: LoanStatus; label: string }[] = [
   { value: "ACTIVE", label: "Activo" },

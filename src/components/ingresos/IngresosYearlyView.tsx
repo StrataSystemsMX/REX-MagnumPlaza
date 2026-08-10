@@ -23,16 +23,16 @@ import {
   YearNavigator,
 } from "@/components/shared/yearly-matrix/YearlyMatrixParts";
 import { MONTHS_SHORT, compactMxn } from "@/components/shared/yearly-matrix/theme";
-import { formatMXN } from "@/lib/format-currency";
-import { formatMonthLong, formatPeriodLong } from "@/lib/format-date";
-import { cn } from "@/lib/utils";
+import { formatMXN } from "@/shared/format-currency";
+import { formatMonthLong, formatPeriodLong } from "@/shared/format-date";
+import { cn } from "@/shared/utils";
 import type {
   MonthlyUnitStatus,
   YearlyCell,
   YearlyCollections,
   YearlyPropertyGroup,
   YearlyUnitRow,
-} from "@/lib/services/payments-queries";
+} from "@/server/services/payments-queries";
 
 // Línea divisora gris superpuesta (pseudo-elemento absoluto, no afecta el
 // layout de la tabla) en el borde derecho de la columna del mes actual: separa

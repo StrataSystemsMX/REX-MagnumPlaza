@@ -19,13 +19,13 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { requireAuth } from "@/lib/auth/get-session";
-import { getUserRoleCodes } from "@/lib/auth/permissions";
-import { propertyTypeLabel } from "@/lib/i18n/enums";
-import { getLegalEntityMetrics } from "@/lib/services/legal-entity-queries";
+import { requireAuth } from "@/server/auth/get-session";
+import { getUserRoleCodes } from "@/server/auth/permissions";
+import { propertyTypeLabel } from "@/shared/i18n/enums";
+import { getLegalEntityMetrics } from "@/server/services/legal-entity-queries";
 import type { PropertyType } from "@/generated/prisma/enums";
-import { capitalizeFirst } from "@/lib/utils";
-import { formatMXN } from "@/lib/format-currency";
+import { capitalizeFirst } from "@/shared/utils";
+import { formatMXN } from "@/shared/format-currency";
 
 const DATE = new Intl.DateTimeFormat("es-MX", {
   day: "2-digit",

@@ -21,12 +21,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { cn } from "@/lib/utils";
-import { formatMXN, formatMXNCompact } from "@/lib/format-currency";
+import { cn } from "@/shared/utils";
+import { formatMXN, formatMXNCompact } from "@/shared/format-currency";
 import { MonthlyPivotTable, themeFor } from "./MonthlyPivotTable";
 import { UtilityMonthlyChart } from "./UtilityMonthlyChart";
 import { EntityUtilityBars } from "./EntityUtilityBars";
-import type { AnnualClosing, Monthly12 } from "@/lib/services/cierres-queries";
+import type { AnnualClosing, Monthly12 } from "@/server/services/cierres-queries";
 
 interface CierreAnualViewProps {
   data: AnnualClosing;

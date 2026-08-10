@@ -19,16 +19,16 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
-import { actionGetContractRentHistory } from "@/lib/services/rentas";
-import type { ContractHistoryEntry } from "@/lib/services/rentas-queries";
-import type { RentTableRow, RentasTableData } from "@/lib/services/rentas-queries";
-import { cn } from "@/lib/utils";
-import { formatMXN } from "@/lib/format-currency";
+import { actionGetContractRentHistory } from "@/server/services/rentas";
+import type { ContractHistoryEntry } from "@/server/services/rentas-queries";
+import type { RentTableRow, RentasTableData } from "@/server/services/rentas-queries";
+import { cn } from "@/shared/utils";
+import { formatMXN } from "@/shared/format-currency";
 import {
   formatDate,
   formatPeriodLong,
   formatPeriodShort,
-} from "@/lib/format-date";
+} from "@/shared/format-date";
 
 // ─── Formatters ───────────────────────────────────────────────────────────────
 

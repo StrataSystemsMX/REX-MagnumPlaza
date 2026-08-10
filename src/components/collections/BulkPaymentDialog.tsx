@@ -16,17 +16,17 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { EnumSelect } from "@/components/ui/enum-select";
 import { Separator } from "@/components/ui/separator";
-import { paymentMethodLabel } from "@/lib/i18n/enums";
+import { paymentMethodLabel } from "@/shared/i18n/enums";
 import {
   actionGetOutstandingRentsForLessee,
   actionRegisterBulkPayment,
-} from "@/lib/services/payments";
-import { actionSearchLessees, type LesseeSearchResult } from "@/lib/services/lessees";
-import { bulkPaymentSchema } from "@/lib/validators/payment";
-import type { OutstandingRentLite } from "@/lib/services/payments-queries";
+} from "@/server/services/payments";
+import { actionSearchLessees, type LesseeSearchResult } from "@/server/services/lessees";
+import { bulkPaymentSchema } from "@/shared/validators/payment";
+import type { OutstandingRentLite } from "@/server/services/payments-queries";
 import type { PaymentMethod } from "@/generated/prisma/enums";
-import { formatMXN } from "@/lib/format-currency";
-import { formatPeriodShort } from "@/lib/format-date";
+import { formatMXN } from "@/shared/format-currency";
+import { formatPeriodShort } from "@/shared/format-date";
 
 const METHODS: ReadonlyArray<PaymentMethod> = [
   "TRANSFER",

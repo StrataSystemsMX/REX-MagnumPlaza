@@ -34,13 +34,13 @@ vi.mock("next/cache", () => ({
   revalidateTag: vi.fn(),
 }));
 
-vi.mock("@/lib/auth/get-session", () => ({
+vi.mock("@/server/auth/get-session", () => ({
   requireAuth: () => mockRequireAuth(),
 }));
 
-vi.mock("@/lib/auth/permissions", async () => {
-  const actual = await vi.importActual<typeof import("@/lib/auth/permissions")>(
-    "@/lib/auth/permissions",
+vi.mock("@/server/auth/permissions", async () => {
+  const actual = await vi.importActual<typeof import("@/server/auth/permissions")>(
+    "@/server/auth/permissions",
   );
   return {
     ...actual,
@@ -48,7 +48,7 @@ vi.mock("@/lib/auth/permissions", async () => {
   };
 });
 
-vi.mock("@/lib/prisma/client", () => ({
+vi.mock("@/server/prisma/client", () => ({
   prisma: {
     payment: paymentMock,
     rent: rentMock,
@@ -60,7 +60,7 @@ vi.mock("@/lib/prisma/client", () => ({
 }));
 
 const mockSendPaymentConfirmation = vi.fn();
-vi.mock("@/lib/services/notifications", () => ({
+vi.mock("@/server/services/notifications", () => ({
   sendPaymentConfirmation: (...args: unknown[]) => mockSendPaymentConfirmation(...args),
 }));
 
@@ -113,7 +113,7 @@ describe("actionRegisterPayment", () => {
     paymentMock.findMany.mockResolvedValue([{ amount: 10000 }]);
     rentMock.findFirstOrThrow.mockResolvedValue(rentRow(10000));
 
-    const { actionRegisterPayment } = await import("@/lib/services/payments");
+    const { actionRegisterPayment } = await import("@/server/services/payments");
     const result = await actionRegisterPayment({
       rentId: "rent-1",
       amount: 10000,
@@ -139,7 +139,7 @@ describe("actionRegisterPayment", () => {
     paymentMock.findMany.mockResolvedValue([{ amount: 4000 }]);
     rentMock.findFirstOrThrow.mockResolvedValue(rentRow(10000));
 
-    const { actionRegisterPayment } = await import("@/lib/services/payments");
+    const { actionRegisterPayment } = await import("@/server/services/payments");
     const result = await actionRegisterPayment({
       rentId: "rent-1",
       amount: 4000,
@@ -162,7 +162,7 @@ describe("actionRegisterPayment", () => {
     paymentMock.findMany.mockResolvedValue([{ amount: 6000 }]);
     rentMock.findFirstOrThrow.mockResolvedValue(rentRow(10000));
 
-    const { actionRegisterPayment } = await import("@/lib/services/payments");
+    const { actionRegisterPayment } = await import("@/server/services/payments");
     const r1 = await actionRegisterPayment({
       rentId: "rent-1",
       amount: 6000,
@@ -191,7 +191,7 @@ describe("actionRegisterPayment", () => {
 
   it("falla si la renta no pertenece al tenant", async () => {
     rentMock.findFirst.mockResolvedValue(null);
-    const { actionRegisterPayment } = await import("@/lib/services/payments");
+    const { actionRegisterPayment } = await import("@/server/services/payments");
     await expect(
       actionRegisterPayment({
         rentId: "rent-x",
@@ -214,7 +214,7 @@ describe("actionRegisterPayment", () => {
       contract: { lateFeePercentage: new Prisma.Decimal(5) },
     });
 
-    const { actionRegisterPayment } = await import("@/lib/services/payments");
+    const { actionRegisterPayment } = await import("@/server/services/payments");
     const result = await actionRegisterPayment({
       rentId: "rent-1",
       amount: 10000,
@@ -255,7 +255,7 @@ describe("actionRegisterPayment", () => {
     paymentMock.findMany.mockResolvedValue([{ amount: 10000 }]);
     rentMock.findFirstOrThrow.mockResolvedValue(rentRow(10000));
 
-    const { actionRegisterPayment } = await import("@/lib/services/payments");
+    const { actionRegisterPayment } = await import("@/server/services/payments");
     const result = await actionRegisterPayment({
       rentId: "rent-1",
       amount: 30000,
@@ -283,7 +283,7 @@ describe("actionRegisterPayment", () => {
       ...rentRow(10000),
       status: "WAIVED" as const,
     });
-    const { actionRegisterPayment } = await import("@/lib/services/payments");
+    const { actionRegisterPayment } = await import("@/server/services/payments");
     const r = await actionRegisterPayment({
       rentId: "rent-1",
       amount: 5000,
@@ -317,7 +317,7 @@ describe("actionRegisterBulkPayment", () => {
       .mockResolvedValueOnce([{ amount: 10000 }]);
     rentMock.findFirstOrThrow.mockResolvedValue(rentRow(10000));
 
-    const { actionRegisterBulkPayment } = await import("@/lib/services/payments");
+    const { actionRegisterBulkPayment } = await import("@/server/services/payments");
     const result = await actionRegisterBulkPayment({
       lesseeId: "lessee-1",
       amount: 30000,
@@ -343,7 +343,7 @@ describe("actionRegisterBulkPayment", () => {
   });
 
   it("falla si la suma del split no coincide con el monto", async () => {
-    const { actionRegisterBulkPayment } = await import("@/lib/services/payments");
+    const { actionRegisterBulkPayment } = await import("@/server/services/payments");
     await expect(
       actionRegisterBulkPayment({
         lesseeId: "lessee-1",
@@ -361,7 +361,7 @@ describe("actionRegisterBulkPayment", () => {
 
   it("falla si alguna renta no pertenece al inquilino", async () => {
     rentMock.findMany.mockResolvedValueOnce([{ id: "rent-1" }]); // sólo encuentra 1 de 2
-    const { actionRegisterBulkPayment } = await import("@/lib/services/payments");
+    const { actionRegisterBulkPayment } = await import("@/server/services/payments");
     await expect(
       actionRegisterBulkPayment({
         lesseeId: "lessee-1",
@@ -395,7 +395,7 @@ describe("actionDeletePayment", () => {
     paymentMock.findMany.mockResolvedValue([]); // ya no hay pagos tras el delete
     rentMock.findFirstOrThrow.mockResolvedValue(rentRow(10000));
 
-    const { actionDeletePayment } = await import("@/lib/services/payments");
+    const { actionDeletePayment } = await import("@/server/services/payments");
     await actionDeletePayment("pay-1");
 
     expect(paymentMock.deleteMany).toHaveBeenCalledOnce();
@@ -411,7 +411,7 @@ describe("actionDeletePayment", () => {
   it("PermissionError si el user no es MASTER (aunque tenga el permission sembrado)", async () => {
     // El gate es por rol explícito: ni siquiera requirePermission aplica.
     userRoleMock.findFirst.mockResolvedValue(null); // no es MASTER
-    const { actionDeletePayment } = await import("@/lib/services/payments");
+    const { actionDeletePayment } = await import("@/server/services/payments");
     await expect(actionDeletePayment("pay-1")).rejects.toMatchObject({
       name: "PermissionError",
       code: "payment.delete",

@@ -16,14 +16,14 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { cn } from "@/lib/utils";
-import { isPlaza } from "@/lib/i18n/unit-label";
-import { formatMXN } from "@/lib/format-currency";
-import { formatDate } from "@/lib/format-date";
+import { cn } from "@/shared/utils";
+import { isPlaza } from "@/shared/i18n/unit-label";
+import { formatMXN } from "@/shared/format-currency";
+import { formatDate } from "@/shared/format-date";
 import type {
   MaintenanceRow,
   PropertyForMaintenance,
-} from "@/lib/services/maintenances-queries";
+} from "@/server/services/maintenances-queries";
 
 const TABS = [
   { key: "manual", label: "Manuales" },

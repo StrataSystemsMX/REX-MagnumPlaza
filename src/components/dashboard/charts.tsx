@@ -12,8 +12,8 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { formatMXN, formatMXNCompact } from "@/lib/format-currency";
-import { formatMonthShort } from "@/lib/format-date";
+import { formatMXN, formatMXNCompact } from "@/shared/format-currency";
+import { formatMonthShort } from "@/shared/format-date";
 
 // Histórico real extraído del Excel del cliente (2009–2025)
 const HISTORICAL_DATA = [

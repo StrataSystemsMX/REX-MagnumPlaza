@@ -14,11 +14,11 @@ import {
 } from "@/components/ui/table";
 import { HistorialFilters } from "@/components/historial/HistorialFilters";
 import { UndoChangeButton } from "@/components/historial/UndoChangeButton";
-import { auditCategoryLabel, categoryOf } from "@/lib/audit/categories";
-import { describeAuditDetail } from "@/lib/audit/describe";
-import { auditActionLabel } from "@/lib/i18n/enums";
-import { capitalizeFirst } from "@/lib/utils";
-import type { AuditLogPage } from "@/lib/services/audit";
+import { auditCategoryLabel, categoryOf } from "@/shared/audit/categories";
+import { describeAuditDetail } from "@/shared/audit/describe";
+import { auditActionLabel } from "@/shared/i18n/enums";
+import { capitalizeFirst } from "@/shared/utils";
+import type { AuditLogPage } from "@/server/services/audit";
 import type { AuditAction } from "@/generated/prisma/enums";
 
 const DATETIME = new Intl.DateTimeFormat("es-MX", {

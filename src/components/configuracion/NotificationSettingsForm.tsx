@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import {
   actionUpdateTenantNotificationSettings,
   type TenantNotificationSettings,
-} from "@/lib/services/notifications-actions";
+} from "@/server/services/notifications-actions";
 
 interface Props {
   initial: TenantNotificationSettings;

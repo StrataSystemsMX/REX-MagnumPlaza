@@ -25,11 +25,11 @@ import {
   type RegisterPaymentDialogContext,
 } from "@/components/collections/RegisterPaymentDialog";
 import { RentStatusBadge } from "@/components/shared/RentStatusBadge";
-import { contractStatusLabel, paymentMethodLabel } from "@/lib/i18n/enums";
-import { isPlaza, unitWithProperty } from "@/lib/i18n/unit-label";
-import type { LesseeStatement as LesseeStatementData } from "@/lib/services/payments-queries";
-import { formatMXN } from "@/lib/format-currency";
-import { formatDate, formatPeriodShort } from "@/lib/format-date";
+import { contractStatusLabel, paymentMethodLabel } from "@/shared/i18n/enums";
+import { isPlaza, unitWithProperty } from "@/shared/i18n/unit-label";
+import type { LesseeStatement as LesseeStatementData } from "@/server/services/payments-queries";
+import { formatMXN } from "@/shared/format-currency";
+import { formatDate, formatPeriodShort } from "@/shared/format-date";
 
 interface LesseeStatementProps {
   data: LesseeStatementData;

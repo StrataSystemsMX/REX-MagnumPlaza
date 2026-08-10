@@ -1,6 +1,6 @@
 import { VacancyLeadButton } from "@/components/promoters/public/VacancyLeadButton";
-import { buildWhatsAppUrl } from "@/lib/utils/whatsapp-link";
-import { formatMXN } from "@/lib/format-currency";
+import { buildWhatsAppUrl } from "@/shared/utils/whatsapp-link";
+import { formatMXN } from "@/shared/format-currency";
 
 interface Props {
   token: string;

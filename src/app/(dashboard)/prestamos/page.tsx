@@ -1,8 +1,8 @@
 import { PrestamosView } from "@/components/prestamos/PrestamosView";
-import { requireAuth } from "@/lib/auth/get-session";
-import { getUserRoleCodes } from "@/lib/auth/permissions";
-import { getLoans } from "@/lib/services/prestamos-queries";
-import { getLegalEntities } from "@/lib/services/properties-queries";
+import { requireAuth } from "@/server/auth/get-session";
+import { getUserRoleCodes } from "@/server/auth/permissions";
+import { getLoans } from "@/server/services/prestamos-queries";
+import { getLegalEntities } from "@/server/services/properties-queries";
 
 export const metadata = { title: "Préstamos" };
 

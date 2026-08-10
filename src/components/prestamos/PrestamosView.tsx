@@ -12,10 +12,10 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { NewLoanDialog } from "@/components/prestamos/NewLoanDialog";
-import { cn } from "@/lib/utils";
-import type { LoanRow } from "@/lib/services/prestamos-queries";
-import type { LegalEntityOption } from "@/lib/services/properties-queries";
-import { formatMXN } from "@/lib/format-currency";
+import { cn } from "@/shared/utils";
+import type { LoanRow } from "@/server/services/prestamos-queries";
+import type { LegalEntityOption } from "@/server/services/properties-queries";
+import { formatMXN } from "@/shared/format-currency";
 
 const DATE_FMT = new Intl.DateTimeFormat("es-MX", {
   day: "2-digit",

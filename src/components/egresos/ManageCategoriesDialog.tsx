@@ -13,10 +13,10 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { expenseTypeLabel } from "@/lib/i18n/enums";
+import { expenseTypeLabel } from "@/shared/i18n/enums";
 import type { ExpenseType } from "@/generated/prisma/enums";
-import { actionSetExpenseCategoryActive } from "@/lib/services/expenses";
-import type { ManagedExpenseCategory } from "@/lib/services/expenses-queries";
+import { actionSetExpenseCategoryActive } from "@/server/services/expenses";
+import type { ManagedExpenseCategory } from "@/server/services/expenses-queries";
 
 interface ManageCategoriesDialogProps {
   categories: ReadonlyArray<ManagedExpenseCategory>;

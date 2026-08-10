@@ -1,12 +1,12 @@
 import { InversionesView } from "@/components/inversiones/InversionesView";
-import { requireAuth } from "@/lib/auth/get-session";
-import { getUserRoleCodes } from "@/lib/auth/permissions";
+import { requireAuth } from "@/server/auth/get-session";
+import { getUserRoleCodes } from "@/server/auth/permissions";
 import {
   getInversionesKpis,
   getInvestmentProjects,
-} from "@/lib/services/inversiones-queries";
-import { getLegalEntities } from "@/lib/services/properties-queries";
-import { prisma } from "@/lib/prisma/client";
+} from "@/server/services/inversiones-queries";
+import { getLegalEntities } from "@/server/services/properties-queries";
+import { prisma } from "@/server/prisma/client";
 
 export const metadata = { title: "Inversiones" };
 

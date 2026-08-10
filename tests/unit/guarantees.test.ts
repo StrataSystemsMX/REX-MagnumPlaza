@@ -17,12 +17,12 @@ const auditLogMock = { create: vi.fn() };
 vi.mock("next/cache", () => ({
   revalidatePath: (...args: unknown[]) => mockRevalidatePath(...args),
 }));
-vi.mock("@/lib/auth/get-session", () => ({
+vi.mock("@/server/auth/get-session", () => ({
   requireAuth: () => mockRequireAuth(),
 }));
-vi.mock("@/lib/auth/permissions", async () => {
-  const actual = await vi.importActual<typeof import("@/lib/auth/permissions")>(
-    "@/lib/auth/permissions",
+vi.mock("@/server/auth/permissions", async () => {
+  const actual = await vi.importActual<typeof import("@/server/auth/permissions")>(
+    "@/server/auth/permissions",
   );
   return {
     ...actual,
@@ -35,7 +35,7 @@ const txMock = {
   maintenance: maintenanceMock,
   auditLog: auditLogMock,
 };
-vi.mock("@/lib/prisma/client", () => ({
+vi.mock("@/server/prisma/client", () => ({
   prisma: {
     guarantee: guaranteeMock,
     contract: contractMock,
@@ -70,7 +70,7 @@ describe("actionCreateGuarantee", () => {
     contractMock.findFirstOrThrow.mockResolvedValue({ id: "contract-1" });
     guaranteeMock.create.mockResolvedValue({ id: "guarantee-1" });
 
-    const { actionCreateGuarantee } = await import("@/lib/services/guarantees");
+    const { actionCreateGuarantee } = await import("@/server/services/guarantees");
     const result = await actionCreateGuarantee({
       contractId: "contract-1",
       amount: 13500,
@@ -96,7 +96,7 @@ describe("actionCreateGuarantee", () => {
   it("falla si el contrato no pertenece al tenant", async () => {
     contractMock.findFirstOrThrow.mockRejectedValue(new Error("Not found"));
 
-    const { actionCreateGuarantee } = await import("@/lib/services/guarantees");
+    const { actionCreateGuarantee } = await import("@/server/services/guarantees");
     await expect(
       actionCreateGuarantee({
         contractId: "contract-x",
@@ -121,7 +121,7 @@ describe("actionReturnGuarantee", () => {
     });
     maintenanceMock.deleteMany.mockResolvedValue({ count: 0 });
 
-    const { actionReturnGuarantee } = await import("@/lib/services/guarantees");
+    const { actionReturnGuarantee } = await import("@/server/services/guarantees");
     await actionReturnGuarantee({
       guaranteeId: "guarantee-1",
       returnedAmount: 13500,
@@ -145,7 +145,7 @@ describe("actionReturnGuarantee", () => {
     });
     maintenanceMock.deleteMany.mockResolvedValue({ count: 0 });
 
-    const { actionReturnGuarantee } = await import("@/lib/services/guarantees");
+    const { actionReturnGuarantee } = await import("@/server/services/guarantees");
     await actionReturnGuarantee({
       guaranteeId: "guarantee-1",
       returnedAmount: 8000,
@@ -170,7 +170,7 @@ describe("actionReturnGuarantee", () => {
       unit: { id: "unit-1", propertyId: "prop-1" },
     });
 
-    const { actionReturnGuarantee } = await import("@/lib/services/guarantees");
+    const { actionReturnGuarantee } = await import("@/server/services/guarantees");
     await actionReturnGuarantee({
       guaranteeId: "guarantee-1",
       returnedAmount: 11500,
@@ -199,7 +199,7 @@ describe("actionReturnGuarantee", () => {
       contractId: "contract-1",
     });
 
-    const { actionReturnGuarantee } = await import("@/lib/services/guarantees");
+    const { actionReturnGuarantee } = await import("@/server/services/guarantees");
     await expect(
       actionReturnGuarantee({
         guaranteeId: "guarantee-1",
@@ -222,7 +222,7 @@ describe("actionReturnGuarantee", () => {
       unit: { id: "unit-1", propertyId: "prop-1" },
     });
 
-    const { actionReturnGuarantee } = await import("@/lib/services/guarantees");
+    const { actionReturnGuarantee } = await import("@/server/services/guarantees");
     await actionReturnGuarantee({
       guaranteeId: "guarantee-1",
       returnedAmount: 12000,

@@ -6,7 +6,7 @@ const payrollMock = { findMany: vi.fn() };
 const cadastralPaymentMock = { findMany: vi.fn() };
 const loanPaymentMock = { findMany: vi.fn() };
 
-vi.mock("@/lib/prisma/client", () => ({
+vi.mock("@/server/prisma/client", () => ({
   prisma: {
     expense: expenseMock,
     payroll: payrollMock,
@@ -39,7 +39,7 @@ describe("getOperatingExpenseRows", () => {
         category: { name: "CFE" },
       },
     ]);
-    const { getOperatingExpenseRows } = await import("@/lib/services/consolidated-expenses");
+    const { getOperatingExpenseRows } = await import("@/server/services/consolidated-expenses");
     const rows = await getOperatingExpenseRows(TENANT, utc(2026, 0, 1), utc(2027, 0, 1));
 
     expect(rows).toHaveLength(1);
@@ -53,7 +53,7 @@ describe("getOperatingExpenseRows", () => {
   });
 
   it("excluye categorías tipo PAYROLL de la tabla Expense (se leen desde Payroll)", async () => {
-    await import("@/lib/services/consolidated-expenses").then((m) =>
+    await import("@/server/services/consolidated-expenses").then((m) =>
       m.getOperatingExpenseRows(TENANT, utc(2026, 0, 1), utc(2027, 0, 1)),
     );
     const call = expenseMock.findMany.mock.calls[0]?.[0] as {
@@ -72,7 +72,7 @@ describe("getOperatingExpenseRows", () => {
         legalEntityId: "crt",
       },
     ]);
-    const { getOperatingExpenseRows } = await import("@/lib/services/consolidated-expenses");
+    const { getOperatingExpenseRows } = await import("@/server/services/consolidated-expenses");
     const rows = await getOperatingExpenseRows(TENANT, utc(2026, 0, 1), utc(2027, 0, 1));
 
     expect(rows[0]).toMatchObject({
@@ -90,7 +90,7 @@ describe("getOperatingExpenseRows", () => {
     payrollMock.findMany.mockResolvedValue([
       { id: "p2", amount: D(1000), period: utc(2026, 5, 1), type: "WEIRD_TYPE", legalEntityId: "crt" },
     ]);
-    const { getOperatingExpenseRows } = await import("@/lib/services/consolidated-expenses");
+    const { getOperatingExpenseRows } = await import("@/server/services/consolidated-expenses");
     const rows = await getOperatingExpenseRows(TENANT, utc(2026, 0, 1), utc(2027, 0, 1));
     expect(rows[0]!.categoryLabel).toBe("WEIRD_TYPE");
   });
@@ -107,7 +107,7 @@ describe("getOperatingExpenseRows", () => {
         property: { managerEntityId: "crt" },
       },
     ]);
-    const { getOperatingExpenseRows } = await import("@/lib/services/consolidated-expenses");
+    const { getOperatingExpenseRows } = await import("@/server/services/consolidated-expenses");
     const rows = await getOperatingExpenseRows(TENANT, utc(2026, 0, 1), utc(2027, 0, 1));
 
     expect(rows[0]).toMatchObject({
@@ -132,7 +132,7 @@ describe("getOperatingExpenseRows", () => {
         property: { managerEntityId: "crt" },
       },
     ]);
-    const { getOperatingExpenseRows } = await import("@/lib/services/consolidated-expenses");
+    const { getOperatingExpenseRows } = await import("@/server/services/consolidated-expenses");
     const rows = await getOperatingExpenseRows(TENANT, utc(2026, 0, 1), utc(2027, 0, 1));
     expect(rows[0]!.amount.toString()).toBe("12000");
     expect(rows[0]!.date.getTime()).toBe(utc(2026, 3, 1).getTime());
@@ -150,7 +150,7 @@ describe("getOperatingExpenseRows", () => {
         property: { managerEntityId: "crt" },
       },
     ]);
-    const { getOperatingExpenseRows } = await import("@/lib/services/consolidated-expenses");
+    const { getOperatingExpenseRows } = await import("@/server/services/consolidated-expenses");
     const rows = await getOperatingExpenseRows(TENANT, utc(2026, 0, 1), utc(2027, 0, 1));
     expect(rows[0]!.legalEntityId).toBe("tsr");
   });
@@ -167,7 +167,7 @@ describe("getOperatingExpenseRows", () => {
         property: { managerEntityId: "crt" },
       },
     ]);
-    const { getOperatingExpenseRows } = await import("@/lib/services/consolidated-expenses");
+    const { getOperatingExpenseRows } = await import("@/server/services/consolidated-expenses");
     const rows = await getOperatingExpenseRows(TENANT, utc(2026, 0, 1), utc(2027, 0, 1));
     expect(rows).toHaveLength(0);
   });
@@ -181,7 +181,7 @@ describe("getOperatingExpenseRows", () => {
         loan: { id: "loan-1", name: "Toyota Hilux", legalEntityId: "crt" },
       },
     ]);
-    const { getOperatingExpenseRows } = await import("@/lib/services/consolidated-expenses");
+    const { getOperatingExpenseRows } = await import("@/server/services/consolidated-expenses");
     const rows = await getOperatingExpenseRows(TENANT, utc(2026, 0, 1), utc(2027, 0, 1));
 
     expect(rows[0]).toMatchObject({
@@ -209,7 +209,7 @@ describe("getOperatingExpenseRows", () => {
     loanPaymentMock.findMany.mockResolvedValue([
       { id: "lp1", amount: D(400), period: utc(2026, 0, 1), loan: { id: "loan-1", name: "Hilux", legalEntityId: "crt" } },
     ]);
-    const { getOperatingExpenseRows } = await import("@/lib/services/consolidated-expenses");
+    const { getOperatingExpenseRows } = await import("@/server/services/consolidated-expenses");
     const rows = await getOperatingExpenseRows(TENANT, utc(2026, 0, 1), utc(2027, 0, 1));
 
     expect(rows).toHaveLength(4);

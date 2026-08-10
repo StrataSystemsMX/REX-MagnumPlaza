@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { Prisma } from "@/generated/prisma/client";
-import { calculateLateFee } from "@/lib/services/late-fees";
+import { calculateLateFee } from "@/server/services/late-fees";
 
 const utc = (y: number, m: number, d: number) => new Date(Date.UTC(y, m, d));
 

@@ -21,8 +21,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { actionSendRentReminderManual } from "@/lib/services/notifications-actions";
-import type { ReminderLevel } from "@/lib/pdf/template-config";
+import { actionSendRentReminderManual } from "@/server/services/notifications-actions";
+import type { ReminderLevel } from "@/server/pdf/template-config";
 
 type Channel = "WHATSAPP" | "EMAIL";
 

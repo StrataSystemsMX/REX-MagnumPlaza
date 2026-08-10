@@ -30,11 +30,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { actionCreateMaintenance } from "@/lib/services/maintenances";
+import { actionCreateMaintenance } from "@/server/services/maintenances";
 import { CharacterCount } from "@/components/ui/character-count";
-import { createMaintenanceSchema, type CreateMaintenanceInput } from "@/lib/validators/maintenance";
-import type { PropertyForMaintenance } from "@/lib/services/maintenances-queries";
-import { isPlaza } from "@/lib/i18n/unit-label";
+import { createMaintenanceSchema, type CreateMaintenanceInput } from "@/shared/validators/maintenance";
+import type { PropertyForMaintenance } from "@/server/services/maintenances-queries";
+import { isPlaza } from "@/shared/i18n/unit-label";
 
 const TYPE_LABELS = {
   PERIODIC: "Periódico",

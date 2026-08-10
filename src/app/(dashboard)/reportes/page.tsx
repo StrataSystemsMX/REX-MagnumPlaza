@@ -4,11 +4,11 @@ import { BarChart3 } from "lucide-react";
 import { KpiGrid } from "@/components/reports/KpiGrid";
 import { ReportsTabs } from "@/components/reports/ReportsTabs";
 import { ScopeSelector } from "@/components/reports/ScopeSelector";
-import { requireAuth } from "@/lib/auth/get-session";
-import { getUserRoleCodes } from "@/lib/auth/permissions";
-import { prisma } from "@/lib/prisma/client";
-import { getReportsBundle } from "@/lib/services/reports-queries";
-import { getKpiSet, type ReportScope } from "@/lib/services/kpi-queries";
+import { requireAuth } from "@/server/auth/get-session";
+import { getUserRoleCodes } from "@/server/auth/permissions";
+import { prisma } from "@/server/prisma/client";
+import { getReportsBundle } from "@/server/services/reports-queries";
+import { getKpiSet, type ReportScope } from "@/server/services/kpi-queries";
 
 interface PageProps {
   searchParams: Promise<{

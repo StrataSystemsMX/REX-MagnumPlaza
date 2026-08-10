@@ -51,16 +51,16 @@ import { PredialRegisterPaymentDialog } from "@/components/prediales/PredialRegi
 import {
   actionDeleteCadastralPayment,
   actionUnmarkCadastralPayment,
-} from "@/lib/services/cadastral";
+} from "@/server/services/cadastral";
 import type {
   CadastralListItem,
   CadastralPropertyOption,
   CadastralStatus,
-} from "@/lib/services/cadastral-queries";
-import type { LegalEntityOption } from "@/lib/services/properties-queries";
-import { formatMXN } from "@/lib/format-currency";
-import { formatDate } from "@/lib/format-date";
-import { cn } from "@/lib/utils";
+} from "@/server/services/cadastral-queries";
+import type { LegalEntityOption } from "@/server/services/properties-queries";
+import { formatMXN } from "@/shared/format-currency";
+import { formatDate } from "@/shared/format-date";
+import { cn } from "@/shared/utils";
 
 type StatusFilter = "ALL" | CadastralStatus;
 

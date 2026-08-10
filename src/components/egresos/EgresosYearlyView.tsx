@@ -24,9 +24,9 @@ import {
   YearNavigator,
 } from "@/components/shared/yearly-matrix/YearlyMatrixParts";
 import { MONTHS_SHORT, compactMxn } from "@/components/shared/yearly-matrix/theme";
-import { cn } from "@/lib/utils";
-import { formatMXN } from "@/lib/format-currency";
-import { formatPeriodLong } from "@/lib/format-date";
+import { cn } from "@/shared/utils";
+import { formatMXN } from "@/shared/format-currency";
+import { formatPeriodLong } from "@/shared/format-date";
 import type {
   MonthlyExpenseStatus,
   YearlyExpenseCell,
@@ -36,8 +36,8 @@ import type {
   ExpenseCategoryOption,
   ExpensePropertyOption,
   ManagedExpenseCategory,
-} from "@/lib/services/expenses-queries";
-import type { LegalEntityOption } from "@/lib/services/properties-queries";
+} from "@/server/services/expenses-queries";
+import type { LegalEntityOption } from "@/server/services/properties-queries";
 
 interface EgresosYearlyViewProps {
   data: YearlyExpenses;

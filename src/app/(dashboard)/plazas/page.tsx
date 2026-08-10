@@ -8,11 +8,11 @@ import { MetricCard } from "@/components/shared/metric-card";
 import {
   parsePropertiesViewMode,
   PROPERTIES_VIEW_COOKIE,
-} from "@/lib/properties-view-mode";
+} from "@/shared/properties-view-mode";
 import {
   getLegalEntities,
   getProperties,
-} from "@/lib/services/properties-queries";
+} from "@/server/services/properties-queries";
 
 export default async function PropiedadesPage({
   searchParams,

@@ -42,18 +42,18 @@ import {
 import { PropertyForm } from "@/components/forms/PropertyForm";
 import { PropertyPhotoGallery } from "@/components/properties/PropertyPhotoGallery";
 import { usePropertiesViewMode } from "@/hooks/use-properties-view-mode";
-import { propertyTypeLabel } from "@/lib/i18n/enums";
-import type { PropertiesViewMode } from "@/lib/properties-view-mode";
-import { actionDeleteProperty } from "@/lib/services/properties";
-import { actionCountSubjectDependents } from "@/lib/services/audit-actions";
+import { propertyTypeLabel } from "@/shared/i18n/enums";
+import type { PropertiesViewMode } from "@/shared/properties-view-mode";
+import { actionDeleteProperty } from "@/server/services/properties";
+import { actionCountSubjectDependents } from "@/server/services/audit-actions";
 import { DependentsWarning } from "@/components/historial/DangerConfirmDialog";
-import type { DependentCounts } from "@/lib/services/audit-undo";
-import { actionEnsureInmuebleUnit } from "@/lib/services/units";
+import type { DependentCounts } from "@/server/services/audit-undo";
+import { actionEnsureInmuebleUnit } from "@/server/services/units";
 import type {
   LegalEntityOption,
   PropertyListItem,
-} from "@/lib/services/properties-queries";
-import { formatMXN } from "@/lib/format-currency";
+} from "@/server/services/properties-queries";
+import { formatMXN } from "@/shared/format-currency";
 
 interface InmueblesTableProps {
   inmuebles: ReadonlyArray<PropertyListItem>;

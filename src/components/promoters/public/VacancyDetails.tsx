@@ -1,9 +1,9 @@
 import { MapPin, Maximize2, Store, Tag } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { propertyTypeLabel } from "@/lib/i18n/enums";
-import { isPlaza } from "@/lib/i18n/unit-label";
-import { cn } from "@/lib/utils";
-import type { PublicVacancyData } from "@/lib/services/promoters-public";
+import { propertyTypeLabel } from "@/shared/i18n/enums";
+import { isPlaza } from "@/shared/i18n/unit-label";
+import { cn } from "@/shared/utils";
+import type { PublicVacancyData } from "@/server/services/promoters-public";
 import { VacancyFeaturesList } from "./VacancyFeaturesList";
 
 interface Props {

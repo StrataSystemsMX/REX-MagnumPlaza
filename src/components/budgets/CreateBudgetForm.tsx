@@ -12,7 +12,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { actionCreateBudgetsBatch } from "@/lib/services/budgets";
+import { actionCreateBudgetsBatch } from "@/server/services/budgets";
 
 interface LegalEntityOption {
   id: string;

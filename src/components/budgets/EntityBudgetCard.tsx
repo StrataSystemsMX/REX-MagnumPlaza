@@ -13,11 +13,11 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { cn } from "@/lib/utils";
-import { formatMXN, formatPercent } from "@/lib/format-currency";
+import { cn } from "@/shared/utils";
+import { formatMXN, formatPercent } from "@/shared/format-currency";
 import { themeFor } from "@/components/cierres/MonthlyPivotTable";
-import { MONTH_KEYS } from "@/lib/services/budgets-types";
-import type { BudgetLineRow, EntityBudgetSummary } from "@/lib/services/budgets-types";
+import { MONTH_KEYS } from "@/server/services/budgets-types";
+import type { BudgetLineRow, EntityBudgetSummary } from "@/server/services/budgets-types";
 
 const MONTH_SHORT = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
 

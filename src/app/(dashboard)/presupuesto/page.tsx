@@ -1,8 +1,8 @@
 import { Target, TrendingUp, TrendingDown, BarChart2 } from "lucide-react";
 import { ConsolidatedBudgetView } from "@/components/budgets/ConsolidatedBudgetView";
 import { MetricCard } from "@/components/shared/metric-card";
-import { getRealConsolidatedBudgetForYear } from "@/lib/services/budgets-queries";
-import { formatMXN, formatPercent } from "@/lib/format-currency";
+import { getRealConsolidatedBudgetForYear } from "@/server/services/budgets-queries";
+import { formatMXN, formatPercent } from "@/shared/format-currency";
 
 interface SearchParams { year?: string }
 

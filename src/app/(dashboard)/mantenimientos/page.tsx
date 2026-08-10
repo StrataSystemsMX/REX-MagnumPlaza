@@ -2,14 +2,14 @@ import { AlertTriangle, CheckCircle2, Clock, Wrench } from "lucide-react";
 import { MaintenancesTable } from "@/components/maintenances/MaintenancesTable";
 import { NewMaintenanceDialog } from "@/components/maintenances/NewMaintenanceDialog";
 import { MetricCard } from "@/components/shared/metric-card";
-import { requireAuth } from "@/lib/auth/get-session";
-import { hasPermission } from "@/lib/auth/permissions";
+import { requireAuth } from "@/server/auth/get-session";
+import { hasPermission } from "@/server/auth/permissions";
 import {
   getMaintenanceSummary,
   getMaintenances,
   getPropertiesForMaintenanceForm,
-} from "@/lib/services/maintenances-queries";
-import { formatMXN } from "@/lib/format-currency";
+} from "@/server/services/maintenances-queries";
+import { formatMXN } from "@/shared/format-currency";
 
 export default async function MantenimientosPage() {
   const { dbUser } = await requireAuth();

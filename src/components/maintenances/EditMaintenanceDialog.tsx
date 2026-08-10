@@ -29,17 +29,17 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { MaintenanceAttachments } from "@/components/maintenances/MaintenanceAttachments";
-import { actionUpdateMaintenance } from "@/lib/services/maintenances";
+import { actionUpdateMaintenance } from "@/server/services/maintenances";
 import { CharacterCount } from "@/components/ui/character-count";
 import {
   updateMaintenanceSchema,
   type UpdateMaintenanceInput,
-} from "@/lib/validators/maintenance";
+} from "@/shared/validators/maintenance";
 import type {
   MaintenanceRow,
   PropertyForMaintenance,
-} from "@/lib/services/maintenances-queries";
-import { isPlaza } from "@/lib/i18n/unit-label";
+} from "@/server/services/maintenances-queries";
+import { isPlaza } from "@/shared/i18n/unit-label";
 
 const TYPE_LABELS = {
   PERIODIC: "Periódico",

@@ -19,19 +19,19 @@ const auditLogMock = { create: vi.fn() };
 vi.mock("next/cache", () => ({
   revalidatePath: (...args: unknown[]) => mockRevalidatePath(...args),
 }));
-vi.mock("@/lib/auth/get-session", () => ({
+vi.mock("@/server/auth/get-session", () => ({
   requireAuth: () => mockRequireAuth(),
 }));
-vi.mock("@/lib/auth/permissions", async () => {
-  const actual = await vi.importActual<typeof import("@/lib/auth/permissions")>(
-    "@/lib/auth/permissions",
+vi.mock("@/server/auth/permissions", async () => {
+  const actual = await vi.importActual<typeof import("@/server/auth/permissions")>(
+    "@/server/auth/permissions",
   );
   return {
     ...actual,
     requirePermission: (...args: [string, string]) => mockRequirePermission(...args),
   };
 });
-vi.mock("@/lib/prisma/client", () => ({
+vi.mock("@/server/prisma/client", () => ({
   prisma: {
     expense: expenseMock,
     legalEntity: legalEntityMock,
@@ -76,7 +76,7 @@ describe("actionCreateExpense", () => {
   it("crea egreso con los datos correctos y escribe AuditLog", async () => {
     expenseMock.create.mockResolvedValue({ id: "expense-1" });
 
-    const { actionCreateExpense } = await import("@/lib/services/expenses");
+    const { actionCreateExpense } = await import("@/server/services/expenses");
     const result = await actionCreateExpense(VALID_CREATE);
 
     expect(result).toEqual({ id: "expense-1" });
@@ -104,7 +104,7 @@ describe("actionCreateExpense", () => {
   it("valida propertyId cuando se proporciona", async () => {
     expenseMock.create.mockResolvedValue({ id: "expense-1" });
 
-    const { actionCreateExpense } = await import("@/lib/services/expenses");
+    const { actionCreateExpense } = await import("@/server/services/expenses");
     await actionCreateExpense({ ...VALID_CREATE, propertyId: "prop-1" });
 
     expect(propertyMock.findFirstOrThrow).toHaveBeenCalledOnce();
@@ -117,7 +117,7 @@ describe("actionCreateExpense", () => {
   it("falla si la razón social no existe en el tenant", async () => {
     legalEntityMock.findFirstOrThrow.mockRejectedValue(new Error("Not found"));
 
-    const { actionCreateExpense } = await import("@/lib/services/expenses");
+    const { actionCreateExpense } = await import("@/server/services/expenses");
     await expect(actionCreateExpense(VALID_CREATE)).rejects.toThrow();
     expect(expenseMock.create).not.toHaveBeenCalled();
   });
@@ -131,7 +131,7 @@ describe("actionUpdateExpense", () => {
   it("actualiza el egreso cuando pertenece al tenant", async () => {
     expenseMock.updateMany.mockResolvedValue({ count: 1 });
 
-    const { actionUpdateExpense } = await import("@/lib/services/expenses");
+    const { actionUpdateExpense } = await import("@/server/services/expenses");
     await actionUpdateExpense({
       id: "expense-1",
       legalEntityId: "entity-1",
@@ -153,7 +153,7 @@ describe("actionUpdateExpense", () => {
   it("falla si el egreso no pertenece al tenant (count=0)", async () => {
     expenseMock.updateMany.mockResolvedValue({ count: 0 });
 
-    const { actionUpdateExpense } = await import("@/lib/services/expenses");
+    const { actionUpdateExpense } = await import("@/server/services/expenses");
     await expect(
       actionUpdateExpense({
         id: "expense-x",
@@ -180,7 +180,7 @@ describe("actionRegisterExpense", () => {
     });
     expenseMock.updateMany.mockResolvedValue({ count: 1 });
 
-    const { actionRegisterExpense } = await import("@/lib/services/expenses");
+    const { actionRegisterExpense } = await import("@/server/services/expenses");
     await actionRegisterExpense({
       id: "expense-1",
       amount: 5000,
@@ -200,7 +200,7 @@ describe("actionRegisterExpense", () => {
     expenseMock.findFirstOrThrow.mockResolvedValue({ id: "expense-1", notes: null });
     expenseMock.updateMany.mockResolvedValue({ count: 1 });
 
-    const { actionRegisterExpense } = await import("@/lib/services/expenses");
+    const { actionRegisterExpense } = await import("@/server/services/expenses");
     await actionRegisterExpense({ id: "expense-1", amount: 3000 });
 
     const updateArg = expenseMock.updateMany.mock.calls[0]?.[0] as {
@@ -220,7 +220,7 @@ describe("actionToggleExpenseNotRequired", () => {
     expenseMock.findFirstOrThrow.mockResolvedValue({ id: "expense-1", isNotRequired: false });
     expenseMock.updateMany.mockResolvedValue({ count: 1 });
 
-    const { actionToggleExpenseNotRequired } = await import("@/lib/services/expenses");
+    const { actionToggleExpenseNotRequired } = await import("@/server/services/expenses");
     await actionToggleExpenseNotRequired({ id: "expense-1" });
 
     const updateArg = expenseMock.updateMany.mock.calls[0]?.[0] as {
@@ -234,7 +234,7 @@ describe("actionToggleExpenseNotRequired", () => {
     expenseMock.findFirstOrThrow.mockResolvedValue({ id: "expense-1", isNotRequired: true });
     expenseMock.updateMany.mockResolvedValue({ count: 1 });
 
-    const { actionToggleExpenseNotRequired } = await import("@/lib/services/expenses");
+    const { actionToggleExpenseNotRequired } = await import("@/server/services/expenses");
     await actionToggleExpenseNotRequired({ id: "expense-1" });
 
     const updateArg = expenseMock.updateMany.mock.calls[0]?.[0] as {
@@ -254,7 +254,7 @@ describe("actionDeleteExpense", () => {
   it("elimina el egreso y escribe AuditLog DELETE", async () => {
     expenseMock.deleteMany.mockResolvedValue({ count: 1 });
 
-    const { actionDeleteExpense } = await import("@/lib/services/expenses");
+    const { actionDeleteExpense } = await import("@/server/services/expenses");
     await actionDeleteExpense({ id: "expense-1" });
 
     const deleteArg = expenseMock.deleteMany.mock.calls[0]?.[0] as {
@@ -271,7 +271,7 @@ describe("actionDeleteExpense", () => {
   it("falla si el egreso no existe en el tenant", async () => {
     expenseMock.deleteMany.mockResolvedValue({ count: 0 });
 
-    const { actionDeleteExpense } = await import("@/lib/services/expenses");
+    const { actionDeleteExpense } = await import("@/server/services/expenses");
     await expect(actionDeleteExpense({ id: "expense-x" })).rejects.toThrow(/no encontrado/i);
   });
 });

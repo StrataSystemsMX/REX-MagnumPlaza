@@ -1,8 +1,8 @@
 import type { ReactNode } from "react";
 import { Sidebar } from "@/components/shared/sidebar";
 import { Topbar } from "@/components/shared/topbar";
-import { requireAuth } from "@/lib/auth/get-session";
-import { canAccessAudit } from "@/lib/auth/permissions";
+import { requireAuth } from "@/server/auth/get-session";
+import { canAccessAudit } from "@/server/auth/permissions";
 
 export default async function DashboardLayout({ children }: { children: ReactNode }) {
   const { dbUser } = await requireAuth();

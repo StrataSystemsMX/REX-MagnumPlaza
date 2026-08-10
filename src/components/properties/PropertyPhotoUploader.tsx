@@ -4,13 +4,13 @@ import { ImagePlus, Loader2, X } from "lucide-react";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { actionUploadPropertyPhoto } from "@/lib/services/property-photos";
+import { actionUploadPropertyPhoto } from "@/server/services/property-photos";
 import {
   ALLOWED_PROPERTY_PHOTO_MIME_TYPES,
   MAX_PROPERTY_PHOTO_SIZE_BYTES,
   propertyPhotoFileSchema,
-} from "@/lib/validators/document";
-import { cn } from "@/lib/utils";
+} from "@/shared/validators/document";
+import { cn } from "@/shared/utils";
 
 interface Props {
   propertyId: string;

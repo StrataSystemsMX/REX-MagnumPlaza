@@ -1,5 +1,5 @@
 import { SignUp } from "@clerk/nextjs";
-import { clerkAppearance } from "@/lib/auth/clerk-appearance";
+import { clerkAppearance } from "@/server/auth/clerk-appearance";
 
 export default function SignUpPage() {
   return (

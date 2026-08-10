@@ -5,7 +5,7 @@
  * completo, que recrea el tenant).
  *
  * Los códigos deben coincidir con los usados en requirePermission(...) en
- * src/lib/services. MASTER hace bypass en hasPermission, no necesita filas.
+ * src/server/services. MASTER hace bypass en hasPermission, no necesita filas.
  */
 
 export const PERMISSIONS: { code: string; name: string }[] = [

@@ -6,7 +6,7 @@ import { INMUEBLES_TAB_VALUE } from "@/components/shared/property-filter-constan
 import {
   getAvailableUnits,
   getContracts,
-} from "@/lib/services/contracts-queries";
+} from "@/server/services/contracts-queries";
 
 export default async function ContractsPage({
   searchParams,

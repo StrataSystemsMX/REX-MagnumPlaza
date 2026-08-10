@@ -23,19 +23,19 @@ import {
   contractTypeLabel,
   propertyTypeLabel,
   unitStatusLabel,
-} from "@/lib/i18n/enums";
+} from "@/shared/i18n/enums";
 import type {
   ContractStatus,
   PropertyType,
   UnitStatus,
 } from "@/generated/prisma/enums";
-import type { ReportsBundle } from "@/lib/services/reports-queries";
+import type { ReportsBundle } from "@/server/services/reports-queries";
 import {
   ExpensesByCategoryChart,
   OccupancyChart,
 } from "@/components/dashboard/charts";
-import { formatMXN, formatPercent } from "@/lib/format-currency";
-import { formatDate } from "@/lib/format-date";
+import { formatMXN, formatPercent } from "@/shared/format-currency";
+import { formatDate } from "@/shared/format-date";
 
 const MONTH_NAMES = [
   "Ene",

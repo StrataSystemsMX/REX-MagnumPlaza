@@ -1,12 +1,12 @@
 import { NominasView } from "@/components/nominas/NominasView";
-import { requireAuth } from "@/lib/auth/get-session";
-import { hasPermission } from "@/lib/auth/permissions";
+import { requireAuth } from "@/server/auth/get-session";
+import { hasPermission } from "@/server/auth/permissions";
 import {
   getPayrollAnnualTotalsByEntity,
   getPayrollYears,
   getPayrolls,
-} from "@/lib/services/payroll-queries";
-import { getLegalEntities } from "@/lib/services/properties-queries";
+} from "@/server/services/payroll-queries";
+import { getLegalEntities } from "@/server/services/properties-queries";
 
 interface SearchParams {
   year?: string;

@@ -4,7 +4,7 @@ import {
   formatMonthShort,
   formatPeriodLong,
   formatPeriodShort,
-} from "@/lib/format-date";
+} from "@/shared/format-date";
 
 const utc = (y: number, m: number, d: number) => new Date(Date.UTC(y, m, d));
 

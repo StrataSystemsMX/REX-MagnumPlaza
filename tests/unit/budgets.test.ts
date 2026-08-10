@@ -24,19 +24,19 @@ const auditLogMock = { create: vi.fn() };
 vi.mock("next/cache", () => ({
   revalidatePath: (...args: unknown[]) => mockRevalidatePath(...args),
 }));
-vi.mock("@/lib/auth/get-session", () => ({
+vi.mock("@/server/auth/get-session", () => ({
   requireAuth: () => mockRequireAuth(),
 }));
-vi.mock("@/lib/auth/permissions", async () => {
-  const actual = await vi.importActual<typeof import("@/lib/auth/permissions")>(
-    "@/lib/auth/permissions",
+vi.mock("@/server/auth/permissions", async () => {
+  const actual = await vi.importActual<typeof import("@/server/auth/permissions")>(
+    "@/server/auth/permissions",
   );
   return {
     ...actual,
     requirePermission: (...args: [string, string]) => mockRequirePermission(...args),
   };
 });
-vi.mock("@/lib/prisma/client", () => ({
+vi.mock("@/server/prisma/client", () => ({
   prisma: {
     budget: budgetMock,
     budgetLine: budgetLineMock,
@@ -76,7 +76,7 @@ describe("actionCreateBudget", () => {
     legalEntityMock.findFirstOrThrow.mockResolvedValue({ id: "entity-1" });
     budgetMock.create.mockResolvedValue({ id: "budget-1", year: 2026 });
 
-    const { actionCreateBudget } = await import("@/lib/services/budgets");
+    const { actionCreateBudget } = await import("@/server/services/budgets");
     const result = await actionCreateBudget({ legalEntityId: "entity-1", year: 2026 });
 
     expect(result).toMatchObject({ id: "budget-1", year: 2026 });
@@ -91,7 +91,7 @@ describe("actionCreateBudget", () => {
   it("falla si la entidad no está activa en el tenant", async () => {
     legalEntityMock.findFirstOrThrow.mockRejectedValue(new Error("Not found"));
 
-    const { actionCreateBudget } = await import("@/lib/services/budgets");
+    const { actionCreateBudget } = await import("@/server/services/budgets");
     await expect(actionCreateBudget({ legalEntityId: "entity-x", year: 2026 })).rejects.toThrow();
     expect(budgetMock.create).not.toHaveBeenCalled();
   });
@@ -112,7 +112,7 @@ describe("actionCreateBudgetsBatch", () => {
     budgetMock.findMany.mockResolvedValue([{ legalEntityId: "entity-1" }]);
     budgetMock.createMany.mockResolvedValue({ count: 2 });
 
-    const { actionCreateBudgetsBatch } = await import("@/lib/services/budgets");
+    const { actionCreateBudgetsBatch } = await import("@/server/services/budgets");
     const result = await actionCreateBudgetsBatch({
       legalEntityIds: ["entity-1", "entity-2", "entity-3"],
       year: 2026,
@@ -134,7 +134,7 @@ describe("actionCreateBudgetsBatch", () => {
     legalEntityMock.findMany.mockResolvedValue([{ id: "entity-1" }]);
     budgetMock.findMany.mockResolvedValue([{ legalEntityId: "entity-1" }]);
 
-    const { actionCreateBudgetsBatch } = await import("@/lib/services/budgets");
+    const { actionCreateBudgetsBatch } = await import("@/server/services/budgets");
     const result = await actionCreateBudgetsBatch({
       legalEntityIds: ["entity-1"],
       year: 2026,
@@ -149,7 +149,7 @@ describe("actionCreateBudgetsBatch", () => {
     legalEntityMock.findMany.mockResolvedValue([{ id: "entity-1" }]);
     budgetMock.findMany.mockResolvedValue([]);
 
-    const { actionCreateBudgetsBatch } = await import("@/lib/services/budgets");
+    const { actionCreateBudgetsBatch } = await import("@/server/services/budgets");
     await expect(
       actionCreateBudgetsBatch({
         legalEntityIds: ["entity-1", "entity-invalid"],
@@ -170,7 +170,7 @@ describe("actionUpsertBudgetLine", () => {
     propertyMock.findFirstOrThrow.mockResolvedValue({ id: "prop-1" });
     budgetLineMock.create.mockResolvedValue({ id: "line-1" });
 
-    const { actionUpsertBudgetLine } = await import("@/lib/services/budgets");
+    const { actionUpsertBudgetLine } = await import("@/server/services/budgets");
     await actionUpsertBudgetLine({
       budgetId: "budget-1",
       conceptType: "INCOME_RENT",
@@ -191,7 +191,7 @@ describe("actionUpsertBudgetLine", () => {
     budgetMock.findFirstOrThrow.mockResolvedValue({ id: "budget-1", isLocked: false });
     budgetLineMock.create.mockResolvedValue({ id: "line-1" });
 
-    const { actionUpsertBudgetLine } = await import("@/lib/services/budgets");
+    const { actionUpsertBudgetLine } = await import("@/server/services/budgets");
     await actionUpsertBudgetLine({
       budgetId: "budget-1",
       conceptType: "EXPENSE",
@@ -213,7 +213,7 @@ describe("actionUpsertBudgetLine", () => {
     budgetLineMock.findFirstOrThrow.mockResolvedValue({ id: "line-1" });
     budgetLineMock.update.mockResolvedValue({ id: "line-1" });
 
-    const { actionUpsertBudgetLine } = await import("@/lib/services/budgets");
+    const { actionUpsertBudgetLine } = await import("@/server/services/budgets");
     await actionUpsertBudgetLine({
       budgetId: "budget-1",
       lineId: "line-1",
@@ -236,7 +236,7 @@ describe("actionUpsertBudgetLine", () => {
     budgetMock.findFirstOrThrow.mockResolvedValue({ id: "budget-1", isLocked: false });
     budgetLineMock.findFirstOrThrow.mockRejectedValue(new Error("Not found"));
 
-    const { actionUpsertBudgetLine } = await import("@/lib/services/budgets");
+    const { actionUpsertBudgetLine } = await import("@/server/services/budgets");
     await expect(
       actionUpsertBudgetLine({
         budgetId: "budget-1",
@@ -254,7 +254,7 @@ describe("actionUpsertBudgetLine", () => {
     budgetMock.findFirstOrThrow.mockResolvedValue({ id: "budget-1", isLocked: false });
     budgetLineMock.create.mockResolvedValue({ id: "line-1" });
 
-    const { actionUpsertBudgetLine } = await import("@/lib/services/budgets");
+    const { actionUpsertBudgetLine } = await import("@/server/services/budgets");
     await actionUpsertBudgetLine({
       budgetId: "budget-1",
       conceptType: "EXPENSE",
@@ -274,7 +274,7 @@ describe("actionUpsertBudgetLine", () => {
   it("falla si el presupuesto está cerrado (isLocked=true)", async () => {
     budgetMock.findFirstOrThrow.mockResolvedValue({ id: "budget-1", isLocked: true });
 
-    const { actionUpsertBudgetLine } = await import("@/lib/services/budgets");
+    const { actionUpsertBudgetLine } = await import("@/server/services/budgets");
     await expect(
       actionUpsertBudgetLine({
         budgetId: "budget-1",
@@ -298,7 +298,7 @@ describe("actionDeleteBudgetLine", () => {
     budgetMock.findFirstOrThrow.mockResolvedValue({ id: "budget-1", isLocked: false });
     budgetLineMock.deleteMany.mockResolvedValue({ count: 1 });
 
-    const { actionDeleteBudgetLine } = await import("@/lib/services/budgets");
+    const { actionDeleteBudgetLine } = await import("@/server/services/budgets");
     await actionDeleteBudgetLine("line-1", "budget-1");
 
     expect(budgetLineMock.deleteMany).toHaveBeenCalledOnce();
@@ -313,7 +313,7 @@ describe("actionDeleteBudgetLine", () => {
     budgetMock.findFirstOrThrow.mockResolvedValue({ id: "budget-1", isLocked: false });
     budgetLineMock.deleteMany.mockResolvedValue({ count: 0 });
 
-    const { actionDeleteBudgetLine } = await import("@/lib/services/budgets");
+    const { actionDeleteBudgetLine } = await import("@/server/services/budgets");
     await expect(actionDeleteBudgetLine("line-ajena", "budget-1")).rejects.toThrow(
       /no encontrada/i,
     );
@@ -322,7 +322,7 @@ describe("actionDeleteBudgetLine", () => {
   it("falla si el presupuesto está cerrado", async () => {
     budgetMock.findFirstOrThrow.mockResolvedValue({ id: "budget-1", isLocked: true });
 
-    const { actionDeleteBudgetLine } = await import("@/lib/services/budgets");
+    const { actionDeleteBudgetLine } = await import("@/server/services/budgets");
     await expect(actionDeleteBudgetLine("line-1", "budget-1")).rejects.toThrow(/cerrado/i);
     expect(budgetLineMock.deleteMany).not.toHaveBeenCalled();
   });

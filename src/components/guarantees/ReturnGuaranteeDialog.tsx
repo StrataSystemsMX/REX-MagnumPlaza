@@ -24,13 +24,13 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { actionReturnGuarantee } from "@/lib/services/guarantees";
-import { cn } from "@/lib/utils";
+import { actionReturnGuarantee } from "@/server/services/guarantees";
+import { cn } from "@/shared/utils";
 import {
   returnGuaranteeSchema,
   type ReturnGuaranteeInput,
-} from "@/lib/validators/guarantee";
-import { formatMXN } from "@/lib/format-currency";
+} from "@/shared/validators/guarantee";
+import { formatMXN } from "@/shared/format-currency";
 
 interface InitialReturn {
   returnedAmount: number | null;

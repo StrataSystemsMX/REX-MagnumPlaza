@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
-import { requireAuth } from "@/lib/auth/get-session";
-import { canExportFinancials } from "@/lib/auth/permissions";
-import { generateDashboardSummary } from "@/lib/pdf/generator";
+import { requireAuth } from "@/server/auth/get-session";
+import { canExportFinancials } from "@/server/auth/permissions";
+import { generateDashboardSummary } from "@/server/pdf/generator";
 
 export async function GET(request: Request): Promise<Response> {
   const { tenantId, dbUser } = await requireAuth();

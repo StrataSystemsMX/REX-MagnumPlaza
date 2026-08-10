@@ -13,7 +13,7 @@ import {
   computeRoi,
   computeTenantTurnover,
   renewalCandidateWindow,
-} from "@/lib/services/kpi-queries-helpers";
+} from "@/server/services/kpi-queries-helpers";
 
 const dec = (n: number | string) => new Prisma.Decimal(n);
 const utc = (y: number, m: number, d: number) => new Date(Date.UTC(y, m, d));

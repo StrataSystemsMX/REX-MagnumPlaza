@@ -21,11 +21,11 @@ import {
   actionResetReminderTemplate,
   actionUpsertReminderTemplate,
   type ReminderTemplateEntry,
-} from "@/lib/services/document-templates";
+} from "@/server/services/document-templates";
 import {
   upsertReminderTemplateSchema,
   type UpsertReminderTemplateInput,
-} from "@/lib/validators/document-template";
+} from "@/shared/validators/document-template";
 
 const LEVEL_LABELS: Record<string, string> = {
   "1M": "Recordatorio amable (1 mes)",

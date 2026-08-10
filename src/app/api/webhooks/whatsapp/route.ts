@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
-import { prismaUnsafe } from "@/lib/prisma/client";
-import { secureCompare } from "@/lib/secure-compare";
+import { prismaUnsafe } from "@/server/prisma/client";
+import { secureCompare } from "@/server/secure-compare";
 import {
   parseStatusEvents,
   verifyWhatsAppSignature,
-} from "@/lib/whatsapp/webhook";
+} from "@/server/whatsapp/webhook";
 import type { NotificationStatus } from "@/generated/prisma/enums";
 
 /**

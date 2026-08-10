@@ -24,11 +24,11 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { actionCaptureLead } from "@/lib/services/leads";
+import { actionCaptureLead } from "@/server/services/leads";
 import {
   captureLeadSchema,
   type CaptureLeadInput,
-} from "@/lib/validators/promoter";
+} from "@/shared/validators/promoter";
 
 interface Props {
   token: string;

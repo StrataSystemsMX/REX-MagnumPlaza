@@ -1,14 +1,14 @@
 import { EgresosYearlyView } from "@/components/egresos/EgresosYearlyView";
-import { requireAuth } from "@/lib/auth/get-session";
-import { hasPermission } from "@/lib/auth/permissions";
-import { prisma } from "@/lib/prisma/client";
+import { requireAuth } from "@/server/auth/get-session";
+import { hasPermission } from "@/server/auth/permissions";
+import { prisma } from "@/server/prisma/client";
 import {
   getExpenseCategories,
   getManagedExpenseCategories,
   getPropertiesForExpenseForm,
   getYearlyExpensesMatrix,
-} from "@/lib/services/expenses-queries";
-import { getLegalEntities } from "@/lib/services/properties-queries";
+} from "@/server/services/expenses-queries";
+import { getLegalEntities } from "@/server/services/properties-queries";
 
 interface PageProps {
   searchParams: Promise<{ year?: string }>;

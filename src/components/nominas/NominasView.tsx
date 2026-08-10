@@ -45,16 +45,16 @@ import {
 import { PayrollFormDialog } from "@/components/nominas/PayrollFormDialog";
 import { PayrollDetailDialog } from "@/components/nominas/PayrollDetailDialog";
 import { themeFor } from "@/components/cierres/MonthlyPivotTable";
-import { actionDeletePayroll } from "@/lib/services/payroll";
+import { actionDeletePayroll } from "@/server/services/payroll";
 import type {
   PayrollEntityTotal,
   PayrollListItem,
-} from "@/lib/services/payroll-queries";
-import type { LegalEntityOption } from "@/lib/services/properties-queries";
-import { payrollTypeLabel } from "@/lib/i18n/enums";
+} from "@/server/services/payroll-queries";
+import type { LegalEntityOption } from "@/server/services/properties-queries";
+import { payrollTypeLabel } from "@/shared/i18n/enums";
 import type { PayrollType } from "@/generated/prisma/enums";
-import { cn } from "@/lib/utils";
-import { formatMXN } from "@/lib/format-currency";
+import { cn } from "@/shared/utils";
+import { formatMXN } from "@/shared/format-currency";
 
 // Alias local: mismo output que la const Intl que existía aquí (2 decimales).
 const mxn = (v: number | string) => formatMXN(v, 2);

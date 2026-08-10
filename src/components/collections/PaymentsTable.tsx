@@ -61,13 +61,13 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { INMUEBLES_TAB_VALUE } from "@/components/shared/property-filter-constants";
-import { paymentMethodLabel } from "@/lib/i18n/enums";
-import { actionDeletePayment, actionEditPayment } from "@/lib/services/payments";
-import type { PaymentListItem } from "@/lib/services/payments-queries";
+import { paymentMethodLabel } from "@/shared/i18n/enums";
+import { actionDeletePayment, actionEditPayment } from "@/server/services/payments";
+import type { PaymentListItem } from "@/server/services/payments-queries";
 import type { PaymentMethod } from "@/generated/prisma/enums";
-import { cn } from "@/lib/utils";
-import { formatMXN } from "@/lib/format-currency";
-import { formatDate, formatPeriodShort } from "@/lib/format-date";
+import { cn } from "@/shared/utils";
+import { formatMXN } from "@/shared/format-currency";
+import { formatDate, formatPeriodShort } from "@/shared/format-date";
 
 const METHODS: ReadonlyArray<PaymentMethod> = [
   "TRANSFER",

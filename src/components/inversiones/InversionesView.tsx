@@ -20,15 +20,15 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { cn } from "@/lib/utils";
+import { cn } from "@/shared/utils";
 import type {
   InversionesKpis,
   InvestmentProjectListItem,
-} from "@/lib/services/inversiones-queries";
-import type { LegalEntityOption } from "@/lib/services/properties-queries";
+} from "@/server/services/inversiones-queries";
+import type { LegalEntityOption } from "@/server/services/properties-queries";
 import { NewInvestmentProjectDialog } from "./NewInvestmentProjectDialog";
 import { RegisterInvestmentPaymentDialog } from "./RegisterInvestmentPaymentDialog";
-import { formatMXN } from "@/lib/format-currency";
+import { formatMXN } from "@/shared/format-currency";
 
 // Alias local: mismo output que la const Intl que existía aquí (2 decimales).
 const mxn = (v: number | string) => formatMXN(v, 2);

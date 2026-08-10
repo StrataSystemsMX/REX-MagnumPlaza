@@ -3,11 +3,11 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { RunMorosityCronButton } from "@/components/configuracion/RunMorosityCronButton";
-import { requireAuth } from "@/lib/auth/get-session";
-import { isMaster } from "@/lib/auth/permissions";
-import { prisma } from "@/lib/prisma/client";
-import { capitalizeFirst } from "@/lib/utils";
-import { formatMXN } from "@/lib/format-currency";
+import { requireAuth } from "@/server/auth/get-session";
+import { isMaster } from "@/server/auth/permissions";
+import { prisma } from "@/server/prisma/client";
+import { capitalizeFirst } from "@/shared/utils";
+import { formatMXN } from "@/shared/format-currency";
 
 const DATETIME = new Intl.DateTimeFormat("es-MX", {
   dateStyle: "medium",

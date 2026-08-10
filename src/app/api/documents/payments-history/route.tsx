@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
 import { renderToBuffer } from "@react-pdf/renderer";
-import { requireAuth } from "@/lib/auth/get-session";
-import { canExportFinancials } from "@/lib/auth/permissions";
-import { prisma } from "@/lib/prisma/client";
-import { getPayments } from "@/lib/services/payments-queries";
-import { paymentMethodLabel } from "@/lib/i18n/enums";
+import { requireAuth } from "@/server/auth/get-session";
+import { canExportFinancials } from "@/server/auth/permissions";
+import { prisma } from "@/server/prisma/client";
+import { getPayments } from "@/server/services/payments-queries";
+import { paymentMethodLabel } from "@/shared/i18n/enums";
 import { INMUEBLES_TAB_VALUE } from "@/components/shared/property-filter-constants";
-import { PaymentsHistoryPdf } from "@/lib/pdf/templates/PaymentsHistoryPdf";
+import { PaymentsHistoryPdf } from "@/server/pdf/templates/PaymentsHistoryPdf";
 import type { PaymentMethod } from "@/generated/prisma/enums";
 
 export async function GET(request: Request): Promise<Response> {

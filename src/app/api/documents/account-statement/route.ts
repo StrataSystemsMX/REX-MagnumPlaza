@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
-import { requireAuth } from "@/lib/auth/get-session";
-import { requirePermission } from "@/lib/auth/permissions";
-import { generateAccountStatement } from "@/lib/pdf/generator";
+import { requireAuth } from "@/server/auth/get-session";
+import { requirePermission } from "@/server/auth/permissions";
+import { generateAccountStatement } from "@/server/pdf/generator";
 
 // Ventana móvil de los últimos N meses (incluye el mes en curso), en UTC,
 // alineada al primer día de cada mes (igual que Rent.period).

@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
 import { renderToBuffer } from "@react-pdf/renderer";
-import { requireAuth } from "@/lib/auth/get-session";
-import { canExportFinancials } from "@/lib/auth/permissions";
-import { prisma } from "@/lib/prisma/client";
-import { getAnnualClosingBundle } from "@/lib/services/cierres-queries";
-import { CierreAnualPdf } from "@/lib/pdf/templates/CierreAnualPdf";
+import { requireAuth } from "@/server/auth/get-session";
+import { canExportFinancials } from "@/server/auth/permissions";
+import { prisma } from "@/server/prisma/client";
+import { getAnnualClosingBundle } from "@/server/services/cierres-queries";
+import { CierreAnualPdf } from "@/server/pdf/templates/CierreAnualPdf";
 
 export async function GET(request: Request): Promise<Response> {
   const { tenantId, dbUser } = await requireAuth();

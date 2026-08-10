@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { Prisma } from "@/generated/prisma/client";
-import { computeBalance, computeRentStatus, daysOverdue } from "@/lib/services/rent-status";
+import { computeBalance, computeRentStatus, daysOverdue } from "@/server/services/rent-status";
 
 const D = (n: number | string) => new Prisma.Decimal(n);
 const utc = (y: number, m: number, d: number) => new Date(Date.UTC(y, m, d));

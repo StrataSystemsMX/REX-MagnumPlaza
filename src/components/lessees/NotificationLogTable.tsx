@@ -16,11 +16,11 @@ import {
 import {
   notificationStatusLabel,
   communicationChannelLabel,
-} from "@/lib/i18n/enums";
-import { actionRetryNotification } from "@/lib/services/notifications-actions";
-import type { NotificationLogRow } from "@/lib/services/notifications-queries";
+} from "@/shared/i18n/enums";
+import { actionRetryNotification } from "@/server/services/notifications-actions";
+import type { NotificationLogRow } from "@/server/services/notifications-queries";
 import type { NotificationStatus } from "@/generated/prisma/enums";
-import { capitalizeFirst } from "@/lib/utils";
+import { capitalizeFirst } from "@/shared/utils";
 
 const DATETIME = new Intl.DateTimeFormat("es-MX", {
   dateStyle: "medium",

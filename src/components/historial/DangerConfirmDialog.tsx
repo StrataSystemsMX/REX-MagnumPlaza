@@ -13,7 +13,7 @@ import {
   AlertDialogMedia,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import type { DependentCounts } from "@/lib/services/audit-undo";
+import type { DependentCounts } from "@/server/services/audit-undo";
 
 // Singular / plural por tipo de dependiente.
 const DEP_LABELS: Record<keyof DependentCounts, [string, string]> = {

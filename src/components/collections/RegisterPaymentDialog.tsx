@@ -17,16 +17,16 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { EnumSelect } from "@/components/ui/enum-select";
 import { Textarea } from "@/components/ui/textarea";
-import { paymentMethodLabel, rentStatusLabel } from "@/lib/i18n/enums";
+import { paymentMethodLabel, rentStatusLabel } from "@/shared/i18n/enums";
 import {
   actionCanWaiveRent,
   actionRegisterPayment,
   actionWaiveRents,
-} from "@/lib/services/payments";
-import { registerPaymentSchema } from "@/lib/validators/payment";
+} from "@/server/services/payments";
+import { registerPaymentSchema } from "@/shared/validators/payment";
 import type { PaymentMethod } from "@/generated/prisma/enums";
-import { capitalizeFirst, cn } from "@/lib/utils";
-import { formatMXN } from "@/lib/format-currency";
+import { capitalizeFirst, cn } from "@/shared/utils";
+import { formatMXN } from "@/shared/format-currency";
 
 // Alias local: mismo output que la const Intl que existía aquí (2 decimales).
 const mxn = (v: number | string) => formatMXN(v, 2);

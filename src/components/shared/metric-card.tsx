@@ -1,7 +1,7 @@
 import type { ComponentType, ReactNode } from "react";
 import { ArrowDown, ArrowRight, ArrowUp } from "lucide-react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { cn } from "@/lib/utils";
+import { cn } from "@/shared/utils";
 
 export type MetricTrendDirection = "up" | "down" | "flat";
 

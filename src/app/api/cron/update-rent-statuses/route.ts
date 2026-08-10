@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { secureCompare } from "@/lib/secure-compare";
-import { runDailyMorosityCron } from "@/lib/services/cron-runner";
+import { secureCompare } from "@/server/secure-compare";
+import { runDailyMorosityCron } from "@/server/services/cron-runner";
 
 /**
  * Cron diario de actualización de morosidad. Disparado por Vercel Cron

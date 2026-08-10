@@ -29,10 +29,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { actionUpsertBudgetLine } from "@/lib/services/budgets";
-import { formatMXN } from "@/lib/format-currency";
-import { upsertBudgetLineSchema, type UpsertBudgetLineInput } from "@/lib/validators/budget";
-import { MONTH_KEYS, type BudgetLineRow } from "@/lib/services/budgets-types";
+import { actionUpsertBudgetLine } from "@/server/services/budgets";
+import { formatMXN } from "@/shared/format-currency";
+import { upsertBudgetLineSchema, type UpsertBudgetLineInput } from "@/shared/validators/budget";
+import { MONTH_KEYS, type BudgetLineRow } from "@/server/services/budgets-types";
 import type { BudgetConceptType } from "@/generated/prisma/enums";
 
 const CONCEPT_LABELS: Record<BudgetConceptType, string> = {

@@ -20,19 +20,19 @@ vi.mock("next/cache", () => ({
   revalidatePath: (...args: unknown[]) => mockRevalidatePath(...args),
   revalidateTag: vi.fn(),
 }));
-vi.mock("@/lib/auth/get-session", () => ({
+vi.mock("@/server/auth/get-session", () => ({
   requireAuth: () => mockRequireAuth(),
 }));
-vi.mock("@/lib/auth/permissions", async () => {
-  const actual = await vi.importActual<typeof import("@/lib/auth/permissions")>(
-    "@/lib/auth/permissions",
+vi.mock("@/server/auth/permissions", async () => {
+  const actual = await vi.importActual<typeof import("@/server/auth/permissions")>(
+    "@/server/auth/permissions",
   );
   return {
     ...actual,
     requirePermission: (...args: [string, string]) => mockRequirePermission(...args),
   };
 });
-vi.mock("@/lib/prisma/client", () => ({
+vi.mock("@/server/prisma/client", () => ({
   prisma: {
     maintenance: maintenanceMock,
     property: propertyMock,
@@ -71,7 +71,7 @@ beforeEach(() => {
 
 describe("actionCreateMaintenance", () => {
   it("crea mantenimiento sin costo — no crea egreso", async () => {
-    const { actionCreateMaintenance } = await import("@/lib/services/maintenances");
+    const { actionCreateMaintenance } = await import("@/server/services/maintenances");
     const result = await actionCreateMaintenance({
       propertyId: "prop-1",
       title: "Revisión eléctrica",
@@ -96,7 +96,7 @@ describe("actionCreateMaintenance", () => {
     expenseCategoryMock.findFirst.mockResolvedValue({ id: "cat-mant" });
     expenseMock.create.mockResolvedValue({ id: "expense-auto-1" });
 
-    const { actionCreateMaintenance } = await import("@/lib/services/maintenances");
+    const { actionCreateMaintenance } = await import("@/server/services/maintenances");
     await actionCreateMaintenance({
       propertyId: "prop-1",
       title: "Cambio de vidrio",
@@ -129,7 +129,7 @@ describe("actionCreateMaintenance", () => {
   it("con costo pero sin categoría MANTENIMIENTO_PLAZAS — no crea egreso", async () => {
     expenseCategoryMock.findFirst.mockResolvedValue(null);
 
-    const { actionCreateMaintenance } = await import("@/lib/services/maintenances");
+    const { actionCreateMaintenance } = await import("@/server/services/maintenances");
     await actionCreateMaintenance({
       propertyId: "prop-1",
       title: "Pintura",
@@ -148,7 +148,7 @@ describe("actionCreateMaintenance", () => {
     unitMock.findFirst.mockResolvedValue({ code: "L7" });
     expenseMock.create.mockResolvedValue({ id: "expense-auto-1" });
 
-    const { actionCreateMaintenance } = await import("@/lib/services/maintenances");
+    const { actionCreateMaintenance } = await import("@/server/services/maintenances");
     await actionCreateMaintenance({
       propertyId: "prop-1",
       unitId: "unit-7",
@@ -169,7 +169,7 @@ describe("actionCreateMaintenance", () => {
   it("falla si la propiedad no pertenece al tenant", async () => {
     propertyMock.findFirstOrThrow.mockRejectedValue(new Error("Not found"));
 
-    const { actionCreateMaintenance } = await import("@/lib/services/maintenances");
+    const { actionCreateMaintenance } = await import("@/server/services/maintenances");
     await expect(
       actionCreateMaintenance({
         propertyId: "prop-x",
@@ -197,7 +197,7 @@ describe("actionUpdateMaintenanceStatus", () => {
     });
     maintenanceMock.update.mockResolvedValue({ id: "maint-1", status: "IN_PROGRESS" });
 
-    const { actionUpdateMaintenanceStatus } = await import("@/lib/services/maintenances");
+    const { actionUpdateMaintenanceStatus } = await import("@/server/services/maintenances");
     await actionUpdateMaintenanceStatus({
       maintenanceId: "maint-1",
       status: "IN_PROGRESS",
@@ -219,7 +219,7 @@ describe("actionUpdateMaintenanceStatus", () => {
     });
     maintenanceMock.update.mockResolvedValue({ id: "maint-1", status: "COMPLETED" });
 
-    const { actionUpdateMaintenanceStatus } = await import("@/lib/services/maintenances");
+    const { actionUpdateMaintenanceStatus } = await import("@/server/services/maintenances");
     await actionUpdateMaintenanceStatus({
       maintenanceId: "maint-1",
       status: "COMPLETED",
@@ -242,7 +242,7 @@ describe("actionUpdateMaintenanceStatus", () => {
     maintenanceMock.update.mockResolvedValue({ id: "maint-1" });
     const explicitDate = utc(2026, 5, 30);
 
-    const { actionUpdateMaintenanceStatus } = await import("@/lib/services/maintenances");
+    const { actionUpdateMaintenanceStatus } = await import("@/server/services/maintenances");
     await actionUpdateMaintenanceStatus({
       maintenanceId: "maint-1",
       status: "COMPLETED",

@@ -1,11 +1,11 @@
 "use client";
 
 import { Badge } from "@/components/ui/badge";
-import { rentStatusLabel, rentStatusVariant } from "@/lib/i18n/enums";
-import type { ContractRent } from "@/lib/services/contracts-queries";
-import { capitalizeFirst } from "@/lib/utils";
-import { formatMXN } from "@/lib/format-currency";
-import { formatMonthShort } from "@/lib/format-date";
+import { rentStatusLabel, rentStatusVariant } from "@/shared/i18n/enums";
+import type { ContractRent } from "@/server/services/contracts-queries";
+import { capitalizeFirst } from "@/shared/utils";
+import { formatMXN } from "@/shared/format-currency";
+import { formatMonthShort } from "@/shared/format-date";
 
 function bgFor(status: ContractRent["status"]): string {
   switch (status) {

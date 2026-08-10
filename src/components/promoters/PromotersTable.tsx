@@ -41,12 +41,12 @@ import {
   actionCreatePromoterLink,
   actionDeactivatePromoterLink,
   actionTogglePromoterActive,
-} from "@/lib/services/promoters";
-import { createPromoterLinkSchema, type CreatePromoterLinkInput } from "@/lib/validators/promoter";
-import type { PromoterRow, UnitForLink } from "@/lib/services/promoters-queries";
-import { unitWithProperty } from "@/lib/i18n/unit-label";
-import { formatMXN } from "@/lib/format-currency";
-import { formatDate } from "@/lib/format-date";
+} from "@/server/services/promoters";
+import { createPromoterLinkSchema, type CreatePromoterLinkInput } from "@/shared/validators/promoter";
+import type { PromoterRow, UnitForLink } from "@/server/services/promoters-queries";
+import { unitWithProperty } from "@/shared/i18n/unit-label";
+import { formatMXN } from "@/shared/format-currency";
+import { formatDate } from "@/shared/format-date";
 
 function LinkDialog({ promoterId, units }: { promoterId: string; units: UnitForLink[] }) {
   const [open, setOpen] = useState(false);

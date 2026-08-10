@@ -6,7 +6,7 @@ import {
   detectAlerts,
   lastNMonths,
   parseMonth,
-} from "@/lib/services/dashboard-metrics-helpers";
+} from "@/server/services/dashboard-metrics-helpers";
 
 const dec = (n: number | string) => new Prisma.Decimal(n);
 const utc = (y: number, m: number, d: number) => new Date(Date.UTC(y, m, d));

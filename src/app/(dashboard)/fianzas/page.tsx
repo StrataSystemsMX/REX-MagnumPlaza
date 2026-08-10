@@ -1,12 +1,12 @@
 import { GuaranteesTable } from "@/components/guarantees/GuaranteesTable";
 import { NewGuaranteeDialog } from "@/components/guarantees/NewGuaranteeDialog";
-import { requireAuth } from "@/lib/auth/get-session";
-import { hasPermission } from "@/lib/auth/permissions";
+import { requireAuth } from "@/server/auth/get-session";
+import { hasPermission } from "@/server/auth/permissions";
 import {
   getContractsWithoutGuarantee,
   getGuarantees,
-} from "@/lib/services/guarantees-queries";
-import { getLegalEntities } from "@/lib/services/properties-queries";
+} from "@/server/services/guarantees-queries";
+import { getLegalEntities } from "@/server/services/properties-queries";
 
 export default async function FianzasPage() {
   const { dbUser } = await requireAuth();

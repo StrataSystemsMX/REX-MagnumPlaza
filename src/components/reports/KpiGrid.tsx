@@ -10,7 +10,7 @@ import {
   TrendingUp,
   Wrench,
 } from "lucide-react";
-import type { KpiSet, KpiValue } from "@/lib/services/kpi-queries";
+import type { KpiSet, KpiValue } from "@/server/services/kpi-queries";
 
 type KpiKey = keyof KpiSet;
 

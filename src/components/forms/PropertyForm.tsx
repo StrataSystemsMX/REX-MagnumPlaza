@@ -22,16 +22,16 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { propertyStatusLabel, propertyTypeLabel } from "@/lib/i18n/enums";
+import { propertyStatusLabel, propertyTypeLabel } from "@/shared/i18n/enums";
 import {
   createPropertySchema,
   type CreatePropertyInput,
-} from "@/lib/validators/property";
+} from "@/shared/validators/property";
 import {
   actionCreateProperty,
   actionUpdateProperty,
-} from "@/lib/services/properties";
-import type { LegalEntityOption } from "@/lib/services/properties-queries";
+} from "@/server/services/properties";
+import type { LegalEntityOption } from "@/server/services/properties-queries";
 import type { PropertyStatus, PropertyType } from "@/generated/prisma/enums";
 import { CharacterCount } from "@/components/ui/character-count";
 

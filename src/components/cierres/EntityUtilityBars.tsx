@@ -1,5 +1,5 @@
-import { cn } from "@/lib/utils";
-import { formatMXN } from "@/lib/format-currency";
+import { cn } from "@/shared/utils";
+import { formatMXN } from "@/shared/format-currency";
 import { themeFor } from "./MonthlyPivotTable";
 
 interface EntityUtilityBarsProps {

@@ -10,8 +10,8 @@ import {
   AUDIT_CATEGORIES,
   auditCategoryLabel,
   type AuditCategory,
-} from "@/lib/audit/categories";
-import { auditActionLabel } from "@/lib/i18n/enums";
+} from "@/shared/audit/categories";
+import { auditActionLabel } from "@/shared/i18n/enums";
 import type { AuditAction } from "@/generated/prisma/enums";
 
 const ALL = "ALL";

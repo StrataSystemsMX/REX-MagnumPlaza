@@ -10,13 +10,13 @@ import {
 } from "@/components/collections/OutstandingRentsTable";
 import { PaymentsTable } from "@/components/collections/PaymentsTable";
 import { RentasView } from "@/components/rentas/RentasView";
-import { cn } from "@/lib/utils";
+import { cn } from "@/shared/utils";
 import type {
   MonthlyCollections,
   OutstandingRent,
   PaymentListItem,
-} from "@/lib/services/payments-queries";
-import type { RentasTableData } from "@/lib/services/rentas-queries";
+} from "@/server/services/payments-queries";
+import type { RentasTableData } from "@/server/services/rentas-queries";
 
 export type CollectionsTopTab = "mes" | "por-cobrar" | "historial";
 type MesMode = "tarjetas" | "kpis";

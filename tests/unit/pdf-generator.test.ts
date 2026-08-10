@@ -13,7 +13,7 @@ const documentMock = { create: vi.fn() };
 const notificationLogMock = { create: vi.fn() };
 const documentTemplateMock = { findUnique: vi.fn() };
 
-vi.mock("@/lib/prisma/client", () => ({
+vi.mock("@/server/prisma/client", () => ({
   prisma: {
     tenant: tenantMock,
     lessee: lesseeMock,
@@ -26,7 +26,7 @@ vi.mock("@/lib/prisma/client", () => ({
 }));
 
 const uploadFileMock = vi.fn();
-vi.mock("@/lib/storage/r2", () => ({
+vi.mock("@/server/storage/r2", () => ({
   uploadFile: (...args: unknown[]) => uploadFileMock(...args),
 }));
 
@@ -125,7 +125,7 @@ describe("generateAccountStatement", () => {
     lesseeMock.findFirstOrThrow.mockResolvedValue(fakeLesseeWithContracts());
     documentMock.create.mockResolvedValue({ id: "doc-1" });
 
-    const { generateAccountStatement } = await import("@/lib/pdf/generator");
+    const { generateAccountStatement } = await import("@/server/pdf/generator");
     const result = await generateAccountStatement(TENANT_ID, "lessee-1");
 
     // Magic bytes del PDF
@@ -157,7 +157,7 @@ describe("generateAccountStatement", () => {
     tenantMock.findUniqueOrThrow.mockResolvedValue(fakeTenant());
     lesseeMock.findFirstOrThrow.mockResolvedValue(fakeLesseeWithContracts());
 
-    const { generateAccountStatement } = await import("@/lib/pdf/generator");
+    const { generateAccountStatement } = await import("@/server/pdf/generator");
     const result = await generateAccountStatement(TENANT_ID, "lessee-1", {
       persist: false,
     });
@@ -174,7 +174,7 @@ describe("generateAccountStatement", () => {
     lesseeMock.findFirstOrThrow.mockResolvedValue(fakeLesseeWithContracts());
     documentMock.create.mockResolvedValue({ id: "doc-1" });
 
-    const { generateAccountStatement } = await import("@/lib/pdf/generator");
+    const { generateAccountStatement } = await import("@/server/pdf/generator");
     const from = utc(2026, 0, 1); // Ene 2026
     const to = utc(2026, 2, 1); // Mar 2026
     const result = await generateAccountStatement(TENANT_ID, "lessee-1", {
@@ -206,7 +206,7 @@ describe("generateAccountStatement", () => {
     lesseeMock.findFirstOrThrow.mockResolvedValue(fakeLesseeWithContracts());
     documentMock.create.mockResolvedValue({ id: "doc-1" });
 
-    const { generateAccountStatement } = await import("@/lib/pdf/generator");
+    const { generateAccountStatement } = await import("@/server/pdf/generator");
     await generateAccountStatement(TENANT_ID, "lessee-1");
 
     const arg = lesseeMock.findFirstOrThrow.mock.calls[0]?.[0] as {
@@ -268,7 +268,7 @@ describe("generateOverdueReminder", () => {
     documentMock.create.mockResolvedValue({ id: "doc-2" });
     notificationLogMock.create.mockResolvedValue({ id: "log-1" });
 
-    const { generateOverdueReminder } = await import("@/lib/pdf/generator");
+    const { generateOverdueReminder } = await import("@/server/pdf/generator");
     const result = await generateOverdueReminder(TENANT_ID, "rent-x", "2M");
 
     expect(result.buffer.subarray(0, 4).toString()).toBe(PDF_HEADER);
@@ -303,7 +303,7 @@ describe("generateOverdueReminder", () => {
     documentMock.create.mockResolvedValue({ id: "doc-3" });
     notificationLogMock.create.mockResolvedValue({ id: "log-2" });
 
-    const { generateOverdueReminder } = await import("@/lib/pdf/generator");
+    const { generateOverdueReminder } = await import("@/server/pdf/generator");
     const result = await generateOverdueReminder(TENANT_ID, "rent-x", "3M");
 
     expect(result.buffer.subarray(0, 4).toString()).toBe(PDF_HEADER);
@@ -331,7 +331,7 @@ describe("generateOverdueReminder", () => {
       closing: "Atentamente",
     });
 
-    const { generateOverdueReminder } = await import("@/lib/pdf/generator");
+    const { generateOverdueReminder } = await import("@/server/pdf/generator");
     const result = await generateOverdueReminder(TENANT_ID, "rent-x", "2M");
 
     // Se consulta la plantilla por (tenantId, level) y el PDF se renderiza igual.
@@ -350,7 +350,7 @@ describe("generateOverdueReminder", () => {
 
 describe("resolveTokens", () => {
   it("reemplaza tokens conocidos y deja los desconocidos como placeholder", async () => {
-    const { resolveTokens } = await import("@/lib/pdf/template-config");
+    const { resolveTokens } = await import("@/server/pdf/template-config");
     const result = resolveTokens("Hola {nombre}, debes {monto}, total {pendiente}", {
       nombre: "Juan",
       monto: "$1,000",

@@ -3,11 +3,11 @@
 import { AlertTriangle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { SendNotificationDialog } from "@/components/collections/SendNotificationDialog";
-import type { LesseeDetail, LesseeOverdueRent } from "@/lib/services/lessees-queries";
-import type { ReminderLevel } from "@/lib/pdf/template-config";
-import { formatMXN } from "@/lib/format-currency";
-import { formatPeriodLong } from "@/lib/format-date";
-import { isPlaza } from "@/lib/i18n/unit-label";
+import type { LesseeDetail, LesseeOverdueRent } from "@/server/services/lessees-queries";
+import type { ReminderLevel } from "@/server/pdf/template-config";
+import { formatMXN } from "@/shared/format-currency";
+import { formatPeriodLong } from "@/shared/format-date";
+import { isPlaza } from "@/shared/i18n/unit-label";
 
 function levelFromStatus(status: LesseeOverdueRent["status"]): ReminderLevel {
   if (status === "OVERDUE_2M") return "2M";

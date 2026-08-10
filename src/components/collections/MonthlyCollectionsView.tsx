@@ -29,14 +29,14 @@ import {
 } from "@/components/collections/RegisterPaymentDialog";
 import { SendNotificationDialog } from "@/components/collections/SendNotificationDialog";
 import { INMUEBLES_TAB_VALUE } from "@/components/shared/property-filter-constants";
-import { cn } from "@/lib/utils";
+import { cn } from "@/shared/utils";
 import type {
   MonthlyCollections,
   MonthlyPropertyGroup,
   MonthlyUnitRow,
   MonthlyUnitStatus,
-} from "@/lib/services/payments-queries";
-import { formatMXN } from "@/lib/format-currency";
+} from "@/server/services/payments-queries";
+import { formatMXN } from "@/shared/format-currency";
 
 // Alias local: mismo output que la const Intl que existía aquí (2 decimales).
 const mxn = (v: number | string) => formatMXN(v, 2);

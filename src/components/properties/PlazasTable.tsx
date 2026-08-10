@@ -48,15 +48,15 @@ import {
 } from "@/components/properties/UnitCard";
 import { NewUnitDialog } from "@/components/properties/NewUnitDialog";
 import { usePropertiesViewMode } from "@/hooks/use-properties-view-mode";
-import type { PropertiesViewMode } from "@/lib/properties-view-mode";
-import { actionDeleteProperty } from "@/lib/services/properties";
-import { actionCountSubjectDependents } from "@/lib/services/audit-actions";
+import type { PropertiesViewMode } from "@/shared/properties-view-mode";
+import { actionDeleteProperty } from "@/server/services/properties";
+import { actionCountSubjectDependents } from "@/server/services/audit-actions";
 import { DependentsWarning } from "@/components/historial/DangerConfirmDialog";
-import type { DependentCounts } from "@/lib/services/audit-undo";
+import type { DependentCounts } from "@/server/services/audit-undo";
 import type {
   LegalEntityOption,
   PropertyListItem,
-} from "@/lib/services/properties-queries";
+} from "@/server/services/properties-queries";
 
 interface PlazasTableProps {
   plazas: ReadonlyArray<PropertyListItem>;
