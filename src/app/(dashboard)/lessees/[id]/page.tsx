@@ -3,14 +3,14 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { LesseeDetailTabs } from "@/components/lessees/LesseeDetailTabs";
-import { communicationChannelLabel } from "@/lib/i18n/enums";
-import { getAvailableUnits } from "@/lib/services/contracts-queries";
-import { getLesseeById, getOverdueRentsByLessee } from "@/lib/services/lessees-queries";
-import { getNotificationLogsByLessee } from "@/lib/services/notifications-queries";
+import { communicationChannelLabel } from "@/shared/i18n/enums";
+import { getAvailableUnits } from "@/server/services/contracts-queries";
+import { getLesseeById, getOverdueRentsByLessee } from "@/server/services/lessees-queries";
+import { getNotificationLogsByLessee } from "@/server/services/notifications-queries";
 import {
   getLesseeStatement,
   getPaymentsByLessee,
-} from "@/lib/services/payments-queries";
+} from "@/server/services/payments-queries";
 
 interface Params {
   id: string;

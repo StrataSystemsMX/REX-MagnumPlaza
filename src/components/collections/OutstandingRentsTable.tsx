@@ -47,15 +47,15 @@ import { SendNotificationDialog } from "@/components/collections/SendNotificatio
 import { RentStatusBadge } from "@/components/shared/RentStatusBadge";
 import { INMUEBLES_TAB_VALUE } from "@/components/shared/property-filter-constants";
 import { Badge } from "@/components/ui/badge";
-import { OUTSTANDING_STATUSES } from "@/lib/constants/rent-statuses";
-import { rentStatusLabel } from "@/lib/i18n/enums";
-import { unitWithProperty } from "@/lib/i18n/unit-label";
-import type { OutstandingRent } from "@/lib/services/payments-queries";
+import { OUTSTANDING_STATUSES } from "@/shared/constants/rent-statuses";
+import { rentStatusLabel } from "@/shared/i18n/enums";
+import { unitWithProperty } from "@/shared/i18n/unit-label";
+import type { OutstandingRent } from "@/server/services/payments-queries";
 import type { RentStatus } from "@/generated/prisma/enums";
-import type { ReminderLevel } from "@/lib/pdf/template-config";
-import { cn } from "@/lib/utils";
-import { formatMXN } from "@/lib/format-currency";
-import { formatPeriodLong } from "@/lib/format-date";
+import type { ReminderLevel } from "@/server/pdf/template-config";
+import { cn } from "@/shared/utils";
+import { formatMXN } from "@/shared/format-currency";
+import { formatPeriodLong } from "@/shared/format-date";
 
 type StatusFilter = RentStatus | "ALL";
 

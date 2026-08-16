@@ -35,14 +35,14 @@ import {
 } from "@/components/ui/dialog";
 import { UnitForm } from "@/components/forms/UnitForm";
 import { UnitPhotoGallery } from "@/components/properties/UnitPhotoGallery";
-import { unitStatusLabel, unitStatusVariant } from "@/lib/i18n/enums";
-import { actionDeleteUnit } from "@/lib/services/units";
-import { actionCountSubjectDependents } from "@/lib/services/audit-actions";
+import { unitStatusLabel, unitStatusVariant } from "@/shared/i18n/enums";
+import { actionDeleteUnit } from "@/server/services/units";
+import { actionCountSubjectDependents } from "@/server/services/audit-actions";
 import { DependentsWarning } from "@/components/historial/DangerConfirmDialog";
-import type { DependentCounts } from "@/lib/services/audit-undo";
+import type { DependentCounts } from "@/server/services/audit-undo";
 import type { UnitStatus } from "@/generated/prisma/enums";
-import { formatMXN } from "@/lib/format-currency";
-import { formatDate } from "@/lib/format-date";
+import { formatMXN } from "@/shared/format-currency";
+import { formatDate } from "@/shared/format-date";
 
 function formatContractDate(d: string | Date | null | undefined): string | null {
   if (!d) return null;

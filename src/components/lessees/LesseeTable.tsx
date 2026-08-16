@@ -22,8 +22,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { LesseeForm } from "@/components/forms/LesseeForm";
-import { communicationChannelLabel } from "@/lib/i18n/enums";
-import type { LesseeListItem } from "@/lib/services/lessees-queries";
+import { communicationChannelLabel } from "@/shared/i18n/enums";
+import type { LesseeListItem } from "@/server/services/lessees-queries";
 import type { PropertyType } from "@/generated/prisma/enums";
 
 const TABLE_COLUMN_COUNT = 4;

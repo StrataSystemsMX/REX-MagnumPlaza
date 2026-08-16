@@ -18,23 +18,23 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { requireAuth } from "@/lib/auth/get-session";
-import { getUserRoleCodes } from "@/lib/auth/permissions";
+import { requireAuth } from "@/server/auth/get-session";
+import { getUserRoleCodes } from "@/server/auth/permissions";
 import {
   maintenanceStatusLabel,
   maintenanceTypeLabel,
   propertyTypeLabel,
   unitStatusLabel,
-} from "@/lib/i18n/enums";
-import { getPropertyReport } from "@/lib/services/property-report-queries";
+} from "@/shared/i18n/enums";
+import { getPropertyReport } from "@/server/services/property-report-queries";
 import type {
   MaintenanceStatus,
   MaintenanceType,
   PropertyType,
   UnitStatus,
 } from "@/generated/prisma/enums";
-import { capitalizeFirst } from "@/lib/utils";
-import { formatMXN } from "@/lib/format-currency";
+import { capitalizeFirst } from "@/shared/utils";
+import { formatMXN } from "@/shared/format-currency";
 
 interface PageProps {
   params: Promise<{ id: string }>;

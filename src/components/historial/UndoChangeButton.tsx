@@ -15,17 +15,17 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { DangerConfirmDialog } from "@/components/historial/DangerConfirmDialog";
-import { actionGetUndoImpact, actionUndoChange } from "@/lib/services/audit-actions";
+import { actionGetUndoImpact, actionUndoChange } from "@/server/services/audit-actions";
 import {
   auditCategoryLabel,
   categoryOf,
   entityTypeLabel,
   reversibilityOf,
-} from "@/lib/audit/categories";
-import { describeAuditDetail } from "@/lib/audit/describe";
-import { capitalizeFirst } from "@/lib/utils";
-import type { AuditLogEntry } from "@/lib/services/audit";
-import type { UndoImpact } from "@/lib/services/audit-undo";
+} from "@/shared/audit/categories";
+import { describeAuditDetail } from "@/shared/audit/describe";
+import { capitalizeFirst } from "@/shared/utils";
+import type { AuditLogEntry } from "@/server/services/audit";
+import type { UndoImpact } from "@/server/services/audit-undo";
 import type { AuditAction } from "@/generated/prisma/enums";
 
 const DATETIME = new Intl.DateTimeFormat("es-MX", {

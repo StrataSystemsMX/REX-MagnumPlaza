@@ -1,6 +1,6 @@
 import { Badge } from "@/components/ui/badge";
-import { rentStatusLabel } from "@/lib/i18n/enums";
-import { cn } from "@/lib/utils";
+import { rentStatusLabel } from "@/shared/i18n/enums";
+import { cn } from "@/shared/utils";
 import type { RentStatus } from "@/generated/prisma/enums";
 
 /**

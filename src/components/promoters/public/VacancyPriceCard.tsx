@@ -1,11 +1,11 @@
 import { UserCircle2 } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
-import { unitStatusLabel, unitStatusVariant } from "@/lib/i18n/enums";
-import type { PublicVacancyData } from "@/lib/services/promoters-public";
-import { buildWhatsAppUrl } from "@/lib/utils/whatsapp-link";
+import { unitStatusLabel, unitStatusVariant } from "@/shared/i18n/enums";
+import type { PublicVacancyData } from "@/server/services/promoters-public";
+import { buildWhatsAppUrl } from "@/shared/utils/whatsapp-link";
 import { VacancyLeadButton } from "@/components/promoters/public/VacancyLeadButton";
 import { Badge } from "@/components/ui/badge";
-import { formatMXN } from "@/lib/format-currency";
+import { formatMXN } from "@/shared/format-currency";
 
 interface Props {
   token: string;

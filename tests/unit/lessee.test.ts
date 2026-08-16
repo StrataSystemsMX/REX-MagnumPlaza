@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createLesseeSchema } from "@/lib/validators/lessee";
+import { createLesseeSchema } from "@/shared/validators/lessee";
 
 describe("createLesseeSchema", () => {
   it("acepta una entrada mínima válida", () => {

@@ -24,9 +24,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { actionCreateInvestmentProject } from "@/lib/services/inversiones-actions";
+import { actionCreateInvestmentProject } from "@/server/services/inversiones-actions";
 import type { InvestmentProjectStatus } from "@/generated/prisma/enums";
-import type { LegalEntityOption } from "@/lib/services/properties-queries";
+import type { LegalEntityOption } from "@/server/services/properties-queries";
 
 const STATUS_OPTIONS: { value: InvestmentProjectStatus; label: string }[] = [
   { value: "PLANNING", label: "Planeación" },

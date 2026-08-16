@@ -30,15 +30,16 @@ const txMock = {
 
 vi.mock("next/cache", () => ({
   revalidatePath: (...args: unknown[]) => mockRevalidatePath(...args),
+  revalidateTag: vi.fn(),
 }));
 
-vi.mock("@/lib/auth/get-session", () => ({
+vi.mock("@/server/auth/get-session", () => ({
   requireAuth: () => mockRequireAuth(),
 }));
 
-vi.mock("@/lib/auth/permissions", async () => {
-  const actual = await vi.importActual<typeof import("@/lib/auth/permissions")>(
-    "@/lib/auth/permissions",
+vi.mock("@/server/auth/permissions", async () => {
+  const actual = await vi.importActual<typeof import("@/server/auth/permissions")>(
+    "@/server/auth/permissions",
   );
   return {
     ...actual,
@@ -46,12 +47,12 @@ vi.mock("@/lib/auth/permissions", async () => {
   };
 });
 
-vi.mock("@/lib/services/rent-generation", () => ({
+vi.mock("@/server/services/rent-generation", () => ({
   generateRentsForContract: (...args: unknown[]) => mockGenerateRents(...args),
   reconcileRentsForContract: (...args: unknown[]) => mockReconcileRents(...args),
 }));
 
-vi.mock("@/lib/prisma/client", () => ({
+vi.mock("@/server/prisma/client", () => ({
   prisma: {
     contract: contractMock,
     unit: unitMock,
@@ -97,7 +98,7 @@ describe("actionCreateContract", () => {
       status: "RENTADA",
     });
 
-    const { actionCreateContract } = await import("@/lib/services/contracts");
+    const { actionCreateContract } = await import("@/server/services/contracts");
 
     await expect(actionCreateContract(VALID_INPUT)).rejects.toThrow(
       /ya está rentada/i,
@@ -123,7 +124,7 @@ describe("actionCreateContract", () => {
       endDate: new Date(Date.UTC(2026, 11, 31)),
     });
 
-    const { actionCreateContract } = await import("@/lib/services/contracts");
+    const { actionCreateContract } = await import("@/server/services/contracts");
     const result = await actionCreateContract(VALID_INPUT);
 
     expect(result).toMatchObject({ id: "contract-1" });
@@ -158,7 +159,7 @@ describe("actionUpdateContract", () => {
     contractMock.findFirstOrThrow.mockResolvedValue({ status: "ACTIVE" });
     mockGenerateRents.mockResolvedValue({ created: 12, skipped: 0, total: 12 });
 
-    const { actionUpdateContract } = await import("@/lib/services/contracts");
+    const { actionUpdateContract } = await import("@/server/services/contracts");
     await actionUpdateContract("contract-1", { status: "ACTIVE" });
 
     expect(mockGenerateRents).toHaveBeenCalledWith("tenant-1", "contract-1");
@@ -179,7 +180,7 @@ describe("actionUpdateContract", () => {
       created: 1, removed: 0, resynced: 3, keptWithPayments: 0,
     });
 
-    const { actionUpdateContract } = await import("@/lib/services/contracts");
+    const { actionUpdateContract } = await import("@/server/services/contracts");
     const result = await actionUpdateContract("contract-1", { monthlyAmount: 15000 });
 
     expect(mockReconcileRents).toHaveBeenCalledWith("tenant-1", "contract-1");
@@ -192,7 +193,7 @@ describe("actionUpdateContract", () => {
     contractMock.updateMany.mockResolvedValue({ count: 1 });
     contractMock.findFirstOrThrow.mockResolvedValue({ status: "DRAFT" });
 
-    const { actionUpdateContract } = await import("@/lib/services/contracts");
+    const { actionUpdateContract } = await import("@/server/services/contracts");
     await actionUpdateContract("contract-1", { notes: "nota interna" });
 
     expect(mockGenerateRents).not.toHaveBeenCalled();
@@ -213,7 +214,7 @@ describe("actionTerminateContract", () => {
       status: "TERMINATED",
     });
 
-    const { actionTerminateContract } = await import("@/lib/services/contracts");
+    const { actionTerminateContract } = await import("@/server/services/contracts");
 
     await actionTerminateContract("contract-1", {
       terminationDate: new Date(Date.UTC(2026, 5, 30)),
@@ -257,7 +258,7 @@ describe("actionActivateContract", () => {
     });
     mockGenerateRents.mockResolvedValue({ contractId: "contract-1", created: 12, skipped: 0, total: 12 });
 
-    const { actionActivateContract } = await import("@/lib/services/contracts");
+    const { actionActivateContract } = await import("@/server/services/contracts");
     const result = await actionActivateContract("contract-1");
 
     expect(result.rentsCreated).toBe(12);
@@ -270,7 +271,7 @@ describe("actionActivateContract", () => {
 
   it("rechaza activar un contrato que no está en DRAFT", async () => {
     contractMock.findFirst.mockResolvedValue({ id: "contract-1", status: "ACTIVE" });
-    const { actionActivateContract } = await import("@/lib/services/contracts");
+    const { actionActivateContract } = await import("@/server/services/contracts");
     await expect(actionActivateContract("contract-1")).rejects.toThrow(/borrador/i);
     expect(mockGenerateRents).not.toHaveBeenCalled();
   });

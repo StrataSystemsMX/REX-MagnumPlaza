@@ -11,10 +11,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import type { PayrollListItem } from "@/lib/services/payroll-queries";
+import type { PayrollListItem } from "@/server/services/payroll-queries";
 import type { PayrollType } from "@/generated/prisma/enums";
-import { payrollTypeLabel } from "@/lib/i18n/enums";
-import { formatMXN } from "@/lib/format-currency";
+import { payrollTypeLabel } from "@/shared/i18n/enums";
+import { formatMXN } from "@/shared/format-currency";
 
 const MONTH_LABELS = [
   "Enero",

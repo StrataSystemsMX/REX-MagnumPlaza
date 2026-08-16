@@ -25,17 +25,17 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { includedServiceLabel, unitStatusLabel } from "@/lib/i18n/enums";
+import { includedServiceLabel, unitStatusLabel } from "@/shared/i18n/enums";
 import {
   createUnitSchema,
   type CreateUnitInput,
-} from "@/lib/validators/unit";
+} from "@/shared/validators/unit";
 import { CharacterCount } from "@/components/ui/character-count";
 import {
   actionCreateUnit,
   actionUngroupUnit,
   actionUpdateUnit,
-} from "@/lib/services/units";
+} from "@/server/services/units";
 import type { IncludedService, UnitStatus } from "@/generated/prisma/enums";
 
 const UNIT_STATUSES: ReadonlyArray<UnitStatus> = [

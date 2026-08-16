@@ -4,10 +4,10 @@ import { notFound } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { NotificationSettingsForm } from "@/components/configuracion/NotificationSettingsForm";
 import { ReminderTemplatesEditor } from "@/components/configuracion/ReminderTemplatesEditor";
-import { requireAuth } from "@/lib/auth/get-session";
-import { isMaster } from "@/lib/auth/permissions";
-import { actionGetTenantNotificationSettings } from "@/lib/services/notifications-actions";
-import { getReminderTemplates } from "@/lib/services/document-templates";
+import { requireAuth } from "@/server/auth/get-session";
+import { isMaster } from "@/server/auth/permissions";
+import { actionGetTenantNotificationSettings } from "@/server/services/notifications-actions";
+import { getReminderTemplates } from "@/server/services/document-templates";
 
 export default async function ConfiguracionNotificacionesPage() {
   const { dbUser } = await requireAuth();

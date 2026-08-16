@@ -7,13 +7,13 @@ import {
   entityTypesForCategory,
   isReversible,
   reversibilityOf,
-} from "@/lib/audit/categories";
+} from "@/shared/audit/categories";
 import {
   coerceFields,
   serializeFields,
   DATE_KEYS,
-} from "@/lib/audit/field-types";
-import { describeAuditDetail } from "@/lib/audit/describe";
+} from "@/shared/audit/field-types";
+import { describeAuditDetail } from "@/shared/audit/describe";
 
 // ============================================================================
 // Mocks (para audit-undo / audit-actions)
@@ -53,20 +53,20 @@ const prismaMock = {
 vi.mock("next/cache", () => ({
   revalidatePath: (...args: unknown[]) => mockRevalidatePath(...args),
 }));
-vi.mock("@/lib/auth/get-session", () => ({
+vi.mock("@/server/auth/get-session", () => ({
   requireAuth: () => mockRequireAuth(),
 }));
-vi.mock("@/lib/auth/permissions", async () => {
-  const actual = await vi.importActual<typeof import("@/lib/auth/permissions")>(
-    "@/lib/auth/permissions",
+vi.mock("@/server/auth/permissions", async () => {
+  const actual = await vi.importActual<typeof import("@/server/auth/permissions")>(
+    "@/server/auth/permissions",
   );
   return {
     ...actual,
     requireAuditRestore: (...args: [string]) => mockRequireAuditRestore(...args),
   };
 });
-vi.mock("@/lib/prisma/client", () => ({ prisma: prismaMock, prismaUnsafe: {} }));
-vi.mock("@/lib/services/rent-generation", () => ({
+vi.mock("@/server/prisma/client", () => ({ prisma: prismaMock, prismaUnsafe: {} }));
+vi.mock("@/server/services/rent-generation", () => ({
   reconcileRentsForContract: (...args: unknown[]) => mockReconcile(...args),
 }));
 
@@ -342,7 +342,7 @@ describe("reversibilityOf", () => {
 
 describe("UNDO_CAPABILITIES ↔ UNDO_HANDLERS", () => {
   it("cada capacidad declarada tiene su handler implementado", async () => {
-    const { UNDO_HANDLERS } = await import("@/lib/services/audit-undo");
+    const { UNDO_HANDLERS } = await import("@/server/services/audit-undo");
     for (const [entityType, caps] of Object.entries(UNDO_CAPABILITIES)) {
       const handler = UNDO_HANDLERS[entityType];
       expect(handler, `falta handler para ${entityType}`).toBeDefined();
@@ -360,7 +360,7 @@ describe("UNDO_CAPABILITIES ↔ UNDO_HANDLERS", () => {
 
 describe("cascadeDelete Contract", () => {
   it("borra pagos→rentas→fianzas→docs→contrato y libera la unidad", async () => {
-    const { UNDO_HANDLERS } = await import("@/lib/services/audit-undo");
+    const { UNDO_HANDLERS } = await import("@/server/services/audit-undo");
     const cascade = UNDO_HANDLERS.Contract?.cascadeDelete;
     if (!cascade) throw new Error("Contract.cascadeDelete no definido");
     prismaMock.contract.findFirst.mockResolvedValue({ unitId: "unit-1" });
@@ -408,7 +408,7 @@ describe("actionUndoChange", () => {
       .mockResolvedValueOnce(mkLog({ action: "UPDATE", changes: { before: { legalName: "Antes" }, after: { legalName: "Después" } } }))
       .mockResolvedValueOnce(null); // sin cambios más recientes
 
-    const { actionUndoChange } = await import("@/lib/services/audit-actions");
+    const { actionUndoChange } = await import("@/server/services/audit-actions");
     await actionUndoChange("log-1");
 
     expect(prismaMock.lessee.updateMany).toHaveBeenCalledWith({
@@ -425,7 +425,7 @@ describe("actionUndoChange", () => {
       .mockResolvedValueOnce(null);
     prismaMock.contract.findMany.mockResolvedValue([]); // inquilino sin contratos
 
-    const { actionUndoChange } = await import("@/lib/services/audit-actions");
+    const { actionUndoChange } = await import("@/server/services/audit-actions");
     await actionUndoChange("log-1");
 
     expect(prismaMock.lessee.deleteMany).toHaveBeenCalledWith({ where: { id: "l1", tenantId: TENANT } });
@@ -438,7 +438,7 @@ describe("actionUndoChange", () => {
       .mockResolvedValueOnce(mkLog({ action: "UPDATE", changes: { before: {}, after: {} } }))
       .mockResolvedValueOnce({ id: "log-2" }); // existe uno más nuevo
 
-    const { actionUndoChange } = await import("@/lib/services/audit-actions");
+    const { actionUndoChange } = await import("@/server/services/audit-actions");
     await expect(actionUndoChange("log-1")).rejects.toThrow(/más reciente/i);
     expect(prismaMock.lessee.updateMany).not.toHaveBeenCalled();
   });
@@ -448,14 +448,14 @@ describe("actionUndoChange", () => {
       mkLog({ action: "UPDATE", entityType: "Expense", changes: { after: {} } }),
     );
 
-    const { actionUndoChange } = await import("@/lib/services/audit-actions");
+    const { actionUndoChange } = await import("@/server/services/audit-actions");
     await expect(actionUndoChange("log-1")).rejects.toThrow();
     expect(prismaMock.$transaction).not.toHaveBeenCalled();
   });
 
   it("falla si el movimiento no existe", async () => {
     prismaMock.auditLog.findFirst.mockResolvedValueOnce(null);
-    const { actionUndoChange } = await import("@/lib/services/audit-actions");
+    const { actionUndoChange } = await import("@/server/services/audit-actions");
     await expect(actionUndoChange("missing")).rejects.toThrow(/no encontrado/i);
   });
 });

@@ -26,7 +26,7 @@ import { PropertyPhotoUploader } from "@/components/properties/PropertyPhotoUplo
 import {
   actionDeletePropertyPhoto,
   actionReorderPropertyPhotos,
-} from "@/lib/services/property-photos";
+} from "@/server/services/property-photos";
 
 interface Photo {
   id: string;

@@ -27,14 +27,14 @@ import {
 import {
   actionDeleteCadastralReceipt,
   actionUploadCadastralReceipt,
-} from "@/lib/services/cadastral";
-import type { CadastralListItem } from "@/lib/services/cadastral-queries";
+} from "@/server/services/cadastral";
+import type { CadastralListItem } from "@/server/services/cadastral-queries";
 import {
   ALLOWED_CADASTRAL_RECEIPT_MIME_TYPES,
   MAX_CADASTRAL_RECEIPT_SIZE_BYTES,
   cadastralReceiptFileSchema,
-} from "@/lib/validators/cadastral";
-import { capitalizeFirst } from "@/lib/utils";
+} from "@/shared/validators/cadastral";
+import { capitalizeFirst } from "@/shared/utils";
 
 const ACCEPT = ALLOWED_CADASTRAL_RECEIPT_MIME_TYPES.join(",");
 const MAX_MB = MAX_CADASTRAL_RECEIPT_SIZE_BYTES / 1024 / 1024;

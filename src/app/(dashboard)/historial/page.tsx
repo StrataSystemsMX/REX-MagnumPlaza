@@ -1,9 +1,9 @@
 import { notFound } from "next/navigation";
-import { requireAuth } from "@/lib/auth/get-session";
-import { canAccessAudit } from "@/lib/auth/permissions";
-import { prisma } from "@/lib/prisma/client";
-import { getAuditLog } from "@/lib/services/audit";
-import { AUDIT_CATEGORIES, type AuditCategory } from "@/lib/audit/categories";
+import { requireAuth } from "@/server/auth/get-session";
+import { canAccessAudit } from "@/server/auth/permissions";
+import { prisma } from "@/server/prisma/client";
+import { getAuditLog } from "@/server/services/audit";
+import { AUDIT_CATEGORIES, type AuditCategory } from "@/shared/audit/categories";
 import { HistorialCambiosView } from "@/components/historial/HistorialCambiosView";
 import type { AuditAction } from "@/generated/prisma/enums";
 

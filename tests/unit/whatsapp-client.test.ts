@@ -18,17 +18,17 @@ afterEach(() => {
 
 describe("normalizePhone", () => {
   it("agrega prefijo de México a 10 dígitos", async () => {
-    const { normalizePhone } = await import("@/lib/whatsapp/client");
+    const { normalizePhone } = await import("@/server/whatsapp/client");
     expect(normalizePhone("662 123 4567")).toBe("526621234567");
   });
 
   it("respeta números ya con código de país", async () => {
-    const { normalizePhone } = await import("@/lib/whatsapp/client");
+    const { normalizePhone } = await import("@/server/whatsapp/client");
     expect(normalizePhone("+52 662 1234567")).toBe("526621234567");
   });
 
   it("rechaza números muy cortos", async () => {
-    const { normalizePhone, WhatsAppError } = await import("@/lib/whatsapp/client");
+    const { normalizePhone, WhatsAppError } = await import("@/server/whatsapp/client");
     expect(() => normalizePhone("123")).toThrow(WhatsAppError);
   });
 });
@@ -36,7 +36,7 @@ describe("normalizePhone", () => {
 describe("sendTemplate (dev mode, sin token)", () => {
   it("simula el envío y devuelve un messageId fake", async () => {
     const consoleSpy = vi.spyOn(console, "info").mockImplementation(() => {});
-    const { sendTemplate } = await import("@/lib/whatsapp/client");
+    const { sendTemplate } = await import("@/server/whatsapp/client");
     const result = await sendTemplate("6621234567", "rent_reminder_1m", [
       "Goyoma",
       "abril 2026",
@@ -65,7 +65,7 @@ describe("sendTemplate (prod mode, con token)", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    const { sendTemplate } = await import("@/lib/whatsapp/client");
+    const { sendTemplate } = await import("@/server/whatsapp/client");
     const result = await sendTemplate("6621234567", "rent_reminder_1m", [
       "Goyoma",
       "abril 2026",
@@ -101,7 +101,7 @@ describe("sendTemplate (prod mode, con token)", () => {
         }),
       }),
     );
-    const { sendTemplate, WhatsAppError } = await import("@/lib/whatsapp/client");
+    const { sendTemplate, WhatsAppError } = await import("@/server/whatsapp/client");
     await expect(sendTemplate("6621234567", "missing", [])).rejects.toMatchObject({
       name: "WhatsAppError",
       code: "TEMPLATE_NOT_APPROVED",
@@ -123,7 +123,7 @@ describe("sendTemplate (prod mode, con token)", () => {
         }),
       }),
     );
-    const { sendTemplate } = await import("@/lib/whatsapp/client");
+    const { sendTemplate } = await import("@/server/whatsapp/client");
     await expect(sendTemplate("6621234567", "rent_reminder_1m", [])).rejects.toMatchObject({
       code: "RATE_LIMITED",
     });
@@ -140,7 +140,7 @@ describe("sendTemplate (prod mode, con token)", () => {
         }),
       }),
     );
-    const { sendTemplate } = await import("@/lib/whatsapp/client");
+    const { sendTemplate } = await import("@/server/whatsapp/client");
     await expect(sendTemplate("6621234567", "x", [])).rejects.toMatchObject({
       code: "NOT_ON_WHATSAPP",
     });
@@ -157,7 +157,7 @@ describe("sendTemplate (prod mode, con token)", () => {
         }),
       }),
     );
-    const { sendTextMessage } = await import("@/lib/whatsapp/client");
+    const { sendTextMessage } = await import("@/server/whatsapp/client");
     await expect(sendTextMessage("6621234567", "hola")).rejects.toMatchObject({
       code: "OUTSIDE_SERVICE_WINDOW",
     });
@@ -166,14 +166,14 @@ describe("sendTemplate (prod mode, con token)", () => {
 
 describe("isWhatsAppConfigured", () => {
   it("false sin variables de entorno", async () => {
-    const { isWhatsAppConfigured } = await import("@/lib/whatsapp/client");
+    const { isWhatsAppConfigured } = await import("@/server/whatsapp/client");
     expect(isWhatsAppConfigured()).toBe(false);
   });
 
   it("true con ambas variables", async () => {
     process.env[ENV_TOKEN] = "x";
     process.env[ENV_PHONE_ID] = "y";
-    const { isWhatsAppConfigured } = await import("@/lib/whatsapp/client");
+    const { isWhatsAppConfigured } = await import("@/server/whatsapp/client");
     expect(isWhatsAppConfigured()).toBe(true);
   });
 });

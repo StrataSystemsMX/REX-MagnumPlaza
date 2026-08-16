@@ -11,12 +11,13 @@ import {
   Pencil,
   Plus,
   Receipt,
+  Search,
   Trash2,
 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Fragment, useEffect, useState, useTransition } from "react";
+import { Fragment, useEffect, useMemo, useState, useTransition } from "react";
 import { toast } from "sonner";
 import {
   AlertDialog,
@@ -29,6 +30,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   Dialog,
@@ -48,15 +50,15 @@ import {
 } from "@/components/properties/UnitCard";
 import { NewUnitDialog } from "@/components/properties/NewUnitDialog";
 import { usePropertiesViewMode } from "@/hooks/use-properties-view-mode";
-import type { PropertiesViewMode } from "@/lib/properties-view-mode";
-import { actionDeleteProperty } from "@/lib/services/properties";
-import { actionCountSubjectDependents } from "@/lib/services/audit-actions";
+import type { PropertiesViewMode } from "@/shared/properties-view-mode";
+import { actionDeleteProperty } from "@/server/services/properties";
+import { actionCountSubjectDependents } from "@/server/services/audit-actions";
 import { DependentsWarning } from "@/components/historial/DangerConfirmDialog";
-import type { DependentCounts } from "@/lib/services/audit-undo";
+import type { DependentCounts } from "@/server/services/audit-undo";
 import type {
   LegalEntityOption,
   PropertyListItem,
-} from "@/lib/services/properties-queries";
+} from "@/server/services/properties-queries";
 
 interface PlazasTableProps {
   plazas: ReadonlyArray<PropertyListItem>;
@@ -75,6 +77,17 @@ export function PlazasTable({ plazas, legalEntities, initialView }: PlazasTableP
   const [view, setView] = usePropertiesViewMode(initialView);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [pending, startTransition] = useTransition();
+  const [search, setSearch] = useState("");
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return plazas;
+    return plazas.filter((p) => {
+      const unitFields = p.units.map((u) => `${u.code} ${u.name ?? ""}`).join(" ");
+      const hay = `${p.name} ${p.address ?? ""} ${unitFields}`;
+      return hay.toLowerCase().includes(q);
+    });
+  }, [plazas, search]);
 
   // Al abrir el diálogo de borrado, cuenta los dependientes para el aviso.
   useEffect(() => {
@@ -138,6 +151,15 @@ export function PlazasTable({ plazas, legalEntities, initialView }: PlazasTableP
     <>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-2">
+          <div className="relative w-full sm:w-64">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Buscar plaza, dirección o local..."
+              className="pl-8"
+            />
+          </div>
           <div className="flex items-center rounded-lg border bg-background p-0.5">
             <Button
               variant={view === "cards" ? "secondary" : "ghost"}
@@ -189,9 +211,13 @@ export function PlazasTable({ plazas, legalEntities, initialView }: PlazasTableP
         <div className="rounded-md border bg-card p-12 text-center text-sm text-muted-foreground">
           No hay plazas activas.
         </div>
+      ) : filtered.length === 0 ? (
+        <div className="rounded-md border bg-card p-12 text-center text-sm text-muted-foreground">
+          No hay plazas que coincidan con &ldquo;{search}&rdquo;.
+        </div>
       ) : view === "cards" ? (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {[...plazas]
+          {[...filtered]
             .sort((a, b) => Number(expanded.has(b.id)) - Number(expanded.has(a.id)))
             .map((p) => (
               <PlazaCard
@@ -205,7 +231,7 @@ export function PlazasTable({ plazas, legalEntities, initialView }: PlazasTableP
         </div>
       ) : (
         <PlazasTableView
-          plazas={plazas}
+          plazas={filtered}
           expanded={expanded}
           onToggle={toggleExpanded}
           onDetail={(p) => setDetailTarget(p)}

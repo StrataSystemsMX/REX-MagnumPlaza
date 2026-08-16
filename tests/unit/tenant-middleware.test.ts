@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { TENANT_SCOPED_MODELS } from "@/lib/prisma/tenant-middleware";
+import { TENANT_SCOPED_MODELS } from "@/server/prisma/tenant-middleware";
 
 /**
  * El guardrail multi-tenant depende de un set hardcodeado de modelos (el

@@ -8,7 +8,7 @@ const rentMock = {
 const auditLogMock = { create: vi.fn() };
 
 const txMock = { rent: rentMock, auditLog: auditLogMock };
-vi.mock("@/lib/prisma/client", () => ({
+vi.mock("@/server/prisma/client", () => ({
   prisma: {
     rent: rentMock,
     auditLog: auditLogMock,
@@ -18,7 +18,7 @@ vi.mock("@/lib/prisma/client", () => ({
 }));
 
 const mockSendRentReminder = vi.fn();
-vi.mock("@/lib/services/notifications", () => ({
+vi.mock("@/server/services/notifications", () => ({
   sendRentReminder: (...args: unknown[]) => mockSendRentReminder(...args),
 }));
 
@@ -74,7 +74,7 @@ describe("updateRentStatuses", () => {
       rent("r1", utc(2026, 2, 1), "DUE"), // 1 marzo 2026
     ]);
     const { updateRentStatuses } = await import(
-      "@/lib/services/rent-status-updater"
+      "@/server/services/rent-status-updater"
     );
     const result = await updateRentStatuses(TENANT, { now: utc(2026, 3, 5) }); // 5 abril → 35 días vencido
 
@@ -107,7 +107,7 @@ describe("updateRentStatuses", () => {
       rent("r1", utc(2026, 1, 1), "OVERDUE_1M"), // 1 feb 2026
     ]);
     const { updateRentStatuses } = await import(
-      "@/lib/services/rent-status-updater"
+      "@/server/services/rent-status-updater"
     );
     const r = await updateRentStatuses(TENANT, { now: utc(2026, 3, 5) }); // 63 días
     expect(r.byNewStatus.OVERDUE_2M).toBe(1);
@@ -119,7 +119,7 @@ describe("updateRentStatuses", () => {
       rent("r1", utc(2026, 0, 1), "OVERDUE_2M"), // 1 ene 2026
     ]);
     const { updateRentStatuses } = await import(
-      "@/lib/services/rent-status-updater"
+      "@/server/services/rent-status-updater"
     );
     const r = await updateRentStatuses(TENANT, { now: utc(2026, 3, 5) }); // 94 días
     expect(r.byNewStatus.OVERDUE_3M).toBe(1);
@@ -131,7 +131,7 @@ describe("updateRentStatuses", () => {
       rent("r1", utc(2026, 3, 1), "PENDING"),
     ]);
     const { updateRentStatuses } = await import(
-      "@/lib/services/rent-status-updater"
+      "@/server/services/rent-status-updater"
     );
     const r = await updateRentStatuses(TENANT, { now: utc(2026, 3, 5) });
     expect(r.byNewStatus.DUE).toBe(1);
@@ -144,7 +144,7 @@ describe("updateRentStatuses", () => {
       rent("r1", utc(2026, 2, 1), "PARTIAL", 5000),
     ]);
     const { updateRentStatuses } = await import(
-      "@/lib/services/rent-status-updater"
+      "@/server/services/rent-status-updater"
     );
     const r = await updateRentStatuses(TENANT, { now: utc(2026, 2, 15) });
     expect(r.rentsUpdated).toBe(0);
@@ -157,7 +157,7 @@ describe("updateRentStatuses", () => {
       rent("r1", utc(2026, 0, 1), "DUE", 10000),
     ]);
     const { updateRentStatuses } = await import(
-      "@/lib/services/rent-status-updater"
+      "@/server/services/rent-status-updater"
     );
     const r = await updateRentStatuses(TENANT, { now: utc(2026, 3, 5) });
     expect(r.byNewStatus.PAID).toBe(1);
@@ -168,7 +168,7 @@ describe("updateRentStatuses", () => {
   it("no avanza PAID/WAIVED; sí incluye OVERDUE_3M en la query (para acumular interés)", async () => {
     rentMock.findMany.mockResolvedValue([]); // PAID/WAIVED no los devuelve la query
     const { updateRentStatuses } = await import(
-      "@/lib/services/rent-status-updater"
+      "@/server/services/rent-status-updater"
     );
     const r = await updateRentStatuses(TENANT, { now: utc(2026, 6, 1) });
     expect(r.rentsUpdated).toBe(0);
@@ -195,7 +195,7 @@ describe("updateRentStatuses", () => {
       rent("r1", utc(2026, 1, 1), "OVERDUE_2M", 0, 10000, 5, 0),
     ]);
     const { updateRentStatuses } = await import(
-      "@/lib/services/rent-status-updater"
+      "@/server/services/rent-status-updater"
     );
     const r = await updateRentStatuses(TENANT, { now: utc(2026, 3, 5) }); // 63 días
     expect(r.lateFeesUpdated).toBe(1);
@@ -215,7 +215,7 @@ describe("updateRentStatuses", () => {
       rent("r1", utc(2026, 0, 1), "OVERDUE_2M", 10000, 10000, 5, 800),
     ]);
     const { updateRentStatuses } = await import(
-      "@/lib/services/rent-status-updater"
+      "@/server/services/rent-status-updater"
     );
     const r = await updateRentStatuses(TENANT, { now: utc(2026, 3, 5) });
     // El fee no cambió (800 → 800): solo se persiste la transición de status.
@@ -233,7 +233,7 @@ describe("updateRentStatuses", () => {
     row.amountWaived = D(10000);
     rentMock.findMany.mockResolvedValue([row]);
     const { updateRentStatuses } = await import(
-      "@/lib/services/rent-status-updater"
+      "@/server/services/rent-status-updater"
     );
     const r = await updateRentStatuses(TENANT, { now: utc(2026, 3, 5) });
     expect(r.lateFeesUpdated).toBe(1);
@@ -251,7 +251,7 @@ describe("updateRentStatuses", () => {
       rent("r4", utc(2026, 3, 1), "PENDING", 10000), // pagado → PAID
     ]);
     const { updateRentStatuses } = await import(
-      "@/lib/services/rent-status-updater"
+      "@/server/services/rent-status-updater"
     );
     const r = await updateRentStatuses(TENANT, { now: utc(2026, 3, 5) });
 
@@ -270,7 +270,7 @@ describe("updateRentStatuses", () => {
       rent("r1", utc(2026, 2, 1), "DUE"), // 35d → OVERDUE_1M, friendly off
     ]);
     const { updateRentStatuses } = await import(
-      "@/lib/services/rent-status-updater"
+      "@/server/services/rent-status-updater"
     );
     const r = await updateRentStatuses(TENANT, { now: utc(2026, 3, 5) });
     expect(r.byNewStatus.OVERDUE_1M).toBe(1);
@@ -283,7 +283,7 @@ describe("updateRentStatuses", () => {
       rent("r1", utc(2026, 2, 1), "DUE", 0, 10000, null, 0, true), // friendly on
     ]);
     const { updateRentStatuses } = await import(
-      "@/lib/services/rent-status-updater"
+      "@/server/services/rent-status-updater"
     );
     await updateRentStatuses(TENANT, { now: utc(2026, 3, 5) });
     expect(mockSendRentReminder).toHaveBeenCalledWith(TENANT, "r1", "1M");
@@ -294,7 +294,7 @@ describe("updateRentStatuses", () => {
       rent("r1", utc(2026, 1, 1), "OVERDUE_1M"), // 63d → OVERDUE_2M, friendly off
     ]);
     const { updateRentStatuses } = await import(
-      "@/lib/services/rent-status-updater"
+      "@/server/services/rent-status-updater"
     );
     await updateRentStatuses(TENANT, { now: utc(2026, 3, 5) });
     expect(mockSendRentReminder).toHaveBeenCalledWith(TENANT, "r1", "2M");

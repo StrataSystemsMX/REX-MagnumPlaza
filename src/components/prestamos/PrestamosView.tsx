@@ -12,10 +12,11 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { NewLoanDialog } from "@/components/prestamos/NewLoanDialog";
-import { cn } from "@/lib/utils";
-import type { LoanRow } from "@/lib/services/prestamos-queries";
-import type { LegalEntityOption } from "@/lib/services/properties-queries";
-import { formatMXN } from "@/lib/format-currency";
+import { YearNavigator } from "@/components/shared/yearly-matrix/YearlyMatrixParts";
+import { cn } from "@/shared/utils";
+import type { LoanRow } from "@/server/services/prestamos-queries";
+import type { LegalEntityOption } from "@/server/services/properties-queries";
+import { formatMXN } from "@/shared/format-currency";
 
 const DATE_FMT = new Intl.DateTimeFormat("es-MX", {
   day: "2-digit",
@@ -42,9 +43,17 @@ interface Props {
   loans: LoanRow[];
   legalEntities: ReadonlyArray<LegalEntityOption>;
   canCreate: boolean;
+  year: number;
+  availableYears: ReadonlyArray<number>;
 }
 
-export function PrestamosView({ loans, legalEntities, canCreate }: Props) {
+export function PrestamosView({
+  loans,
+  legalEntities,
+  canCreate,
+  year,
+  availableYears,
+}: Props) {
   const active = loans.filter((l) => l.status === "ACTIVE");
   const totalActive = active.reduce((s, l) => s + l.amount, 0);
 
@@ -67,12 +76,15 @@ export function PrestamosView({ loans, legalEntities, canCreate }: Props) {
       </div>
 
       {/* Header + button */}
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2 text-base font-semibold">
           <CreditCard className="size-4 text-muted-foreground" />
           Préstamos registrados
         </div>
-        {canCreate && <NewLoanDialog legalEntities={legalEntities} />}
+        <div className="flex items-center gap-3">
+          <YearNavigator year={year} availableYears={availableYears} />
+          {canCreate && <NewLoanDialog legalEntities={legalEntities} />}
+        </div>
       </div>
 
       {/* Table */}

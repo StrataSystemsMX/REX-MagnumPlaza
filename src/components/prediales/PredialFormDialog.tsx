@@ -26,12 +26,12 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   actionCreateCadastralPayment,
   actionUpdateCadastralPayment,
-} from "@/lib/services/cadastral";
+} from "@/server/services/cadastral";
 import type {
   CadastralListItem,
   CadastralPropertyOption,
-} from "@/lib/services/cadastral-queries";
-import type { LegalEntityOption } from "@/lib/services/properties-queries";
+} from "@/server/services/cadastral-queries";
+import type { LegalEntityOption } from "@/server/services/properties-queries";
 
 const NOW_YEAR = new Date().getUTCFullYear();
 const PAYER_NONE = "__NONE__";

@@ -11,7 +11,7 @@ const rentMock = {
   updateMany: vi.fn(),
 };
 
-vi.mock("@/lib/prisma/client", () => ({
+vi.mock("@/server/prisma/client", () => ({
   prisma: {
     contract: contractMock,
     rent: rentMock,
@@ -49,7 +49,7 @@ describe("generateRentsForContract", () => {
   it("genera 12 Rents para un contrato anual (Ene–Dic 2026)", async () => {
     contractMock.findFirstOrThrow.mockResolvedValue(buildContract());
     const { generateRentsForContract } = await import(
-      "@/lib/services/rent-generation"
+      "@/server/services/rent-generation"
     );
 
     const result = await generateRentsForContract(TENANT, CONTRACT_ID, {
@@ -77,7 +77,7 @@ describe("generateRentsForContract", () => {
       }),
     );
     const { generateRentsForContract } = await import(
-      "@/lib/services/rent-generation"
+      "@/server/services/rent-generation"
     );
 
     await generateRentsForContract(TENANT, CONTRACT_ID, {
@@ -103,7 +103,7 @@ describe("generateRentsForContract", () => {
       { period: new Date(Date.UTC(2026, 1, 1)) },
     ]);
     const { generateRentsForContract } = await import(
-      "@/lib/services/rent-generation"
+      "@/server/services/rent-generation"
     );
 
     const result = await generateRentsForContract(TENANT, CONTRACT_ID, {
@@ -122,7 +122,7 @@ describe("generateRentsForContract", () => {
   it("aplica el gradiente DUE/OVERDUE_*/PENDING según días vencidos", async () => {
     contractMock.findFirstOrThrow.mockResolvedValue(buildContract());
     const { generateRentsForContract } = await import(
-      "@/lib/services/rent-generation"
+      "@/server/services/rent-generation"
     );
 
     await generateRentsForContract(TENANT, CONTRACT_ID, {
@@ -190,7 +190,7 @@ describe("reconcileRentsForContract", () => {
       ]);
     });
 
-    const { reconcileRentsForContract } = await import("@/lib/services/rent-generation");
+    const { reconcileRentsForContract } = await import("@/server/services/rent-generation");
 
     const result = await reconcileRentsForContract(TENANT, CONTRACT_ID, {
       now: new Date(Date.UTC(2026, 4, 15)),
@@ -227,7 +227,7 @@ describe("reconcileRentsForContract", () => {
       return Promise.resolve([]);
     });
 
-    const { reconcileRentsForContract } = await import("@/lib/services/rent-generation");
+    const { reconcileRentsForContract } = await import("@/server/services/rent-generation");
     const result = await reconcileRentsForContract(TENANT, CONTRACT_ID, {
       now: new Date(Date.UTC(2026, 4, 15)),
     });

@@ -5,12 +5,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { FinancialHistoryChart } from "@/components/dashboard/charts";
 import { LegalEntitySummaryTable } from "@/components/dashboard/LegalEntitySummaryTable";
 import { MetricCard } from "@/components/shared/metric-card";
-import { getActiveLegalEntityId } from "@/lib/auth/active-legal-entity";
-import { requireAuth } from "@/lib/auth/get-session";
-import { getUserRoleCodes } from "@/lib/auth/permissions";
-import { prisma } from "@/lib/prisma/client";
-import { timed } from "@/lib/perf/timed";
-import { formatMXN } from "@/lib/format-currency";
+import { getActiveLegalEntityId } from "@/server/auth/active-legal-entity";
+import { requireAuth } from "@/server/auth/get-session";
+import { getUserRoleCodes } from "@/server/auth/permissions";
+import { prisma } from "@/server/prisma/client";
+import { timed } from "@/server/perf/timed";
+import { formatMXN } from "@/shared/format-currency";
 
 // ─── Formatters ──────────────────────────────────────────────────────────────
 

@@ -19,13 +19,13 @@ import { Button } from "@/components/ui/button";
 import {
   actionDeleteContractDocument,
   actionUploadContractDocument,
-} from "@/lib/services/contract-documents";
+} from "@/server/services/contract-documents";
 import {
   ALLOWED_CONTRACT_DOCUMENT_MIME_TYPES,
   MAX_CONTRACT_DOCUMENT_SIZE_BYTES,
   contractDocumentFileSchema,
-} from "@/lib/validators/document";
-import { capitalizeFirst } from "@/lib/utils";
+} from "@/shared/validators/document";
+import { capitalizeFirst } from "@/shared/utils";
 
 interface ContractDocument {
   id: string;

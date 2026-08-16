@@ -18,20 +18,20 @@ import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { LesseeForm } from "@/components/forms/LesseeForm";
 import { EnumSelect } from "@/components/ui/enum-select";
-import { contractTypeLabel, propertyTypeLabel, unitStatusLabel } from "@/lib/i18n/enums";
-import { isPlaza, unitCode } from "@/lib/i18n/unit-label";
-import { cn } from "@/lib/utils";
-import { actionCreateContract } from "@/lib/services/contracts";
-import { actionSearchLessees, type LesseeSearchResult } from "@/lib/services/lessees";
+import { contractTypeLabel, propertyTypeLabel, unitStatusLabel } from "@/shared/i18n/enums";
+import { isPlaza, unitCode } from "@/shared/i18n/unit-label";
+import { cn } from "@/shared/utils";
+import { actionCreateContract } from "@/server/services/contracts";
+import { actionSearchLessees, type LesseeSearchResult } from "@/server/services/lessees";
 import {
   createContractSchema,
   type CreateContractInput,
-} from "@/lib/validators/contract";
-import type { AvailableUnit } from "@/lib/services/contracts-queries";
+} from "@/shared/validators/contract";
+import type { AvailableUnit } from "@/server/services/contracts-queries";
 import { CharacterCount } from "@/components/ui/character-count";
 import type { ContractType } from "@/generated/prisma/enums";
-import { capitalizeFirst } from "@/lib/utils";
-import { formatMXN } from "@/lib/format-currency";
+import { capitalizeFirst } from "@/shared/utils";
+import { formatMXN } from "@/shared/format-currency";
 
 const CONTRACT_TYPES: ReadonlyArray<ContractType> = [
   "ARRENDAMIENTO",

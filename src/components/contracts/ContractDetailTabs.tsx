@@ -16,15 +16,15 @@ import {
   auditActionLabel,
   contractTypeLabel,
   guaranteeStatusLabel,
-} from "@/lib/i18n/enums";
-import { isPlaza, unitCode } from "@/lib/i18n/unit-label";
+} from "@/shared/i18n/enums";
+import { isPlaza, unitCode } from "@/shared/i18n/unit-label";
 import type {
   ContractAuditEntry,
   ContractDetail,
-} from "@/lib/services/contracts-queries";
-import { describeAuditDetail } from "@/lib/audit/describe";
-import { capitalizeFirst } from "@/lib/utils";
-import { formatMXN } from "@/lib/format-currency";
+} from "@/server/services/contracts-queries";
+import { describeAuditDetail } from "@/shared/audit/describe";
+import { capitalizeFirst } from "@/shared/utils";
+import { formatMXN } from "@/shared/format-currency";
 
 // Alias local: mismo output que la const Intl que existía aquí (2 decimales).
 const mxn = (v: number | string) => formatMXN(v, 2);

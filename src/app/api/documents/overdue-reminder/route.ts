@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
-import { requireAuth } from "@/lib/auth/get-session";
-import { requirePermission } from "@/lib/auth/permissions";
-import { generateOverdueReminder } from "@/lib/pdf/generator";
-import type { ReminderLevel } from "@/lib/pdf/template-config";
+import { requireAuth } from "@/server/auth/get-session";
+import { requirePermission } from "@/server/auth/permissions";
+import { generateOverdueReminder } from "@/server/pdf/generator";
+import type { ReminderLevel } from "@/server/pdf/template-config";
 
 const VALID_LEVELS: ReminderLevel[] = ["1M", "2M", "3M"];
 

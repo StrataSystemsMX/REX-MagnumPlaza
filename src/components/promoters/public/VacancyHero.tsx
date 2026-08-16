@@ -1,9 +1,9 @@
 import Image from "next/image";
 import { Building2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { propertyTypeLabel, unitStatusLabel, unitStatusVariant } from "@/lib/i18n/enums";
-import { isPlaza } from "@/lib/i18n/unit-label";
-import type { PublicVacancyData } from "@/lib/services/promoters-public";
+import { propertyTypeLabel, unitStatusLabel, unitStatusVariant } from "@/shared/i18n/enums";
+import { isPlaza } from "@/shared/i18n/unit-label";
+import type { PublicVacancyData } from "@/server/services/promoters-public";
 
 interface Props {
   unit: PublicVacancyData["unit"];

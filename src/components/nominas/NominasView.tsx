@@ -10,6 +10,7 @@ import {
   Pencil,
   Plus,
   Receipt,
+  Search,
   Trash2,
   Users2,
   Wallet,
@@ -35,6 +36,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -45,16 +47,16 @@ import {
 import { PayrollFormDialog } from "@/components/nominas/PayrollFormDialog";
 import { PayrollDetailDialog } from "@/components/nominas/PayrollDetailDialog";
 import { themeFor } from "@/components/cierres/MonthlyPivotTable";
-import { actionDeletePayroll } from "@/lib/services/payroll";
+import { actionDeletePayroll } from "@/server/services/payroll";
 import type {
   PayrollEntityTotal,
   PayrollListItem,
-} from "@/lib/services/payroll-queries";
-import type { LegalEntityOption } from "@/lib/services/properties-queries";
-import { payrollTypeLabel } from "@/lib/i18n/enums";
+} from "@/server/services/payroll-queries";
+import type { LegalEntityOption } from "@/server/services/properties-queries";
+import { payrollTypeLabel } from "@/shared/i18n/enums";
 import type { PayrollType } from "@/generated/prisma/enums";
-import { cn } from "@/lib/utils";
-import { formatMXN } from "@/lib/format-currency";
+import { cn } from "@/shared/utils";
+import { formatMXN } from "@/shared/format-currency";
 
 // Alias local: mismo output que la const Intl que existía aquí (2 decimales).
 const mxn = (v: number | string) => formatMXN(v, 2);
@@ -218,16 +220,28 @@ export function NominasView({
     pushParams({ year: String(y), month: String(m) });
   }
 
+  const [search, setSearch] = useState("");
+
+  // Filtro de texto sobre el periodo ya cargado (concepto, tipo o razón social).
+  const visiblePayrolls = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return payrolls;
+    return payrolls.filter((p) => {
+      const hay = `${p.description ?? ""} ${payrollTypeLabel(p.type)} ${p.legalEntity.code}`;
+      return hay.toLowerCase().includes(q);
+    });
+  }, [payrolls, search]);
+
   // Totales del periodo visible — separados operativo vs estrategia fiscal.
   const { periodOperationalTotal, periodFiscalTotal } = useMemo(() => {
     let op = 0;
     let fisc = 0;
-    for (const p of payrolls) {
+    for (const p of visiblePayrolls) {
       if (isFiscalStrategy(p.type)) fisc += p.amount;
       else op += p.amount;
     }
     return { periodOperationalTotal: op, periodFiscalTotal: fisc };
-  }, [payrolls]);
+  }, [visiblePayrolls]);
   const annualTotal = useMemo(
     () => annualTotals.reduce((sum, e) => sum + e.total, 0),
     [annualTotals],
@@ -247,7 +261,7 @@ export function NominasView({
         total: number;
       }
     >();
-    for (const p of payrolls) {
+    for (const p of visiblePayrolls) {
       const key = p.legalEntity.id;
       const fiscal = isFiscalStrategy(p.type);
       const cur = groups.get(key);
@@ -274,7 +288,7 @@ export function NominasView({
     return Array.from(groups.values()).sort((a, b) =>
       a.entity.code.localeCompare(b.entity.code, "es-MX"),
     );
-  }, [payrolls]);
+  }, [visiblePayrolls]);
 
   function periodLabel(): string {
     if (selectedMonth === null) return `Año ${selectedYear}`;
@@ -313,6 +327,15 @@ export function NominasView({
       {/* Filtros */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-3">
+          <div className="relative w-full sm:w-56">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Buscar concepto..."
+              className="pl-8"
+            />
+          </div>
           <Select
             value={String(selectedYear)}
             onValueChange={(v) => v && pushParams({ year: v })}

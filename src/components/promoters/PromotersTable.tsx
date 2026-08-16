@@ -1,11 +1,12 @@
 "use client";
 
-import { useTransition, useState, useEffect } from "react";
-import { Link2, Link2Off, UserCheck, UserX, Copy, QrCode, Printer } from "lucide-react";
+import { useTransition, useState, useEffect, useMemo } from "react";
+import { Link2, Link2Off, UserCheck, UserX, Copy, QrCode, Printer, Search } from "lucide-react";
 import { toast } from "sonner";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm, type Resolver } from "react-hook-form";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import {
   Dialog,
@@ -41,12 +42,12 @@ import {
   actionCreatePromoterLink,
   actionDeactivatePromoterLink,
   actionTogglePromoterActive,
-} from "@/lib/services/promoters";
-import { createPromoterLinkSchema, type CreatePromoterLinkInput } from "@/lib/validators/promoter";
-import type { PromoterRow, UnitForLink } from "@/lib/services/promoters-queries";
-import { unitWithProperty } from "@/lib/i18n/unit-label";
-import { formatMXN } from "@/lib/format-currency";
-import { formatDate } from "@/lib/format-date";
+} from "@/server/services/promoters";
+import { createPromoterLinkSchema, type CreatePromoterLinkInput } from "@/shared/validators/promoter";
+import type { PromoterRow, UnitForLink } from "@/server/services/promoters-queries";
+import { unitWithProperty } from "@/shared/i18n/unit-label";
+import { formatMXN } from "@/shared/format-currency";
+import { formatDate } from "@/shared/format-date";
 
 function LinkDialog({ promoterId, units }: { promoterId: string; units: UnitForLink[] }) {
   const [open, setOpen] = useState(false);
@@ -188,6 +189,19 @@ interface Props {
 export function PromotersTable({ promoters, units, canManage }: Props) {
   const [isPending, startTransition] = useTransition();
   const [origin, setOrigin] = useState("");
+  const [search, setSearch] = useState("");
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return promoters;
+    return promoters.filter((p) => {
+      const linkFields = p.links
+        .map((l) => `${l.unit.code} ${l.unit.name ?? ""} ${l.unit.property.name}`)
+        .join(" ");
+      const hay = `${p.fullName} ${p.agency ?? ""} ${p.phone} ${linkFields}`;
+      return hay.toLowerCase().includes(q);
+    });
+  }, [promoters, search]);
 
   useEffect(() => {
     setOrigin(window.location.origin);
@@ -250,8 +264,28 @@ export function PromotersTable({ promoters, units, canManage }: Props) {
   }
 
   return (
-    <div className={`space-y-4 ${isPending ? "opacity-60" : ""}`}>
-      {promoters.map((p) => (
+    <div className="space-y-4">
+      <div className="relative w-full sm:w-72">
+        <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+        <Input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Buscar promotor, local o inquilino..."
+          className="pl-8"
+        />
+      </div>
+
+      {filtered.length === 0 ? (
+        <Card>
+          <CardContent className="flex flex-col items-center justify-center gap-2 py-16 text-center">
+            <p className="text-muted-foreground">
+              No hay promotores que coincidan con &ldquo;{search}&rdquo;.
+            </p>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className={`space-y-4 ${isPending ? "opacity-60" : ""}`}>
+          {filtered.map((p) => (
         <Card key={p.id}>
           <CardHeader className="flex flex-row items-start justify-between gap-3 pb-3">
             <div>
@@ -400,7 +434,9 @@ export function PromotersTable({ promoters, units, canManage }: Props) {
             </CardContent>
           )}
         </Card>
-      ))}
+          ))}
+        </div>
+      )}
     </div>
   );
 }

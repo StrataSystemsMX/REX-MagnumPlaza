@@ -14,15 +14,15 @@ import {
   RegisterPaymentDialog,
   type RegisterPaymentDialogContext,
 } from "@/components/collections/RegisterPaymentDialog";
-import { capitalizeFirst, cn } from "@/lib/utils";
+import { capitalizeFirst, cn } from "@/shared/utils";
 import type {
   MonthlyUnitStatus,
   YearlyCell,
   YearlyCollections,
   YearlyPropertyGroup,
   YearlyUnitRow,
-} from "@/lib/services/payments-queries";
-import { formatMXN } from "@/lib/format-currency";
+} from "@/server/services/payments-queries";
+import { formatMXN } from "@/shared/format-currency";
 
 // Alias local: mismo output que la const Intl que existía aquí (2 decimales).
 const mxn = (v: number | string) => formatMXN(v, 2);

@@ -25,16 +25,16 @@ import {
   contractStatusLabel,
   contractStatusVariant,
   contractTypeLabel,
-} from "@/lib/i18n/enums";
-import { isPlaza } from "@/lib/i18n/unit-label";
+} from "@/shared/i18n/enums";
+import { isPlaza } from "@/shared/i18n/unit-label";
 import type {
   AvailableUnit,
   ContractListItem,
-} from "@/lib/services/contracts-queries";
+} from "@/server/services/contracts-queries";
 import type { ContractStatus, PropertyType } from "@/generated/prisma/enums";
-import { cn } from "@/lib/utils";
-import { formatMXN } from "@/lib/format-currency";
-import { formatDate } from "@/lib/format-date";
+import { cn } from "@/shared/utils";
+import { formatMXN } from "@/shared/format-currency";
+import { formatDate } from "@/shared/format-date";
 
 type StatusFilter = ContractStatus | "ALL";
 type ExpiryFilter = "ALL" | "30" | "60" | "90";

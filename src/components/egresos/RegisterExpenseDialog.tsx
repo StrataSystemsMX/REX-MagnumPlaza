@@ -27,9 +27,9 @@ import { PaymentMethod } from "@/generated/prisma/enums";
 import {
   actionRegisterExpense,
   actionToggleExpenseNotRequired,
-} from "@/lib/services/expenses";
-import { formatMXN } from "@/lib/format-currency";
-import { formatPeriodLong } from "@/lib/format-date";
+} from "@/server/services/expenses";
+import { formatMXN } from "@/shared/format-currency";
+import { formatPeriodLong } from "@/shared/format-date";
 
 export interface RegisterExpenseContext {
   id: string;

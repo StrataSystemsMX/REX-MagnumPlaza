@@ -29,11 +29,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { actionCreateGuarantee } from "@/lib/services/guarantees";
-import { createGuaranteeSchema, type CreateGuaranteeInput } from "@/lib/validators/guarantee";
-import type { ContractForGuarantee } from "@/lib/services/guarantees-queries";
-import { unitWithProperty } from "@/lib/i18n/unit-label";
-import { formatMXN } from "@/lib/format-currency";
+import { actionCreateGuarantee } from "@/server/services/guarantees";
+import { createGuaranteeSchema, type CreateGuaranteeInput } from "@/shared/validators/guarantee";
+import type { ContractForGuarantee } from "@/server/services/guarantees-queries";
+import { unitWithProperty } from "@/shared/i18n/unit-label";
+import { formatMXN } from "@/shared/format-currency";
 
 interface Props {
   contracts: ContractForGuarantee[];
@@ -67,7 +67,7 @@ export function NewGuaranteeDialog({ contracts }: Props) {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger render={<Button />}>
-        Registrar fianza
+      + Registrar fianza
       </DialogTrigger>
       <DialogContent className="max-w-md">
         <DialogHeader>

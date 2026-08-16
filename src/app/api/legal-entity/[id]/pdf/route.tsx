@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
 import { renderToBuffer } from "@react-pdf/renderer";
-import { requireAuth } from "@/lib/auth/get-session";
-import { getUserRoleCodes } from "@/lib/auth/permissions";
-import { prisma } from "@/lib/prisma/client";
-import { getLegalEntityMetrics } from "@/lib/services/legal-entity-queries";
-import { LegalEntityStatementPdf } from "@/lib/pdf/templates/LegalEntityStatementPdf";
+import { requireAuth } from "@/server/auth/get-session";
+import { getUserRoleCodes } from "@/server/auth/permissions";
+import { prisma } from "@/server/prisma/client";
+import { getLegalEntityMetrics } from "@/server/services/legal-entity-queries";
+import { LegalEntityStatementPdf } from "@/server/pdf/templates/LegalEntityStatementPdf";
 
 export async function GET(
   request: Request,

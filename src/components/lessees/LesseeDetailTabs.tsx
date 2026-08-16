@@ -23,15 +23,15 @@ import {
   contractStatusLabel,
   contractTypeLabel,
   paymentMethodLabel,
-} from "@/lib/i18n/enums";
-import { isPlaza, unitWithProperty } from "@/lib/i18n/unit-label";
-import type { AvailableUnit } from "@/lib/services/contracts-queries";
-import type { LesseeDetail, LesseeOverdueRent } from "@/lib/services/lessees-queries";
-import type { NotificationLogRow } from "@/lib/services/notifications-queries";
-import type { LesseePayment, LesseeStatement as LesseeStatementData } from "@/lib/services/payments-queries";
+} from "@/shared/i18n/enums";
+import { isPlaza, unitWithProperty } from "@/shared/i18n/unit-label";
+import type { AvailableUnit } from "@/server/services/contracts-queries";
+import type { LesseeDetail, LesseeOverdueRent } from "@/server/services/lessees-queries";
+import type { NotificationLogRow } from "@/server/services/notifications-queries";
+import type { LesseePayment, LesseeStatement as LesseeStatementData } from "@/server/services/payments-queries";
 import type { ContractStatus } from "@/generated/prisma/enums";
-import { formatMXN } from "@/lib/format-currency";
-import { formatDate } from "@/lib/format-date";
+import { formatMXN } from "@/shared/format-currency";
+import { formatDate } from "@/shared/format-date";
 
 function statusVariant(s: ContractStatus): "default" | "secondary" | "destructive" | "outline" {
   switch (s) {

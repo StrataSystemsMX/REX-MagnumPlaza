@@ -12,10 +12,10 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { cn } from "@/lib/utils";
-import { formatMXN } from "@/lib/format-currency";
-import { MONTH_KEYS } from "@/lib/services/budgets-types";
-import type { BudgetLineRow, ConsolidatedBudget } from "@/lib/services/budgets-types";
+import { cn } from "@/shared/utils";
+import { formatMXN } from "@/shared/format-currency";
+import { MONTH_KEYS } from "@/server/services/budgets-types";
+import type { BudgetLineRow, ConsolidatedBudget } from "@/server/services/budgets-types";
 
 const MONTH_SHORT = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
 

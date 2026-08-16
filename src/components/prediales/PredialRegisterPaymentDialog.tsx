@@ -16,9 +16,9 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { actionRegisterCadastralPayment } from "@/lib/services/cadastral";
-import type { CadastralListItem } from "@/lib/services/cadastral-queries";
-import { formatMXN } from "@/lib/format-currency";
+import { actionRegisterCadastralPayment } from "@/server/services/cadastral";
+import type { CadastralListItem } from "@/server/services/cadastral-queries";
+import { formatMXN } from "@/shared/format-currency";
 
 interface Props {
   target: CadastralListItem | null;

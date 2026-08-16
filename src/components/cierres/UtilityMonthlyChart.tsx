@@ -12,8 +12,8 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { formatMXN, formatMXNCompact } from "@/lib/format-currency";
-import type { Monthly12 } from "@/lib/services/cierres-queries";
+import { formatMXN, formatMXNCompact } from "@/shared/format-currency";
+import type { Monthly12 } from "@/server/services/cierres-queries";
 
 const MONTHS_SHORT = [
   "Ene", "Feb", "Mar", "Abr", "May", "Jun",

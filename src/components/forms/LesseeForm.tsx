@@ -16,16 +16,16 @@ import {
 import { Input } from "@/components/ui/input";
 import { EnumSelect } from "@/components/ui/enum-select";
 import { Textarea } from "@/components/ui/textarea";
-import { communicationChannelLabel } from "@/lib/i18n/enums";
+import { communicationChannelLabel } from "@/shared/i18n/enums";
 import {
   createLesseeSchema,
   type CreateLesseeInput,
-} from "@/lib/validators/lessee";
+} from "@/shared/validators/lessee";
 import { CharacterCount } from "@/components/ui/character-count";
 import {
   actionCreateLessee,
   actionUpdateLessee,
-} from "@/lib/services/lessees";
+} from "@/server/services/lessees";
 import type { CommunicationChannel } from "@/generated/prisma/enums";
 import type { LesseeModel } from "@/generated/prisma/models";
 

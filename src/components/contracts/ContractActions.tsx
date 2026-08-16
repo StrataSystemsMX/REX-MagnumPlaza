@@ -28,13 +28,13 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { EnumSelect } from "@/components/ui/enum-select";
 import { CharacterCount } from "@/components/ui/character-count";
-import { contractTypeLabel } from "@/lib/i18n/enums";
+import { contractTypeLabel } from "@/shared/i18n/enums";
 import {
   actionActivateContract,
   actionRenewContract,
   actionTerminateContract,
   actionUpdateContract,
-} from "@/lib/services/contracts";
+} from "@/server/services/contracts";
 import type { ContractStatus, ContractType } from "@/generated/prisma/enums";
 
 const CONTRACT_TYPES: ReadonlyArray<ContractType> = [

@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import {
   actionDeleteMaintenanceDocument,
   actionUploadMaintenanceDocument,
-} from "@/lib/services/maintenance-documents";
+} from "@/server/services/maintenance-documents";
 
 export interface MaintenanceDocument {
   id: string;

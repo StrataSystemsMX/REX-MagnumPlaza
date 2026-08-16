@@ -26,11 +26,11 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   actionCreatePayroll,
   actionUpdatePayroll,
-} from "@/lib/services/payroll";
+} from "@/server/services/payroll";
 import { PayrollType } from "@/generated/prisma/enums";
-import type { PayrollListItem } from "@/lib/services/payroll-queries";
-import type { LegalEntityOption } from "@/lib/services/properties-queries";
-import { payrollTypeLabel } from "@/lib/i18n/enums";
+import type { PayrollListItem } from "@/server/services/payroll-queries";
+import type { LegalEntityOption } from "@/server/services/properties-queries";
+import { payrollTypeLabel } from "@/shared/i18n/enums";
 
 const NOW_YEAR = new Date().getUTCFullYear();
 

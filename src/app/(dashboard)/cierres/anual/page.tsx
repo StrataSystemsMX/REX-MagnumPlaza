@@ -1,6 +1,6 @@
-import { requireAuth } from "@/lib/auth/get-session";
-import { prisma } from "@/lib/prisma/client";
-import { getAnnualClosingBundle } from "@/lib/services/cierres-queries";
+import { requireAuth } from "@/server/auth/get-session";
+import { prisma } from "@/server/prisma/client";
+import { getAnnualClosingBundle } from "@/server/services/cierres-queries";
 import { CierreAnualView } from "@/components/cierres/CierreAnualView";
 
 interface SearchParams {

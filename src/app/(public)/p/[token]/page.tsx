@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import {
   getUnitByPromoterToken,
   trackVacancyVisit,
-} from "@/lib/services/promoters-public";
+} from "@/server/services/promoters-public";
 import { PublicFooter } from "@/components/promoters/public/PublicFooter";
 import { VacancyContactCTA } from "@/components/promoters/public/VacancyContactCTA";
 import { VacancyDetails } from "@/components/promoters/public/VacancyDetails";

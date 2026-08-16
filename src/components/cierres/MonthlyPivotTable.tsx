@@ -2,10 +2,10 @@
 
 import { ChevronDown, ChevronUp } from "lucide-react";
 import { useState } from "react";
-import { cn } from "@/lib/utils";
-import { formatMXN } from "@/lib/format-currency";
+import { cn } from "@/shared/utils";
+import { formatMXN } from "@/shared/format-currency";
 import { Sparkline } from "./Sparkline";
-import type { MatrixRow, Monthly12 } from "@/lib/services/cierres-queries";
+import type { MatrixRow, Monthly12 } from "@/server/services/cierres-queries";
 
 const MONTHS_SHORT = [
   "Ene", "Feb", "Mar", "Abr", "May", "Jun",

@@ -1,9 +1,9 @@
 import { CalendarClock, Check, Coins, ShieldCheck, Wallet } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { includedServiceLabel } from "@/lib/i18n/enums";
-import type { PublicVacancyData } from "@/lib/services/promoters-public";
-import { formatMXN } from "@/lib/format-currency";
-import { formatDate } from "@/lib/format-date";
+import { includedServiceLabel } from "@/shared/i18n/enums";
+import type { PublicVacancyData } from "@/server/services/promoters-public";
+import { formatMXN } from "@/shared/format-currency";
+import { formatDate } from "@/shared/format-date";
 
 interface Props {
   unit: PublicVacancyData["unit"];

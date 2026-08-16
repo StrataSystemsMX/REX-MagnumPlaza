@@ -1,4 +1,4 @@
-import { cn } from "@/lib/utils";
+import { cn } from "@/shared/utils";
 
 interface SparklineProps {
   /** Valores como strings (vienen de Decimal serializados) o numbers. */

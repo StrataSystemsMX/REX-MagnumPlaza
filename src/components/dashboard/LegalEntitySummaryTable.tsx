@@ -2,7 +2,7 @@
 
 import { ChevronRight } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { formatMXN, formatPercent } from "@/lib/format-currency";
+import { formatMXN, formatPercent } from "@/shared/format-currency";
 
 export interface LegalEntitySummaryRow {
   id: string;

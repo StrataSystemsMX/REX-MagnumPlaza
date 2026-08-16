@@ -11,8 +11,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { actionSetActiveLegalEntity } from "@/lib/services/active-legal-entity-actions";
-import { cn } from "@/lib/utils";
+import { actionSetActiveLegalEntity } from "@/server/services/active-legal-entity-actions";
+import { cn } from "@/shared/utils";
 
 interface LegalEntityOption {
   id: string;

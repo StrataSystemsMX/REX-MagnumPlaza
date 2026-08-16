@@ -4,17 +4,17 @@ import { MetricCard } from "@/components/shared/metric-card";
 import { PropertyFilterTabs } from "@/components/shared/PropertyFilterTabs";
 import { CollectionsTabs } from "@/components/collections/CollectionsTabs";
 import { Button } from "@/components/ui/button";
-import { requireAuth } from "@/lib/auth/get-session";
-import { isMaster } from "@/lib/auth/permissions";
-import { prisma } from "@/lib/prisma/client";
+import { requireAuth } from "@/server/auth/get-session";
+import { isMaster } from "@/server/auth/permissions";
+import { prisma } from "@/server/prisma/client";
 import {
   getMonthlyCollectionsByProperty,
   getOutstandingRents,
   getPayments,
-} from "@/lib/services/payments-queries";
-import { getRentasTableData } from "@/lib/services/rentas-queries";
-import { timed } from "@/lib/perf/timed";
-import { formatMXN } from "@/lib/format-currency";
+} from "@/server/services/payments-queries";
+import { getRentasTableData } from "@/server/services/rentas-queries";
+import { timed } from "@/server/perf/timed";
+import { formatMXN } from "@/shared/format-currency";
 
 const VALID_TABS = ["mes", "por-cobrar", "historial"] as const;
 type CollectionsTab = (typeof VALID_TABS)[number];

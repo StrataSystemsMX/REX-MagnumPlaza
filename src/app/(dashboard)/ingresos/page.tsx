@@ -1,7 +1,7 @@
 import { IngresosYearlyView } from "@/components/ingresos/IngresosYearlyView";
-import { requireAuth } from "@/lib/auth/get-session";
-import { prisma } from "@/lib/prisma/client";
-import { getYearlyCollectionsMatrix } from "@/lib/services/payments-queries";
+import { requireAuth } from "@/server/auth/get-session";
+import { prisma } from "@/server/prisma/client";
+import { getYearlyCollectionsMatrix } from "@/server/services/payments-queries";
 
 interface PageProps {
   searchParams: Promise<{ year?: string }>;

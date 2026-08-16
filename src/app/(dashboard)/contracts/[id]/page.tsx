@@ -4,21 +4,21 @@ import { notFound } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { ContractActions } from "@/components/contracts/ContractActions";
 import { ContractDetailTabs } from "@/components/contracts/ContractDetailTabs";
-import { requireAuth } from "@/lib/auth/get-session";
-import { hasPermission } from "@/lib/auth/permissions";
+import { requireAuth } from "@/server/auth/get-session";
+import { hasPermission } from "@/server/auth/permissions";
 import {
   contractStatusLabel,
   contractStatusVariant,
   contractTypeLabel,
-} from "@/lib/i18n/enums";
-import { isPlaza, unitCode } from "@/lib/i18n/unit-label";
+} from "@/shared/i18n/enums";
+import { isPlaza, unitCode } from "@/shared/i18n/unit-label";
 import {
   getContractAuditLog,
   getContractById,
-} from "@/lib/services/contracts-queries";
-import { timed } from "@/lib/perf/timed";
-import { formatMXN } from "@/lib/format-currency";
-import { formatDate } from "@/lib/format-date";
+} from "@/server/services/contracts-queries";
+import { timed } from "@/server/perf/timed";
+import { formatMXN } from "@/shared/format-currency";
+import { formatDate } from "@/shared/format-date";
 
 interface Params {
   id: string;

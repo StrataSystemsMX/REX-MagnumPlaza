@@ -2,27 +2,18 @@
 
 import { AlertTriangle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { RentStatusBadge } from "@/components/shared/RentStatusBadge";
 import { SendNotificationDialog } from "@/components/collections/SendNotificationDialog";
-import type { LesseeDetail, LesseeOverdueRent } from "@/lib/services/lessees-queries";
-import type { ReminderLevel } from "@/lib/pdf/template-config";
-import { formatMXN } from "@/lib/format-currency";
-import { formatPeriodLong } from "@/lib/format-date";
-import { isPlaza } from "@/lib/i18n/unit-label";
+import type { LesseeDetail, LesseeOverdueRent } from "@/server/services/lessees-queries";
+import type { ReminderLevel } from "@/server/pdf/template-config";
+import { formatMXN } from "@/shared/format-currency";
+import { formatPeriodLong } from "@/shared/format-date";
+import { isPlaza } from "@/shared/i18n/unit-label";
 
 function levelFromStatus(status: LesseeOverdueRent["status"]): ReminderLevel {
   if (status === "OVERDUE_2M") return "2M";
   if (status === "OVERDUE_3M") return "3M";
   return "1M";
-}
-
-function levelBadge(level: ReminderLevel) {
-  if (level === "3M") {
-    return { label: "3 meses", cls: "bg-red-600 text-white" };
-  }
-  if (level === "2M") {
-    return { label: "2 meses", cls: "bg-red-100 text-red-700" };
-  }
-  return { label: "1 mes", cls: "bg-orange-100 text-orange-700" };
 }
 
 interface OverdueNoticesPanelProps {
@@ -50,7 +41,6 @@ export function OverdueNoticesPanel({ lessee, rents }: OverdueNoticesPanelProps)
       <div className="space-y-2">
         {rents.map((r) => {
           const level = levelFromStatus(r.status);
-          const badge = levelBadge(level);
           const balance =
             Number(r.amountDue) - Number(r.amountPaid) - Number(r.amountWaived);
           return (
@@ -70,11 +60,7 @@ export function OverdueNoticesPanel({ lessee, rents }: OverdueNoticesPanelProps)
                       </>
                     ) : null}
                   </span>
-                  <span
-                    className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${badge.cls}`}
-                  >
-                    {badge.label}
-                  </span>
+                  <RentStatusBadge status={r.status} className="text-[11px]" />
                 </div>
                 <p className="text-xs text-muted-foreground">
                   Periodo {formatPeriodLong(r.period)} ·{" "}

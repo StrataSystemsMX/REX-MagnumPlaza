@@ -26,7 +26,7 @@ import { UnitPhotoUploader } from "@/components/properties/UnitPhotoUploader";
 import {
   actionDeleteUnitPhoto,
   actionReorderUnitPhotos,
-} from "@/lib/services/unit-photos";
+} from "@/server/services/unit-photos";
 
 interface Photo {
   id: string;

@@ -3,7 +3,7 @@
 import React from "react";
 import { EntityBudgetCard } from "./EntityBudgetCard";
 import { BudgetClosingSection } from "./BudgetClosingSection";
-import type { ConsolidatedBudget } from "@/lib/services/budgets-types";
+import type { ConsolidatedBudget } from "@/server/services/budgets-types";
 
 interface Props {
   consolidated: ConsolidatedBudget;

@@ -24,13 +24,13 @@ vi.mock("next/cache", () => ({
   revalidatePath: (...args: unknown[]) => mockRevalidatePath(...args),
 }));
 
-vi.mock("@/lib/auth/get-session", () => ({
+vi.mock("@/server/auth/get-session", () => ({
   requireAuth: () => mockRequireAuth(),
 }));
 
-vi.mock("@/lib/auth/permissions", async () => {
-  const actual = await vi.importActual<typeof import("@/lib/auth/permissions")>(
-    "@/lib/auth/permissions",
+vi.mock("@/server/auth/permissions", async () => {
+  const actual = await vi.importActual<typeof import("@/server/auth/permissions")>(
+    "@/server/auth/permissions",
   );
   return {
     ...actual,
@@ -38,7 +38,7 @@ vi.mock("@/lib/auth/permissions", async () => {
   };
 });
 
-vi.mock("@/lib/prisma/client", () => ({
+vi.mock("@/server/prisma/client", () => ({
   prisma: {
     property: propertyMock,
     document: documentMock,
@@ -47,9 +47,9 @@ vi.mock("@/lib/prisma/client", () => ({
   prismaUnsafe: {},
 }));
 
-vi.mock("@/lib/storage/r2", async () => {
-  const actual = await vi.importActual<typeof import("@/lib/storage/r2")>(
-    "@/lib/storage/r2",
+vi.mock("@/server/storage/r2", async () => {
+  const actual = await vi.importActual<typeof import("@/server/storage/r2")>(
+    "@/server/storage/r2",
   );
   return {
     ...actual,
@@ -81,7 +81,7 @@ function makeFormData(propertyId: string, file: File | null): FormData {
 
 describe("uploadPropertyPhotoSchema", () => {
   it("rechaza MIME no permitido", async () => {
-    const { uploadPropertyPhotoSchema } = await import("@/lib/validators/document");
+    const { uploadPropertyPhotoSchema } = await import("@/shared/validators/document");
     const result = uploadPropertyPhotoSchema.safeParse({
       propertyId: "p-1",
       file: makeFile({ type: "application/pdf", name: "doc.pdf" }),
@@ -91,7 +91,7 @@ describe("uploadPropertyPhotoSchema", () => {
 
   it("rechaza archivos > 5 MB", async () => {
     const { uploadPropertyPhotoSchema, MAX_PROPERTY_PHOTO_SIZE_BYTES } = await import(
-      "@/lib/validators/document"
+      "@/shared/validators/document"
     );
     const result = uploadPropertyPhotoSchema.safeParse({
       propertyId: "p-1",
@@ -101,7 +101,7 @@ describe("uploadPropertyPhotoSchema", () => {
   });
 
   it("acepta JPG válido", async () => {
-    const { uploadPropertyPhotoSchema } = await import("@/lib/validators/document");
+    const { uploadPropertyPhotoSchema } = await import("@/shared/validators/document");
     const result = uploadPropertyPhotoSchema.safeParse({
       propertyId: "p-1",
       file: makeFile(),
@@ -131,11 +131,11 @@ describe("actionUploadPropertyPhoto", () => {
 
   it("falla con PermissionError si no tiene property.update", async () => {
     mockRequirePermission.mockImplementation(async (_userId, code: string) => {
-      const { PermissionError } = await import("@/lib/auth/permissions");
+      const { PermissionError } = await import("@/server/auth/permissions");
       throw new PermissionError(code);
     });
     const { actionUploadPropertyPhoto } = await import(
-      "@/lib/services/property-photos"
+      "@/server/services/property-photos"
     );
     await expect(
       actionUploadPropertyPhoto(makeFormData("prop-1", makeFile())),
@@ -146,7 +146,7 @@ describe("actionUploadPropertyPhoto", () => {
   it("rechaza propertyId de otro tenant (findFirstOrThrow lanza)", async () => {
     propertyMock.findFirstOrThrow.mockRejectedValue(new Error("NotFound"));
     const { actionUploadPropertyPhoto } = await import(
-      "@/lib/services/property-photos"
+      "@/server/services/property-photos"
     );
     await expect(
       actionUploadPropertyPhoto(makeFormData("prop-otra-tenant", makeFile())),
@@ -157,7 +157,7 @@ describe("actionUploadPropertyPhoto", () => {
 
   it("rechaza MIME inválido antes de tocar storage o DB", async () => {
     const { actionUploadPropertyPhoto } = await import(
-      "@/lib/services/property-photos"
+      "@/server/services/property-photos"
     );
     await expect(
       actionUploadPropertyPhoto(
@@ -170,7 +170,7 @@ describe("actionUploadPropertyPhoto", () => {
 
   it("happy path: crea Document con tenantId y type=PROPERTY_PHOTO", async () => {
     const { actionUploadPropertyPhoto } = await import(
-      "@/lib/services/property-photos"
+      "@/server/services/property-photos"
     );
     const result = await actionUploadPropertyPhoto(
       makeFormData("prop-1", makeFile({ name: "frente.jpg" })),
@@ -232,7 +232,7 @@ describe("actionDeletePropertyPhoto", () => {
   it("rechaza documentId de otro tenant (findFirstOrThrow lanza)", async () => {
     documentMock.findFirstOrThrow.mockRejectedValue(new Error("NotFound"));
     const { actionDeletePropertyPhoto } = await import(
-      "@/lib/services/property-photos"
+      "@/server/services/property-photos"
     );
     await expect(
       actionDeletePropertyPhoto({ documentId: "doc-x" }),
@@ -251,7 +251,7 @@ describe("actionDeletePropertyPhoto", () => {
     mockDeleteFile.mockResolvedValue(undefined);
 
     const { actionDeletePropertyPhoto } = await import(
-      "@/lib/services/property-photos"
+      "@/server/services/property-photos"
     );
     await actionDeletePropertyPhoto({ documentId: "doc-1" });
 
@@ -280,7 +280,7 @@ describe("actionDeletePropertyPhoto", () => {
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 
     const { actionDeletePropertyPhoto } = await import(
-      "@/lib/services/property-photos"
+      "@/server/services/property-photos"
     );
     await expect(
       actionDeletePropertyPhoto({ documentId: "doc-1" }),
