@@ -14,6 +14,7 @@ import {
   Pencil,
   Plus,
   RotateCcw,
+  Search,
   Trash2,
   Users,
 } from "lucide-react";
@@ -45,6 +46,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
 import { PredialFormDialog } from "@/components/prediales/PredialFormDialog";
 import { PredialReceiptsDialog } from "@/components/prediales/PredialReceiptsDialog";
 import { PredialRegisterPaymentDialog } from "@/components/prediales/PredialRegisterPaymentDialog";
@@ -187,6 +189,7 @@ export function PredialesTable({
 
   const [ownerFilter, setOwnerFilter] = useState<string>("ALL");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("ALL");
+  const [search, setSearch] = useState("");
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
 
   // Dialog states
@@ -209,9 +212,14 @@ export function PredialesTable({
       if (ownerFilter !== "ALL" && p.ownerEntity.id !== ownerFilter)
         return false;
       if (statusFilter !== "ALL" && p.status !== statusFilter) return false;
+      if (search.trim()) {
+        const q = search.trim().toLowerCase();
+        const hay = `${p.propertyName} ${p.cadastralKey ?? ""}`.toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
       return true;
     });
-  }, [payments, ownerFilter, statusFilter]);
+  }, [payments, ownerFilter, statusFilter, search]);
 
   const groups = useMemo<OwnerGroup[]>(() => {
     const map = new Map<string, OwnerGroup>();
@@ -313,6 +321,15 @@ export function PredialesTable({
       {/* Filters + create */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-3">
+          <div className="relative w-full sm:w-56">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Buscar inmueble o clave catastral..."
+              className="pl-8"
+            />
+          </div>
           <Select
             value={String(selectedYear)}
             onValueChange={(v) => v && setYearParam(v)}

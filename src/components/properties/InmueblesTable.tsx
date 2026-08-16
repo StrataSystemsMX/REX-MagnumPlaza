@@ -10,6 +10,7 @@ import {
   Pencil,
   Plus,
   Receipt,
+  Search,
   Sparkles,
   Trash2,
 } from "lucide-react";
@@ -31,6 +32,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import {
   Dialog,
   DialogContent,
@@ -109,12 +111,23 @@ export function InmueblesTable({
     };
   }, [deleteTarget]);
 
+  const [search, setSearch] = useState("");
+
   // Las propiedades bloqueadas (solo administración) se ocultan por defecto;
   // un toggle las muestra cuando hay alguna.
   const blockedCount = inmuebles.filter((p) => p.status === "BLOQUEADO").length;
-  const filtered = showBlocked
+  const statusFiltered = showBlocked
     ? inmuebles
     : inmuebles.filter((p) => p.status !== "BLOQUEADO");
+
+  const searchQ = search.trim().toLowerCase();
+  const filtered = !searchQ
+    ? statusFiltered
+    : statusFiltered.filter((p) => {
+        const unitFields = p.units.map((u) => `${u.code} ${u.name ?? ""}`).join(" ");
+        const hay = `${p.name} ${p.address ?? ""} ${unitFields}`;
+        return hay.toLowerCase().includes(searchQ);
+      });
 
   function confirmDelete() {
     if (!deleteTarget) return;
@@ -136,6 +149,15 @@ export function InmueblesTable({
     <>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-2">
+          <div className="relative w-full sm:w-64">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Buscar inmueble o dirección..."
+              className="pl-8"
+            />
+          </div>
           <div className="flex items-center rounded-lg border bg-background p-0.5">
             <Button
               variant={view === "cards" ? "secondary" : "ghost"}
