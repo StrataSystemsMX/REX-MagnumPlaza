@@ -19,7 +19,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
+import { RentStatusBadge } from "@/components/shared/RentStatusBadge";
 import { actionGetContractRentHistory } from "@/server/services/rentas";
+import type { RentStatus } from "@/generated/prisma/enums";
 import type { ContractHistoryEntry } from "@/server/services/rentas-queries";
 import type { RentTableRow, RentasTableData } from "@/server/services/rentas-queries";
 import { cn } from "@/shared/utils";
@@ -47,57 +49,22 @@ function nextMonth(isoDate: string): string {
   return toYYYYMM(new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1)).toISOString());
 }
 
-// ─── Status config ────────────────────────────────────────────────────────────
+// ─── Status badge ─────────────────────────────────────────────────────────────
+// Delega en RentStatusBadge (mismo color/label que Cobranza, Historial, etc.)
+// para los 8 status reales de Rent. "NOT_GENERATED" es un pseudo-estado propio
+// de este calendario (el mes aún no generó Rent) — no existe en RentStatus.
 
-const STATUS_CFG: Record<string, { label: string; cls: string }> = {
-  PAID: {
-    label: "Pagado",
-    cls: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400",
-  },
-  PARTIAL: {
-    label: "Parcial",
-    cls: "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400",
-  },
-  PENDING: {
-    label: "Pendiente",
-    cls: "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400",
-  },
-  DUE: {
-    label: "Vencida",
-    cls: "bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400",
-  },
-  OVERDUE_1M: {
-    label: "Vencida 1m",
-    cls: "bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400",
-  },
-  OVERDUE_2M: {
-    label: "Vencida 2m",
-    cls: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400",
-  },
-  OVERDUE_3M: {
-    label: "Vencida 3m",
-    cls: "bg-red-200 text-red-900 dark:bg-red-900/50 dark:text-red-300 font-semibold",
-  },
-  WAIVED: {
-    label: "Condonada",
-    cls: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400",
-  },
-  NOT_GENERATED: {
-    label: "Sin generar",
-    cls: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400",
-  },
-};
+const REAL_RENT_STATUSES = new Set<string>([
+  "PENDING", "DUE", "PARTIAL", "OVERDUE_1M", "OVERDUE_2M", "OVERDUE_3M", "PAID", "WAIVED",
+]);
 
 function StatusBadge({ status }: { status: string }) {
-  const cfg = STATUS_CFG[status] ?? { label: status, cls: STATUS_CFG.PENDING!.cls };
+  if (REAL_RENT_STATUSES.has(status)) {
+    return <RentStatusBadge status={status as RentStatus} />;
+  }
   return (
-    <span
-      className={cn(
-        "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium",
-        cfg.cls,
-      )}
-    >
-      {cfg.label}
+    <span className="inline-flex items-center rounded-full bg-yellow-100 px-2.5 py-0.5 text-xs font-medium text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400">
+      Sin generar
     </span>
   );
 }
