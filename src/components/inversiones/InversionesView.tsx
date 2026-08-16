@@ -28,6 +28,7 @@ import type {
 import type { LegalEntityOption } from "@/server/services/properties-queries";
 import { NewInvestmentProjectDialog } from "./NewInvestmentProjectDialog";
 import { RegisterInvestmentPaymentDialog } from "./RegisterInvestmentPaymentDialog";
+import { YearNavigator } from "@/components/shared/yearly-matrix/YearlyMatrixParts";
 import { formatMXN } from "@/shared/format-currency";
 
 // Alias local: mismo output que la const Intl que existía aquí (2 decimales).
@@ -56,9 +57,19 @@ interface Props {
   legalEntities: ReadonlyArray<LegalEntityOption>;
   properties: ReadonlyArray<PropertyOption>;
   canCreate: boolean;
+  year: number;
+  availableYears: ReadonlyArray<number>;
 }
 
-export function InversionesView({ kpis, projects, legalEntities, properties, canCreate }: Props) {
+export function InversionesView({
+  kpis,
+  projects,
+  legalEntities,
+  properties,
+  canCreate,
+  year,
+  availableYears,
+}: Props) {
   return (
     <div className="space-y-6">
       <KpiCards kpis={kpis} />
@@ -67,6 +78,8 @@ export function InversionesView({ kpis, projects, legalEntities, properties, can
         legalEntities={legalEntities}
         properties={properties}
         canCreate={canCreate}
+        year={year}
+        availableYears={availableYears}
       />
     </div>
   );
@@ -171,25 +184,30 @@ function ProjectsSection({
   legalEntities,
   properties,
   canCreate,
+  year,
+  availableYears,
 }: {
   projects: InvestmentProjectListItem[];
   legalEntities: ReadonlyArray<LegalEntityOption>;
   properties: ReadonlyArray<PropertyOption>;
   canCreate: boolean;
+  year: number;
+  availableYears: ReadonlyArray<number>;
 }) {
   return (
     <div className="space-y-3">
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <Building2 className="size-4 text-muted-foreground" />
         <h2 className="text-base font-semibold">Proyectos de Inversión</h2>
         <Badge variant="secondary">
           {projects.length} proyecto{projects.length !== 1 ? "s" : ""}
         </Badge>
-        {canCreate && (
-          <div className="ml-auto">
+        <div className="ml-auto flex items-center gap-3">
+          <YearNavigator year={year} availableYears={availableYears} />
+          {canCreate && (
             <NewInvestmentProjectDialog legalEntities={legalEntities} properties={properties} />
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
       {projects.length === 0 ? (

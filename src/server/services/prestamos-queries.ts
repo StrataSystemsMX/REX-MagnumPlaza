@@ -14,11 +14,30 @@ export interface LoanRow {
   entityName: string;
 }
 
-export async function getLoans(): Promise<LoanRow[]> {
+export interface LoanFilters {
+  /** Muestra los créditos que siguen ACTIVE (sin importar cuándo arrancaron)
+   *  más los que arrancaron o se liquidaron en el año. */
+  year?: number;
+}
+
+export async function getLoans(filters: LoanFilters = {}): Promise<LoanRow[]> {
   const { tenantId } = await requireAuth();
+  const yearStart = filters.year ? new Date(Date.UTC(filters.year, 0, 1)) : null;
+  const yearEnd = filters.year ? new Date(Date.UTC(filters.year + 1, 0, 1)) : null;
 
   const loans = await prisma.loan.findMany({
-    where: { tenantId },
+    where: {
+      tenantId,
+      ...(yearStart && yearEnd
+        ? {
+            OR: [
+              { status: "ACTIVE" },
+              { startDate: { gte: yearStart, lt: yearEnd } },
+              { endDate: { gte: yearStart, lt: yearEnd } },
+            ],
+          }
+        : {}),
+    },
     orderBy: [{ startDate: "desc" }],
     include: { legalEntity: { select: { id: true, code: true, legalName: true } } },
   });

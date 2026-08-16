@@ -42,14 +42,32 @@ export async function getInversionesKpis(): Promise<InversionesKpis> {
 // PROYECTOS DE INVERSIÓN
 // ============================================================================
 
-export async function getInvestmentProjects() {
+export interface InvestmentProjectFilters {
+  /** Muestra los proyectos que siguen abiertos (PLANNING/ACTIVE/PAUSED) sin
+   *  importar cuándo arrancaron, más los que arrancaron o cerraron en el año. */
+  year?: number;
+}
+
+export async function getInvestmentProjects(filters: InvestmentProjectFilters = {}) {
   const { tenantId } = await requireAuth();
   const activeLegalEntityId = await getActiveLegalEntityId();
+  const yearStart = filters.year ? new Date(Date.UTC(filters.year, 0, 1)) : null;
+  const yearEnd = filters.year ? new Date(Date.UTC(filters.year + 1, 0, 1)) : null;
+
   const projects = await prisma.investmentProject.findMany({
     where: {
       tenantId,
       status: { not: "CANCELLED" },
       ...(activeLegalEntityId ? { legalEntityId: activeLegalEntityId } : {}),
+      ...(yearStart && yearEnd
+        ? {
+            OR: [
+              { status: { in: ["PLANNING", "ACTIVE", "PAUSED"] } },
+              { startDate: { gte: yearStart, lt: yearEnd } },
+              { endDate: { gte: yearStart, lt: yearEnd } },
+            ],
+          }
+        : {}),
     },
     orderBy: [{ status: "asc" }, { startDate: "desc" }],
     include: {

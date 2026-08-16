@@ -5,10 +5,15 @@ import type { GuaranteeStatus } from "@/generated/prisma/enums";
 export interface GuaranteeFilters {
   status?: GuaranteeStatus;
   propertyId?: string;
+  /** Muestra lo que sigue HELD/PARTIALLY_RETURNED (sin importar el año en que
+   *  se recibió) más lo que tuvo movimiento (recibido o devuelto) en el año. */
+  year?: number;
 }
 
 export async function getGuarantees(filters: GuaranteeFilters = {}) {
   const { tenantId } = await requireAuth();
+  const yearStart = filters.year ? new Date(Date.UTC(filters.year, 0, 1)) : null;
+  const yearEnd = filters.year ? new Date(Date.UTC(filters.year + 1, 0, 1)) : null;
 
   const rows = await prisma.guarantee.findMany({
     where: {
@@ -16,6 +21,15 @@ export async function getGuarantees(filters: GuaranteeFilters = {}) {
       ...(filters.status ? { status: filters.status } : {}),
       ...(filters.propertyId
         ? { contract: { unit: { propertyId: filters.propertyId } } }
+        : {}),
+      ...(yearStart && yearEnd
+        ? {
+            OR: [
+              { status: { in: ["HELD", "PARTIALLY_RETURNED"] } },
+              { receivedDate: { gte: yearStart, lt: yearEnd } },
+              { returnedDate: { gte: yearStart, lt: yearEnd } },
+            ],
+          }
         : {}),
     },
     orderBy: { receivedDate: "desc" },

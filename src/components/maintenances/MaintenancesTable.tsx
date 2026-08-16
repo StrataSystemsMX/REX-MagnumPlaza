@@ -8,6 +8,7 @@ import {
 } from "./MaintenanceBadges";
 import { EditMaintenanceDialog } from "./EditMaintenanceDialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { YearNavigator } from "@/components/shared/yearly-matrix/YearlyMatrixParts";
 import {
   Table,
   TableBody,
@@ -36,9 +37,17 @@ interface Props {
   maintenances: MaintenanceRow[];
   properties: PropertyForMaintenance[];
   canManage: boolean;
+  year: number;
+  availableYears: ReadonlyArray<number>;
 }
 
-export function MaintenancesTable({ maintenances, properties, canManage }: Props) {
+export function MaintenancesTable({
+  maintenances,
+  properties,
+  canManage,
+  year,
+  availableYears,
+}: Props) {
   const [editing, setEditing] = useState<MaintenanceRow | null>(null);
   const [open, setOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<SourceTab>("manual");
@@ -63,7 +72,7 @@ export function MaintenancesTable({ maintenances, properties, canManage }: Props
   }
 
   const tabs = (
-    <div className="border-b border-border">
+    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border">
       <nav className="-mb-px flex gap-6">
         {TABS.map((t) => (
           <button
@@ -84,6 +93,9 @@ export function MaintenancesTable({ maintenances, properties, canManage }: Props
           </button>
         ))}
       </nav>
+      <div className="pb-2">
+        <YearNavigator year={year} availableYears={availableYears} />
+      </div>
     </div>
   );
 

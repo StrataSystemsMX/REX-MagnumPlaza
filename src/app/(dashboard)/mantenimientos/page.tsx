@@ -4,6 +4,7 @@ import { NewMaintenanceDialog } from "@/components/maintenances/NewMaintenanceDi
 import { MetricCard } from "@/components/shared/metric-card";
 import { requireAuth } from "@/server/auth/get-session";
 import { hasPermission } from "@/server/auth/permissions";
+import { prisma } from "@/server/prisma/client";
 import {
   getMaintenanceSummary,
   getMaintenances,
@@ -11,11 +12,35 @@ import {
 } from "@/server/services/maintenances-queries";
 import { formatMXN } from "@/shared/format-currency";
 
-export default async function MantenimientosPage() {
-  const { dbUser } = await requireAuth();
+interface PageProps {
+  searchParams: Promise<{ year?: string }>;
+}
+
+export default async function MantenimientosPage({ searchParams }: PageProps) {
+  const { tenantId, dbUser } = await requireAuth();
+  const params = await searchParams;
+
+  const requestedYear = Number(params.year);
+  const year =
+    Number.isFinite(requestedYear) && requestedYear > 1900
+      ? requestedYear
+      : new Date().getUTCFullYear();
+
+  const oldestMaintenance = await prisma.maintenance.findFirst({
+    where: { tenantId },
+    orderBy: { scheduledDate: "asc" },
+    select: { scheduledDate: true },
+  });
+  const minYear = oldestMaintenance?.scheduledDate
+    ? Math.min(oldestMaintenance.scheduledDate.getUTCFullYear(), year - 1)
+    : year - 1;
+  const currentYear = new Date().getUTCFullYear();
+  const maxYear = Math.max(currentYear, year) + 1;
+  const availableYears: number[] = [];
+  for (let y = maxYear; y >= minYear; y--) availableYears.push(y);
 
   const [maintenances, properties, summary, canManage] = await Promise.all([
-    getMaintenances(),
+    getMaintenances({ year }),
     getPropertiesForMaintenanceForm(),
     getMaintenanceSummary(),
     hasPermission(dbUser.id, "expense.create"),
@@ -64,6 +89,8 @@ export default async function MantenimientosPage() {
         maintenances={maintenances}
         properties={properties}
         canManage={canManage}
+        year={year}
+        availableYears={availableYears}
       />
     </div>
   );

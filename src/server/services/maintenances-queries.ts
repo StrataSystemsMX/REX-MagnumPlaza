@@ -6,10 +6,15 @@ export interface MaintenanceFilters {
   propertyId?: string;
   status?: MaintenanceStatus;
   type?: MaintenanceType;
+  /** Muestra lo que sigue PLANNED/IN_PROGRESS (sin importar cuándo se agendó)
+   *  más lo que se agendó o completó en el año. */
+  year?: number;
 }
 
 export async function getMaintenances(filters: MaintenanceFilters = {}) {
   const { tenantId } = await requireAuth();
+  const yearStart = filters.year ? new Date(Date.UTC(filters.year, 0, 1)) : null;
+  const yearEnd = filters.year ? new Date(Date.UTC(filters.year + 1, 0, 1)) : null;
 
   const rows = await prisma.maintenance.findMany({
     where: {
@@ -17,6 +22,15 @@ export async function getMaintenances(filters: MaintenanceFilters = {}) {
       ...(filters.propertyId ? { propertyId: filters.propertyId } : {}),
       ...(filters.status ? { status: filters.status } : {}),
       ...(filters.type ? { type: filters.type } : {}),
+      ...(yearStart && yearEnd
+        ? {
+            OR: [
+              { status: { in: ["PLANNED", "IN_PROGRESS"] } },
+              { scheduledDate: { gte: yearStart, lt: yearEnd } },
+              { completedDate: { gte: yearStart, lt: yearEnd } },
+            ],
+          }
+        : {}),
     },
     orderBy: [{ status: "asc" }, { scheduledDate: "asc" }, { createdAt: "desc" }],
     include: {

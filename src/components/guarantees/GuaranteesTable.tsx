@@ -20,6 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { YearNavigator } from "@/components/shared/yearly-matrix/YearlyMatrixParts";
 import type { GuaranteeStatus } from "@/generated/prisma/enums";
 import type { GuaranteeRow } from "@/server/services/guarantees-queries";
 import type { LegalEntityOption } from "@/server/services/properties-queries";
@@ -122,6 +123,8 @@ interface Props {
   legalEntities: ReadonlyArray<LegalEntityOption>;
   totals: Totals;
   canManage: boolean;
+  year: number;
+  availableYears: ReadonlyArray<number>;
 }
 
 interface OwnerGroup {
@@ -138,6 +141,8 @@ export function GuaranteesTable({
   legalEntities,
   totals,
   canManage,
+  year,
+  availableYears,
 }: Props) {
   const [ownerFilter, setOwnerFilter] = useState<string>("ALL");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("ALL");
@@ -204,6 +209,9 @@ export function GuaranteesTable({
     <>
       {/* Filters */}
       <div className="flex flex-wrap items-end gap-3">
+        <FilterField label="Año">
+          <YearNavigator year={year} availableYears={availableYears} />
+        </FilterField>
         <FilterField label="Dueña">
           <Select
             value={ownerFilter}
