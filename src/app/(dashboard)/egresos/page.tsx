@@ -5,6 +5,7 @@ import { prisma } from "@/server/prisma/client";
 import {
   getExpenseCategories,
   getManagedExpenseCategories,
+  getMissingRecurringExpenses,
   getPropertiesForExpenseForm,
   getYearlyExpensesMatrix,
 } from "@/server/services/expenses-queries";
@@ -45,6 +46,7 @@ export default async function EgresosPage({ searchParams }: PageProps) {
     properties,
     canCreate,
     canUpdate,
+    missingRecurring,
   ] = await Promise.all([
     getYearlyExpensesMatrix(year),
     getLegalEntities(),
@@ -53,6 +55,8 @@ export default async function EgresosPage({ searchParams }: PageProps) {
     getPropertiesForExpenseForm(),
     hasPermission(dbUser.id, "expense.create"),
     hasPermission(dbUser.id, "expense.update"),
+    // El aviso de "falta capturar" solo tiene sentido viendo el año corriente.
+    year === currentYear ? getMissingRecurringExpenses() : Promise.resolve([]),
   ]);
 
   return (
@@ -73,6 +77,7 @@ export default async function EgresosPage({ searchParams }: PageProps) {
         properties={properties}
         canCreate={canCreate}
         canUpdate={canUpdate}
+        missingRecurring={missingRecurring}
       />
     </div>
   );

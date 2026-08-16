@@ -1,6 +1,6 @@
 "use client";
 
-import { TrendingDown, Wallet, AlertTriangle, Percent, Plus } from "lucide-react";
+import { TrendingDown, Wallet, AlertTriangle, Percent, Plus, BellRing } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
@@ -29,6 +29,7 @@ import { formatMXN } from "@/shared/format-currency";
 import { formatPeriodLong } from "@/shared/format-date";
 import type {
   MonthlyExpenseStatus,
+  MissingRecurringExpense,
   YearlyExpenseCell,
   YearlyExpenseEntityGroup,
   YearlyExpenseRow,
@@ -48,6 +49,7 @@ interface EgresosYearlyViewProps {
   properties: ReadonlyArray<ExpensePropertyOption>;
   canCreate: boolean;
   canUpdate: boolean;
+  missingRecurring: ReadonlyArray<MissingRecurringExpense>;
 }
 
 function entityMeta(g: YearlyExpenseEntityGroup): string {
@@ -63,6 +65,7 @@ export function EgresosYearlyView({
   properties,
   canCreate,
   canUpdate,
+  missingRecurring,
 }: EgresosYearlyViewProps) {
   const [entityFilter, setEntityFilter] = useState<string>("ALL");
   const [categoryFilter, setCategoryFilter] = useState<string>("ALL");
@@ -201,6 +204,38 @@ export function EgresosYearlyView({
           ) : null}
         </div>
       </div>
+
+      {missingRecurring.length > 0 ? (
+        <div className="flex flex-col gap-3 rounded-md border border-amber-300 bg-amber-50 p-4 text-sm sm:flex-row sm:items-center sm:justify-between dark:border-amber-900 dark:bg-amber-950/40">
+          <div className="flex items-start gap-2.5">
+            <BellRing className="mt-0.5 size-4 shrink-0 text-amber-700 dark:text-amber-300" />
+            <div>
+              <p className="font-medium text-amber-900 dark:text-amber-200">
+                Faltan {missingRecurring.length}{" "}
+                {missingRecurring.length === 1 ? "concepto" : "conceptos"} recurrente
+                {missingRecurring.length === 1 ? "" : "s"} de este mes
+              </p>
+              <p className="text-amber-800/80 dark:text-amber-300/80">
+                Se pagaron el mes pasado y todavía no tienen egreso capturado:{" "}
+                {missingRecurring
+                  .map((m) => `${m.categoryName} (${m.legalEntityCode})`)
+                  .join(", ")}
+                .
+              </p>
+            </div>
+          </div>
+          {canCreate ? (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setFormMode("create")}
+              className="shrink-0 border-amber-400 bg-transparent text-amber-900 hover:bg-amber-100 dark:border-amber-800 dark:text-amber-200 dark:hover:bg-amber-900/40"
+            >
+              Capturar egreso
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
 
       {/* KPI cards */}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">

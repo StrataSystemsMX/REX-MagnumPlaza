@@ -485,3 +485,101 @@ export async function getYearlyExpensesMatrix(
   return { year, entities, monthlyTotals };
 }
 
+// ============================================================================
+// Egresos recurrentes sin capturar este mes
+// ============================================================================
+// No auto-genera nada: solo avisa. Un (LegalEntity, ExpenseCategory) se marca
+// "faltante" cuando tuvo al menos un Expense el mes pasado pero no tiene
+// ninguno este mes (pagado, pendiente o "sin egreso" — cualquiera cuenta como
+// capturado). Requerir precedente el mes anterior evita falsos positivos:
+// una categoría recurrente que nunca aplicó a una entidad (ej. Gasolina para
+// una LegalEntity sin flotilla) nunca se marca, y una categoría nueva no se
+// reclama en su primer mes.
+// ============================================================================
+
+export interface MissingRecurringExpense {
+  legalEntityId: string;
+  legalEntityCode: string;
+  categoryId: string;
+  categoryName: string;
+}
+
+interface RecurringExpenseRef {
+  legalEntityId: string;
+  categoryId: string;
+}
+
+/** Pura y testeable: arma la lista de faltantes a partir de lo ya cargado. */
+export function diffMissingRecurringExpenses(
+  prevMonthRefs: RecurringExpenseRef[],
+  thisMonthRefs: RecurringExpenseRef[],
+  legalEntityCodes: Map<string, string>,
+  categoryNames: Map<string, string>,
+): MissingRecurringExpense[] {
+  const covered = new Set(thisMonthRefs.map((r) => `${r.legalEntityId}:${r.categoryId}`));
+  const seen = new Set<string>();
+  const missing: MissingRecurringExpense[] = [];
+
+  for (const ref of prevMonthRefs) {
+    const key = `${ref.legalEntityId}:${ref.categoryId}`;
+    if (seen.has(key) || covered.has(key)) continue;
+    seen.add(key);
+
+    const legalEntityCode = legalEntityCodes.get(ref.legalEntityId);
+    const categoryName = categoryNames.get(ref.categoryId);
+    if (!legalEntityCode || !categoryName) continue; // entidad/categoría ya no activa
+
+    missing.push({
+      legalEntityId: ref.legalEntityId,
+      legalEntityCode,
+      categoryId: ref.categoryId,
+      categoryName,
+    });
+  }
+
+  return missing.sort(
+    (a, b) =>
+      a.legalEntityCode.localeCompare(b.legalEntityCode) ||
+      a.categoryName.localeCompare(b.categoryName),
+  );
+}
+
+/**
+ * Egresos recurrentes que se pagaron el mes pasado y aún no tienen registro
+ * este mes. Se usa en el dashboard y en /egresos para avisar, nunca para
+ * crear un Expense automáticamente.
+ */
+export async function getMissingRecurringExpenses(
+  now: Date = new Date(),
+): Promise<MissingRecurringExpense[]> {
+  const { tenantId } = await requireAuth();
+
+  const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+  const monthEnd = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
+  const prevMonthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1));
+
+  const recurringWhere = {
+    category: { isRecurring: true, isActive: true, type: { not: "PAYROLL" as const } },
+  };
+
+  const [legalEntities, thisMonth, prevMonth] = await Promise.all([
+    prisma.legalEntity.findMany({
+      where: { tenantId, isActive: true },
+      select: { id: true, code: true },
+    }),
+    prisma.expense.findMany({
+      where: { tenantId, expenseDate: { gte: monthStart, lt: monthEnd }, ...recurringWhere },
+      select: { legalEntityId: true, categoryId: true },
+    }),
+    prisma.expense.findMany({
+      where: { tenantId, expenseDate: { gte: prevMonthStart, lt: monthStart }, ...recurringWhere },
+      select: { legalEntityId: true, categoryId: true, category: { select: { name: true } } },
+    }),
+  ]);
+
+  const legalEntityCodes = new Map(legalEntities.map((le) => [le.id, le.code]));
+  const categoryNames = new Map(prevMonth.map((e) => [e.categoryId, e.category.name]));
+
+  return diffMissingRecurringExpenses(prevMonth, thisMonth, legalEntityCodes, categoryNames);
+}
+

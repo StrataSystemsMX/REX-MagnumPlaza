@@ -21,6 +21,7 @@ import {
   type RecentActivityRow,
   type TopOverdueRow,
 } from "@/server/services/dashboard-metrics-helpers";
+import { getMissingRecurringExpenses } from "@/server/services/expenses-queries";
 
 // Re-exportamos para que callers existentes puedan seguir importando desde
 // dashboard-metrics. Los helpers puros viven en dashboard-metrics-helpers.
@@ -271,6 +272,29 @@ const fetchDashboardMetricsImpl = async (
     outstandingRents: prevOutstanding,
   });
   const alerts = detectAlerts(summary, prevSummary);
+
+  // Egresos recurrentes (CFE, agua, nómina...) que se pagaron el mes pasado y
+  // no tienen registro este mes todavía. Solo aplica al mes corriente — si el
+  // usuario está viendo un mes histórico, no tiene sentido "avisar" de algo
+  // que ya pasó.
+  const isCurrentMonth =
+    now.getUTCFullYear() === periodStart.getUTCFullYear() &&
+    now.getUTCMonth() === periodStart.getUTCMonth();
+  if (isCurrentMonth && !options.legalEntityId) {
+    const missingRecurring = await getMissingRecurringExpenses(now);
+    if (missingRecurring.length > 0) {
+      const preview = missingRecurring
+        .slice(0, 3)
+        .map((m) => `${m.categoryName} (${m.legalEntityCode})`)
+        .join(", ");
+      const extra =
+        missingRecurring.length > 3 ? ` y ${missingRecurring.length - 3} más` : "";
+      alerts.push({
+        level: "warning",
+        message: `Faltan ${missingRecurring.length} egreso${missingRecurring.length !== 1 ? "s" : ""} recurrente${missingRecurring.length !== 1 ? "s" : ""} de este mes: ${preview}${extra}.`,
+      });
+    }
+  }
 
   // ----- byProperty -----
   const byPropertyMap = new Map<string, PropertyMetricRow>();
