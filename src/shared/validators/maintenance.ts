@@ -6,11 +6,16 @@ import {
 } from "@/generated/prisma/enums";
 import { SPANISH_TEXT } from "./patterns";
 
-const dateLike = z.preprocess((v) => {
-  if (v instanceof Date) return v;
-  if (typeof v === "string" && v.length > 0) return new Date(v);
-  return undefined;
-}, z.date({ message: "Fecha inválida." }).optional());
+// El `.optional()` externo es necesario en Zod v4: un `z.preprocess` sin él
+// rechaza la llave ausente ("expected nonoptional") aunque su schema interno
+// sea opcional.
+const dateLike = z
+  .preprocess((v) => {
+    if (v instanceof Date) return v;
+    if (typeof v === "string" && v.length > 0) return new Date(v);
+    return undefined;
+  }, z.date({ message: "Fecha inválida." }).optional())
+  .optional();
 
 const optionalAmount = z.preprocess(
   (v) => {
@@ -23,7 +28,7 @@ const optionalAmount = z.preprocess(
     return undefined;
   },
   z.number().positive("El costo debe ser mayor a 0.").optional(),
-);
+).optional();
 
 export const createMaintenanceSchema = z.object({
   propertyId: z.string().min(1, "Selecciona una propiedad."),

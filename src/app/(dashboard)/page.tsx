@@ -7,10 +7,18 @@ import { LegalEntitySummaryTable } from "@/components/dashboard/LegalEntitySumma
 import { MetricCard } from "@/components/shared/metric-card";
 import { getActiveLegalEntityId } from "@/server/auth/active-legal-entity";
 import { requireAuth } from "@/server/auth/get-session";
-import { getUserRoleCodes } from "@/server/auth/permissions";
+import { getUserRoleCodes, hasPermission } from "@/server/auth/permissions";
 import { prisma } from "@/server/prisma/client";
 import { timed } from "@/server/perf/timed";
 import { formatMXN } from "@/shared/format-currency";
+import { MobileDashboard } from "@/components/mobile/MobileDashboard";
+import { shortPropertyName } from "@/shared/mobile/format";
+import { getIsMobileView } from "@/server/mobile/viewport";
+import {
+  getMobileMorosity,
+  getMobileOverdueMaintenanceCount,
+} from "@/server/services/mobile-queries";
+import type { RentStatus } from "@/generated/prisma/enums";
 
 // ─── Formatters ──────────────────────────────────────────────────────────────
 
@@ -77,7 +85,11 @@ export default async function DashboardPage({ searchParams }: PageProps) {
     roles.includes("ACCOUNTANT") || roles.includes("OWNER");
   if (!canSeeAll) redirect("/portal");
 
-  const legalEntityParam = params.legalEntity ?? (await getActiveLegalEntityId()) ?? undefined;
+  // `legalEntity=all` (chip "Todas" del móvil) ignora la razón social activa.
+  const legalEntityParam =
+    params.legalEntity === "all"
+      ? undefined
+      : (params.legalEntity ?? (await getActiveLegalEntityId()) ?? undefined);
   const mode = (params.mode === "mensual" ? "mensual" : "anual") as Mode;
 
   const now          = new Date();
@@ -172,7 +184,12 @@ export default async function DashboardPage({ searchParams }: PageProps) {
         amountDue: true,
         amountPaid: true,
         status: true,
-        contract: { select: { lessee: { select: { id: true, legalName: true } } } },
+        contract: {
+          select: {
+            lessee: { select: { id: true, legalName: true } },
+            unit: { select: { code: true, property: { select: { name: true } } } },
+          },
+        },
       },
     })),
 
@@ -344,7 +361,9 @@ export default async function DashboardPage({ searchParams }: PageProps) {
 
   // ── Top Adeudos ───────────────────────────────────────────────────────────
   const levelOrder: Record<string, number> = { DUE: 0, PARTIAL: 0, OVERDUE_1M: 1, OVERDUE_2M: 2, OVERDUE_3M: 3 };
-  const overdueMap = new Map<string, { legalName: string; total: number; count: number; worstStatus: string }>();
+  const overdueMap = new Map<string, {
+    lesseeId: string; legalName: string; unitLabel: string; total: number; count: number; worstStatus: RentStatus;
+  }>();
   for (const r of overdueRentsRaw) {
     const l  = r.contract.lessee;
     const bal = Number(r.amountDue) - Number(r.amountPaid);
@@ -354,10 +373,61 @@ export default async function DashboardPage({ searchParams }: PageProps) {
       cur.count += 1;
       if ((levelOrder[r.status] ?? 0) > (levelOrder[cur.worstStatus] ?? 0)) cur.worstStatus = r.status;
     } else {
-      overdueMap.set(l.id, { legalName: l.legalName, total: bal, count: 1, worstStatus: r.status });
+      overdueMap.set(l.id, {
+        lesseeId: l.id,
+        legalName: l.legalName,
+        unitLabel: `${r.contract.unit.code} · ${shortPropertyName(r.contract.unit.property.name)}`,
+        total: bal,
+        count: 1,
+        worstStatus: r.status,
+      });
     }
   }
   const topOverdue = Array.from(overdueMap.values()).sort((a, b) => b.total - a.total).slice(0, 8);
+
+  // ── Rex móvil ─────────────────────────────────────────────────────────────
+  if (await getIsMobileView()) {
+    const [morosity, overdueMaintenances, tenant] = await Promise.all([
+      getMobileMorosity(),
+      getMobileOverdueMaintenanceCount(),
+      prisma.tenant.findUnique({ where: { id: dbUser.tenantId }, select: { name: true } }),
+    ]);
+    const isOwnerView = !(await hasPermission(dbUser.id, "payment.register"));
+    return (
+      <MobileDashboard
+        tenantName={tenant?.name ?? ""}
+        userName={dbUser.name}
+        isOwnerView={isOwnerView}
+        mode={mode}
+        selectedMonth={selectedMonth}
+        periodLabel={periodLabel}
+        monthLabel={`${MONTHS[currentMonth] ?? ""} ${currentYear}`}
+        legalEntities={legalEntities}
+        activeLegalEntityId={legalEntityParam ?? null}
+        pending={{
+          porCobrar: cobranzaMonthRents.filter(
+            (r) => r.status === "PENDING" || r.status === "DUE" || r.status === "PARTIAL",
+          ).length,
+          avisosSinEnviar: morosity.filter((m) => !m.lastNoticeAt).length,
+          mantenimientosAtrasados: overdueMaintenances,
+        }}
+        kpis={{ ventas: ventasTotal, egresos: egresosTotal, utilidad, rentabilidad }}
+        cobranza={{
+          pct: cobranzaPct,
+          collected: cobranzaCollected,
+          expected: cobranzaExpected,
+          paid: cobranzaPaid,
+          partial: cobranzaPartial,
+          pending: cobranzaPending,
+          overdue: cobranzaOverdue,
+        }}
+        alerts={alerts}
+        topOverdue={topOverdue.slice(0, 5)}
+        byLegalEntity={byLegalEntity}
+        ranking={rankingPlazas}
+      />
+    );
+  }
 
   // ─────────────────────────────────────────────────────────────────────────
   // RENDER

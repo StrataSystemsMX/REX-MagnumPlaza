@@ -9,6 +9,7 @@ import {
   InputGroupAddon,
   InputGroupInput,
 } from "@/components/ui/input-group";
+import { ViewSwitchButton } from "@/components/mobile/ViewSwitchButton";
 import { MobileSidebar } from "./mobile-sidebar";
 
 /**
@@ -20,7 +21,13 @@ import { MobileSidebar } from "./mobile-sidebar";
  * posteriores). En la izquierda solo aparece el disparador del menú en móvil
  * (`lg:hidden`), necesario para navegar cuando el sidebar está oculto.
  */
-export function Topbar({ canViewHistory = false }: { canViewHistory?: boolean }) {
+export function Topbar({
+  canViewHistory = false,
+  canSwitchToMobile = false,
+}: {
+  canViewHistory?: boolean;
+  canSwitchToMobile?: boolean;
+}) {
   return (
     <header className="flex h-14 shrink-0 items-center justify-between gap-2 border-b border-sidebar-border bg-sidebar px-4 text-sidebar-foreground sm:px-6">
       {/* Izquierda — menú móvil + búsqueda (aún sin funcionalidad) */}
@@ -46,6 +53,13 @@ export function Topbar({ canViewHistory = false }: { canViewHistory?: boolean })
       {/* Derecha — sesión e historial. Los botones Deshacer/Rehacer que vivían
           aquí eran stubs sin handler; el deshacer real vive en /historial. */}
       <div className="flex shrink-0 items-center gap-1.5">
+        {canSwitchToMobile && (
+          <ViewSwitchButton
+            to="mobile"
+            className="h-8 rounded-md px-2 text-sm font-medium hover:bg-muted"
+          />
+        )}
+
         {/* Historial de cambios — sólo visible para MASTER/ADMIN. */}
         {canViewHistory && (
           <Button
