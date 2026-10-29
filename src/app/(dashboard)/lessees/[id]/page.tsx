@@ -3,6 +3,10 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { LesseeDetailTabs } from "@/components/lessees/LesseeDetailTabs";
+import { MobileLesseeDetail } from "@/components/mobile/MobileLesseeDetail";
+import { backTarget } from "@/shared/mobile/nav";
+import { getIsMobileView } from "@/server/mobile/viewport";
+import { getMobileLesseeDetail } from "@/server/services/mobile-queries";
 import { communicationChannelLabel } from "@/shared/i18n/enums";
 import { getAvailableUnits } from "@/server/services/contracts-queries";
 import { getLesseeById, getOverdueRentsByLessee } from "@/server/services/lessees-queries";
@@ -18,10 +22,23 @@ interface Params {
 
 export default async function LesseeDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<Params>;
+  searchParams: Promise<{ from?: string }>;
 }) {
   const { id } = await params;
+
+  if (await getIsMobileView()) {
+    const [detail, { from }] = await Promise.all([getMobileLesseeDetail(id), searchParams]);
+    if (!detail) notFound();
+    return (
+      <MobileLesseeDetail
+        lessee={detail}
+        back={backTarget(from, { href: "/lessees", label: "Inquilinos" })}
+      />
+    );
+  }
   const [lessee, statement, payments, notifications, overdueRents, availableUnits] =
     await Promise.all([
       getLesseeById(id),

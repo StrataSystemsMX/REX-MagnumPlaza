@@ -3,6 +3,11 @@ import Link from "next/link";
 import { MetricCard } from "@/components/shared/metric-card";
 import { PropertyFilterTabs } from "@/components/shared/PropertyFilterTabs";
 import { CollectionsTabs } from "@/components/collections/CollectionsTabs";
+import {
+  MobileCollections,
+  type CollectionsFilter,
+} from "@/components/mobile/MobileCollections";
+import { getIsMobileView } from "@/server/mobile/viewport";
 import { Button } from "@/components/ui/button";
 import { requireAuth } from "@/server/auth/get-session";
 import { isMaster } from "@/server/auth/permissions";
@@ -23,6 +28,7 @@ const VALID_MES_MODES = ["tarjetas", "kpis"] as const;
 type MesMode = (typeof VALID_MES_MODES)[number];
 
 const VALID_ESCALONES = ["all", "1m", "2m", "3m"] as const;
+const VALID_MOBILE_FILTERS: CollectionsFilter[] = ["todos", "por-cobrar", "vencidos", "pagados"];
 type EscalonParam = (typeof VALID_ESCALONES)[number];
 
 function parsePeriod(periodo?: string): Date {
@@ -43,6 +49,8 @@ export default async function CollectionsPage({
     escalon?: string;
     periodo?: string;
     plaza?: string;
+    seg?: string;
+    filtro?: string;
   }>;
 }) {
   const { tenantId, dbUser } = await requireAuth();
@@ -52,7 +60,22 @@ export default async function CollectionsPage({
     escalon: escalonParam,
     periodo,
     plaza,
+    seg,
+    filtro,
   } = await searchParams;
+
+  if (await getIsMobileView()) {
+    return (
+      <MobileCollections
+        segment={seg === "morosidad" || tabParam === "por-cobrar" ? "morosidad" : "mes"}
+        filter={
+          VALID_MOBILE_FILTERS.includes(filtro as CollectionsFilter)
+            ? (filtro as CollectionsFilter)
+            : "todos"
+        }
+      />
+    );
+  }
   const activePlazaId = plaza ?? null;
   const activeTab: CollectionsTab = VALID_TABS.includes(tabParam as CollectionsTab)
     ? (tabParam as CollectionsTab)
