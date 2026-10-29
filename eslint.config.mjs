@@ -22,6 +22,22 @@ const eslintConfig = [
       "prisma/migrations/**",
     ],
   },
+  {
+    rules: {
+      // Sin `any`: el código está fuertemente tipado, esto lo mantiene así.
+      "@typescript-eslint/no-explicit-any": "error",
+      // Variables/imports sin uso son error; se ignoran los prefijados con `_`
+      // (params obligatorios por firma) y las constantes en mayúsculas.
+      "@typescript-eslint/no-unused-vars": [
+        "error",
+        {
+          argsIgnorePattern: "^_",
+          varsIgnorePattern: "^_",
+          caughtErrorsIgnorePattern: "^_",
+        },
+      ],
+    },
+  },
 ];
 
 export default eslintConfig;

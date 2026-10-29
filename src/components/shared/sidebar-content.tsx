@@ -4,7 +4,7 @@ import { Settings } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { cn } from "@/lib/utils";
+import { cn } from "@/shared/utils";
 import { NAV_GROUPS } from "./sidebar-nav-config";
 
 interface SidebarContentProps {
@@ -30,7 +30,7 @@ export function SidebarContent({ onLinkClick }: SidebarContentProps) {
   return (
     <>
       {/* Logo */}
-      <div className="flex shrink-0 flex-col gap-1 border-b border-sidebar-border px-5 py-4">
+      <div className="flex h-14 shrink-0 items-center border-b border-sidebar-border px-5">
         <div className="flex items-center gap-3">
           <Image
             src="/logo/StrataSystem_logo.png"

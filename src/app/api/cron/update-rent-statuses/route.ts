@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { runDailyMorosityCron } from "@/lib/services/cron-runner";
+import { secureCompare } from "@/server/secure-compare";
+import { runDailyMorosityCron } from "@/server/services/cron-runner";
 
 /**
  * Cron diario de actualización de morosidad. Disparado por Vercel Cron
@@ -21,7 +22,7 @@ export async function GET(request: Request): Promise<NextResponse> {
     .get("authorization")
     ?.replace(/^Bearer\s+/i, "");
   const got = fromHeader ?? fromBearer ?? "";
-  if (got !== expected) {
+  if (!secureCompare(got, expected)) {
     return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
   }
 
@@ -29,8 +30,8 @@ export async function GET(request: Request): Promise<NextResponse> {
     const summary = await runDailyMorosityCron();
     return NextResponse.json(summary);
   } catch (e) {
+    // Detalle solo al log del servidor; mensaje genérico al cliente.
     console.error("[cron/update-rent-statuses] failed:", e);
-    const message = e instanceof Error ? e.message : "Error desconocido.";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ error: "Error al ejecutar el cron." }, { status: 500 });
   }
 }

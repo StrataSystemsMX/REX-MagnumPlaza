@@ -10,13 +10,13 @@ import {
 } from "@/components/collections/OutstandingRentsTable";
 import { PaymentsTable } from "@/components/collections/PaymentsTable";
 import { RentasView } from "@/components/rentas/RentasView";
-import { cn } from "@/lib/utils";
+import { cn } from "@/shared/utils";
 import type {
   MonthlyCollections,
   OutstandingRent,
   PaymentListItem,
-} from "@/lib/services/payments-queries";
-import type { RentasTableData } from "@/lib/services/rentas-queries";
+} from "@/server/services/payments-queries";
+import type { RentasTableData } from "@/server/services/rentas-queries";
 
 export type CollectionsTopTab = "mes" | "por-cobrar" | "historial";
 type MesMode = "tarjetas" | "kpis";
@@ -25,24 +25,26 @@ interface CollectionsTabsProps {
   outstanding: ReadonlyArray<OutstandingRent>;
   payments: ReadonlyArray<PaymentListItem>;
   monthly: MonthlyCollections;
-  properties: ReadonlyArray<{ id: string; name: string }>;
   canDeletePayment: boolean;
+  canEditPayment: boolean;
   rentasData: RentasTableData;
   activeTab: CollectionsTopTab;
   mesMode: MesMode;
   escalon: EscalonChip;
+  activePlazaId: string | null;
 }
 
 export function CollectionsTabs({
   outstanding,
   payments,
   monthly,
-  properties,
   canDeletePayment,
+  canEditPayment,
   rentasData,
   activeTab,
   mesMode,
   escalon,
+  activePlazaId,
 }: CollectionsTabsProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -66,7 +68,7 @@ export function CollectionsTabs({
       className="w-full"
     >
       <div className="-mx-1 overflow-x-auto px-1">
-        <TabsList variant="line">
+        <TabsList>
           <TabsTrigger value="mes">Este mes</TabsTrigger>
           <TabsTrigger value="por-cobrar">
             Por cobrar ({outstanding.length})
@@ -75,32 +77,45 @@ export function CollectionsTabs({
         </TabsList>
       </div>
 
-      <TabsContent value="mes" className="mt-4 space-y-4">
-        <SubToggle
-          options={[
-            { key: "tarjetas", label: "Tarjetas" },
-            { key: "kpis", label: "KPIs operativos" },
-          ]}
-          active={mesMode}
-          onChange={(k) => navigate({ tab: "mes", mode: k })}
-        />
-        {mesMode === "kpis" ? (
-          <RentasView tableData={rentasData} />
-        ) : (
-          <MonthlyCollectionsView data={monthly} />
-        )}
+      <TabsContent value="mes" className="mt-4">
+        {(() => {
+          const modeToggle = (
+            <SubToggle
+              options={[
+                { key: "tarjetas", label: "Tarjetas" },
+                { key: "kpis", label: "KPIs operativos" },
+              ]}
+              active={mesMode}
+              onChange={(k) => navigate({ tab: "mes", mode: k })}
+            />
+          );
+          return mesMode === "kpis" ? (
+            <RentasView tableData={rentasData} modeToggle={modeToggle} />
+          ) : (
+            <MonthlyCollectionsView
+              data={monthly}
+              activePlazaId={activePlazaId}
+              modeToggle={modeToggle}
+            />
+          );
+        })()}
       </TabsContent>
 
       <TabsContent value="por-cobrar" className="mt-4">
         <OutstandingRentsTable
           rents={outstanding}
-          properties={properties}
           escalon={escalon}
+          activePlazaId={activePlazaId}
         />
       </TabsContent>
 
       <TabsContent value="historial" className="mt-4">
-        <PaymentsTable payments={payments} canDelete={canDeletePayment} />
+        <PaymentsTable
+          payments={payments}
+          canDelete={canDeletePayment}
+          canEdit={canEditPayment}
+          activePlazaId={activePlazaId}
+        />
       </TabsContent>
     </Tabs>
   );

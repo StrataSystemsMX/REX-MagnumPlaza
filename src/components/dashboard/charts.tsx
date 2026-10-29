@@ -12,7 +12,8 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { capitalizeFirst } from "@/lib/utils";
+import { formatMXN, formatMXNCompact } from "@/shared/format-currency";
+import { formatMonthShort } from "@/shared/format-date";
 
 // Histórico real extraído del Excel del cliente (2009–2025)
 const HISTORICAL_DATA = [
@@ -53,10 +54,10 @@ export function FinancialHistoryChart({ current }: FinancialHistoryChartProps) {
           <YAxis
             stroke="hsl(var(--muted-foreground))"
             fontSize={11}
-            tickFormatter={(v: number) => MXN_COMPACT.format(v)}
+            tickFormatter={(v: number) => formatMXNCompact(v)}
           />
           <Tooltip
-            formatter={(value) => MXN_FULL.format(Number(value))}
+            formatter={(value) => formatMXN(Number(value))}
             contentStyle={{ borderRadius: 8, fontSize: 12 }}
           />
           <Legend wrapperStyle={{ fontSize: 12 }} />
@@ -68,26 +69,11 @@ export function FinancialHistoryChart({ current }: FinancialHistoryChartProps) {
   );
 }
 
-const MXN_COMPACT = new Intl.NumberFormat("es-MX", {
-  style: "currency",
-  currency: "MXN",
-  notation: "compact",
-  maximumFractionDigits: 1,
-});
-
-const MXN_FULL = new Intl.NumberFormat("es-MX", {
-  style: "currency",
-  currency: "MXN",
-  maximumFractionDigits: 0,
-});
-
-const MONTH_LABEL = new Intl.DateTimeFormat("es-MX", { month: "short", timeZone: "UTC" });
-
 function monthShortLabel(yyyymm: string): string {
   const y = Number(yyyymm.slice(0, 4));
   const m = Number(yyyymm.slice(5, 7));
   if (!Number.isFinite(y) || !Number.isFinite(m)) return yyyymm;
-  return capitalizeFirst(MONTH_LABEL.format(new Date(Date.UTC(y, m - 1, 1))));
+  return formatMonthShort(new Date(Date.UTC(y, m - 1, 1)));
 }
 
 export interface IncomeChartProps {
@@ -109,10 +95,10 @@ export function IncomeChart({ data }: IncomeChartProps) {
           <YAxis
             stroke="hsl(var(--muted-foreground))"
             fontSize={12}
-            tickFormatter={(v: number) => MXN_COMPACT.format(Number(v))}
+            tickFormatter={(v: number) => formatMXNCompact(Number(v))}
           />
           <Tooltip
-            formatter={(value) => MXN_FULL.format(Number(value))}
+            formatter={(value) => formatMXN(Number(value))}
             contentStyle={{ borderRadius: 8, fontSize: 12 }}
           />
           <Legend wrapperStyle={{ fontSize: 12 }} />
@@ -169,6 +155,64 @@ export function MorosityTrendChart({ data }: MorosityTrendChartProps) {
             dot={{ r: 3 }}
           />
         </LineChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+export interface ExpensesByCategoryChartProps {
+  data: Array<{ categoryName: string; total: string }>;
+  /** Máximo de categorías a graficar (las mayores). Default 8. */
+  topN?: number;
+}
+
+export function ExpensesByCategoryChart({
+  data,
+  topN = 8,
+}: ExpensesByCategoryChartProps) {
+  const chartData = data
+    .map((d) => ({ name: d.categoryName, Gasto: Number(d.total) }))
+    .filter((d) => d.Gasto > 0)
+    .sort((a, b) => b.Gasto - a.Gasto)
+    .slice(0, topN);
+
+  if (chartData.length === 0) {
+    return (
+      <div className="flex h-72 w-full items-center justify-center text-sm text-muted-foreground">
+        Sin egresos para graficar.
+      </div>
+    );
+  }
+
+  return (
+    <div className="h-72 w-full">
+      <ResponsiveContainer width="100%" height="100%">
+        <BarChart
+          data={chartData}
+          layout="vertical"
+          margin={{ top: 4, right: 16, left: 8, bottom: 4 }}
+        >
+          <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" horizontal={false} />
+          <XAxis
+            type="number"
+            stroke="hsl(var(--muted-foreground))"
+            fontSize={11}
+            tickFormatter={(v: number) => formatMXNCompact(Number(v))}
+          />
+          <YAxis
+            type="category"
+            dataKey="name"
+            stroke="hsl(var(--muted-foreground))"
+            fontSize={11}
+            width={120}
+            interval={0}
+          />
+          <Tooltip
+            formatter={(value) => formatMXN(Number(value))}
+            contentStyle={{ borderRadius: 8, fontSize: 12 }}
+          />
+          <Bar dataKey="Gasto" fill="#ef4444" radius={[0, 4, 4, 0]} />
+        </BarChart>
       </ResponsiveContainer>
     </div>
   );

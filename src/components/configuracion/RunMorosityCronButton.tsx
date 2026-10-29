@@ -18,7 +18,7 @@ import { Button } from "@/components/ui/button";
 import {
   actionRunMorosityCron,
   type ManualCronResult,
-} from "@/lib/services/admin-cron";
+} from "@/server/services/admin-cron";
 
 export function RunMorosityCronButton() {
   const router = useRouter();

@@ -8,6 +8,7 @@ import {
 } from "./MaintenanceBadges";
 import { EditMaintenanceDialog } from "./EditMaintenanceDialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { YearNavigator } from "@/components/shared/yearly-matrix/YearlyMatrixParts";
 import {
   Table,
   TableBody,
@@ -16,11 +17,14 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { cn } from "@/lib/utils";
+import { cn } from "@/shared/utils";
+import { isPlaza } from "@/shared/i18n/unit-label";
+import { formatMXN } from "@/shared/format-currency";
+import { formatDate } from "@/shared/format-date";
 import type {
   MaintenanceRow,
   PropertyForMaintenance,
-} from "@/lib/services/maintenances-queries";
+} from "@/server/services/maintenances-queries";
 
 const TABS = [
   { key: "manual", label: "Manuales" },
@@ -29,21 +33,21 @@ const TABS = [
 
 type SourceTab = (typeof TABS)[number]["key"];
 
-const MXN = new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" });
-const DATE = new Intl.DateTimeFormat("es-MX", {
-  day: "2-digit",
-  month: "short",
-  year: "numeric",
-  timeZone: "UTC",
-});
-
 interface Props {
   maintenances: MaintenanceRow[];
   properties: PropertyForMaintenance[];
   canManage: boolean;
+  year: number;
+  availableYears: ReadonlyArray<number>;
 }
 
-export function MaintenancesTable({ maintenances, properties, canManage }: Props) {
+export function MaintenancesTable({
+  maintenances,
+  properties,
+  canManage,
+  year,
+  availableYears,
+}: Props) {
   const [editing, setEditing] = useState<MaintenanceRow | null>(null);
   const [open, setOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<SourceTab>("manual");
@@ -68,7 +72,7 @@ export function MaintenancesTable({ maintenances, properties, canManage }: Props
   }
 
   const tabs = (
-    <div className="border-b border-border">
+    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border">
       <nav className="-mb-px flex gap-6">
         {TABS.map((t) => (
           <button
@@ -89,6 +93,9 @@ export function MaintenancesTable({ maintenances, properties, canManage }: Props
           </button>
         ))}
       </nav>
+      <div className="pb-2">
+        <YearNavigator year={year} availableYears={availableYears} />
+      </div>
     </div>
   );
 
@@ -106,7 +113,7 @@ export function MaintenancesTable({ maintenances, properties, canManage }: Props
             <p className="text-muted-foreground">{emptyMessage}</p>
             {canManage && activeTab === "manual" && (
               <p className="text-sm text-muted-foreground">
-                Usa el botón &ldquo;Nuevo mantenimiento&rdquo; para agregar el primero.
+                Usa el botón &ldquo;Registrar mantenimiento&rdquo; para agregar el primero.
               </p>
             )}
           </CardContent>
@@ -142,9 +149,9 @@ export function MaintenancesTable({ maintenances, properties, canManage }: Props
               <TableBody>
                 {filtered.map((m) => {
                   const dateLabel = m.completedDate
-                    ? DATE.format(m.completedDate)
+                    ? formatDate(m.completedDate)
                     : m.scheduledDate
-                      ? DATE.format(m.scheduledDate)
+                      ? formatDate(m.scheduledDate)
                       : "—";
 
                   return (
@@ -165,7 +172,7 @@ export function MaintenancesTable({ maintenances, properties, canManage }: Props
                       </TableCell>
                       <TableCell className="text-sm">
                         <span className="text-muted-foreground">{m.property.name}</span>
-                        {m.unit && (
+                        {m.unit && isPlaza(m.property.type) && (
                           <span className="ml-1 font-medium text-foreground">{m.unit.code}</span>
                         )}
                       </TableCell>
@@ -183,7 +190,7 @@ export function MaintenancesTable({ maintenances, properties, canManage }: Props
                       </TableCell>
                       <TableCell className="text-right tabular-nums text-sm">
                         {m.cost !== null ? (
-                          <span className="font-medium">{MXN.format(m.cost)}</span>
+                          <span className="font-medium">{formatMXN(m.cost, 2)}</span>
                         ) : (
                           <span className="text-muted-foreground">—</span>
                         )}

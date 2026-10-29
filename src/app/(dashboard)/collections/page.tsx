@@ -1,18 +1,25 @@
 import { AlertTriangle, CalendarRange, CheckCircle2, Clock } from "lucide-react";
 import Link from "next/link";
 import { MetricCard } from "@/components/shared/metric-card";
+import { PropertyFilterTabs } from "@/components/shared/PropertyFilterTabs";
 import { CollectionsTabs } from "@/components/collections/CollectionsTabs";
+import {
+  MobileCollections,
+  type CollectionsFilter,
+} from "@/components/mobile/MobileCollections";
+import { getIsMobileView } from "@/server/mobile/viewport";
 import { Button } from "@/components/ui/button";
-import { requireAuth } from "@/lib/auth/get-session";
-import { isMaster } from "@/lib/auth/permissions";
-import { prisma } from "@/lib/prisma/client";
+import { requireAuth } from "@/server/auth/get-session";
+import { isMaster } from "@/server/auth/permissions";
+import { prisma } from "@/server/prisma/client";
 import {
   getMonthlyCollectionsByProperty,
   getOutstandingRents,
   getPayments,
-} from "@/lib/services/payments-queries";
-import { getRentasTableData } from "@/lib/services/rentas-queries";
-import { timed } from "@/lib/perf/timed";
+} from "@/server/services/payments-queries";
+import { getRentasTableData } from "@/server/services/rentas-queries";
+import { timed } from "@/server/perf/timed";
+import { formatMXN } from "@/shared/format-currency";
 
 const VALID_TABS = ["mes", "por-cobrar", "historial"] as const;
 type CollectionsTab = (typeof VALID_TABS)[number];
@@ -21,6 +28,7 @@ const VALID_MES_MODES = ["tarjetas", "kpis"] as const;
 type MesMode = (typeof VALID_MES_MODES)[number];
 
 const VALID_ESCALONES = ["all", "1m", "2m", "3m"] as const;
+const VALID_MOBILE_FILTERS: CollectionsFilter[] = ["todos", "por-cobrar", "vencidos", "pagados"];
 type EscalonParam = (typeof VALID_ESCALONES)[number];
 
 function parsePeriod(periodo?: string): Date {
@@ -32,12 +40,6 @@ function parsePeriod(periodo?: string): Date {
   return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
 }
 
-const MXN = new Intl.NumberFormat("es-MX", {
-  style: "currency",
-  currency: "MXN",
-  maximumFractionDigits: 2,
-});
-
 export default async function CollectionsPage({
   searchParams,
 }: {
@@ -46,11 +48,35 @@ export default async function CollectionsPage({
     mode?: string;
     escalon?: string;
     periodo?: string;
+    plaza?: string;
+    seg?: string;
+    filtro?: string;
   }>;
 }) {
   const { tenantId, dbUser } = await requireAuth();
-  const { tab: tabParam, mode: modeParam, escalon: escalonParam, periodo } =
-    await searchParams;
+  const {
+    tab: tabParam,
+    mode: modeParam,
+    escalon: escalonParam,
+    periodo,
+    plaza,
+    seg,
+    filtro,
+  } = await searchParams;
+
+  if (await getIsMobileView()) {
+    return (
+      <MobileCollections
+        segment={seg === "morosidad" || tabParam === "por-cobrar" ? "morosidad" : "mes"}
+        filter={
+          VALID_MOBILE_FILTERS.includes(filtro as CollectionsFilter)
+            ? (filtro as CollectionsFilter)
+            : "todos"
+        }
+      />
+    );
+  }
+  const activePlazaId = plaza ?? null;
   const activeTab: CollectionsTab = VALID_TABS.includes(tabParam as CollectionsTab)
     ? (tabParam as CollectionsTab)
     : "mes";
@@ -82,7 +108,7 @@ export default async function CollectionsPage({
         prisma.property.findMany({
           where: { tenantId, isActive: true },
           orderBy: { name: "asc" },
-          select: { id: true, name: true },
+          select: { id: true, name: true, type: true },
         }),
       ),
       timed("collections:isMaster", () => isMaster(dbUser.id)),
@@ -106,6 +132,13 @@ export default async function CollectionsPage({
     )
     .reduce((acc, p) => acc + Number(p.amount), 0);
 
+  // Tabs: plazas comerciales (con datos) + flag para Inmuebles si hay no-plazas.
+  const tabProperties = properties
+    .filter((p) => p.type === "PLAZA_COMERCIAL")
+    .map((p) => ({ id: p.id, name: p.name }));
+  const hasInmuebles = properties.some((p) => p.type !== "PLAZA_COMERCIAL");
+
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -119,14 +152,14 @@ export default async function CollectionsPage({
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-3">
         <MetricCard
           label="Cobrado este mes"
-          value={<span className="tabular-nums">{MXN.format(collectedThisMonth)}</span>}
+          value={<span className="tabular-nums">{formatMXN(collectedThisMonth, 2)}</span>}
           subValue="Pagos registrados"
           icon={CheckCircle2}
           color={collectedThisMonth > 0 ? "success" : "default"}
         />
         <MetricCard
           label="Saldo pendiente"
-          value={<span className="tabular-nums">{MXN.format(totalOutstanding)}</span>}
+          value={<span className="tabular-nums">{formatMXN(totalOutstanding, 2)}</span>}
           subValue={`${outstanding.length} renta${outstanding.length === 1 ? "" : "s"} por cobrar`}
           icon={AlertTriangle}
           color={totalOutstanding > 0 ? "danger" : "success"}
@@ -145,16 +178,23 @@ export default async function CollectionsPage({
         </Link>
       </div>
 
+      <PropertyFilterTabs
+        properties={tabProperties}
+        activePlazaId={activePlazaId}
+        showInmueblesTab={hasInmuebles}
+      />
+
       <CollectionsTabs
         outstanding={outstanding}
         payments={payments}
         monthly={monthly}
-        properties={properties}
         canDeletePayment={master}
+        canEditPayment={master}
         rentasData={rentasData}
         activeTab={activeTab}
         mesMode={mesMode}
         escalon={escalon}
+        activePlazaId={activePlazaId}
       />
     </div>
   );

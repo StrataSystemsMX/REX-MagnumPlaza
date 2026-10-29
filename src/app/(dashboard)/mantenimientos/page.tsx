@@ -2,21 +2,51 @@ import { AlertTriangle, CheckCircle2, Clock, Wrench } from "lucide-react";
 import { MaintenancesTable } from "@/components/maintenances/MaintenancesTable";
 import { NewMaintenanceDialog } from "@/components/maintenances/NewMaintenanceDialog";
 import { MetricCard } from "@/components/shared/metric-card";
-import { requireAuth } from "@/lib/auth/get-session";
-import { hasPermission } from "@/lib/auth/permissions";
+import { MobileMaintenances } from "@/components/mobile/MobileMaintenances";
+import { getIsMobileView } from "@/server/mobile/viewport";
+import { requireAuth } from "@/server/auth/get-session";
+import { hasPermission } from "@/server/auth/permissions";
+import { prisma } from "@/server/prisma/client";
 import {
   getMaintenanceSummary,
   getMaintenances,
   getPropertiesForMaintenanceForm,
-} from "@/lib/services/maintenances-queries";
+} from "@/server/services/maintenances-queries";
+import { formatMXN } from "@/shared/format-currency";
 
-const MXN = new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" });
+interface PageProps {
+  searchParams: Promise<{ year?: string }>;
+}
 
-export default async function MantenimientosPage() {
-  const { dbUser } = await requireAuth();
+export default async function MantenimientosPage({ searchParams }: PageProps) {
+  const { tenantId, dbUser } = await requireAuth();
+  const params = await searchParams;
+
+  if (await getIsMobileView()) {
+    return <MobileMaintenances maintenances={await getMaintenances()} />;
+  }
+
+  const requestedYear = Number(params.year);
+  const year =
+    Number.isFinite(requestedYear) && requestedYear > 1900
+      ? requestedYear
+      : new Date().getUTCFullYear();
+
+  const oldestMaintenance = await prisma.maintenance.findFirst({
+    where: { tenantId },
+    orderBy: { scheduledDate: "asc" },
+    select: { scheduledDate: true },
+  });
+  const minYear = oldestMaintenance?.scheduledDate
+    ? Math.min(oldestMaintenance.scheduledDate.getUTCFullYear(), year - 1)
+    : year - 1;
+  const currentYear = new Date().getUTCFullYear();
+  const maxYear = Math.max(currentYear, year) + 1;
+  const availableYears: number[] = [];
+  for (let y = maxYear; y >= minYear; y--) availableYears.push(y);
 
   const [maintenances, properties, summary, canManage] = await Promise.all([
-    getMaintenances(),
+    getMaintenances({ year }),
     getPropertiesForMaintenanceForm(),
     getMaintenanceSummary(),
     hasPermission(dbUser.id, "expense.create"),
@@ -55,7 +85,7 @@ export default async function MantenimientosPage() {
         />
         <MetricCard
           label="Costo total"
-          value={<span className="tabular-nums">{MXN.format(summary.totalCompletedCost)}</span>}
+          value={<span className="tabular-nums">{formatMXN(summary.totalCompletedCost, 2)}</span>}
           subValue="en mantenimientos completados"
           icon={Clock}
         />
@@ -65,6 +95,8 @@ export default async function MantenimientosPage() {
         maintenances={maintenances}
         properties={properties}
         canManage={canManage}
+        year={year}
+        availableYears={availableYears}
       />
     </div>
   );

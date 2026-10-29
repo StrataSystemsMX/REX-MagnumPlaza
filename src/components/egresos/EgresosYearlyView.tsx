@@ -1,17 +1,8 @@
 "use client";
 
-import {
-  ChevronLeft,
-  ChevronRight,
-  TrendingDown,
-  Wallet,
-  AlertTriangle,
-  Percent,
-  Plus,
-} from "lucide-react";
+import { TrendingDown, Wallet, AlertTriangle, Percent, Plus, BellRing } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import {
   Select,
   SelectContent,
@@ -20,74 +11,49 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { ExpenseFormDialog } from "@/components/egresos/ExpenseFormDialog";
+import { ManageCategoriesDialog } from "@/components/egresos/ManageCategoriesDialog";
 import {
   RegisterExpenseDialog,
   type RegisterExpenseContext,
 } from "@/components/egresos/RegisterExpenseDialog";
-import { capitalizeFirst, cn } from "@/lib/utils";
+import {
+  EntityBreakdownCard,
+  EntitySectionHeader,
+  KpiCard,
+  MonthlyTotalsBar,
+  YearNavigator,
+} from "@/components/shared/yearly-matrix/YearlyMatrixParts";
+import { MONTHS_SHORT, compactMxn } from "@/components/shared/yearly-matrix/theme";
+import { cn } from "@/shared/utils";
+import { formatMXN } from "@/shared/format-currency";
+import { formatPeriodLong } from "@/shared/format-date";
 import type {
   MonthlyExpenseStatus,
+  MissingRecurringExpense,
   YearlyExpenseCell,
   YearlyExpenseEntityGroup,
   YearlyExpenseRow,
   YearlyExpenses,
   ExpenseCategoryOption,
   ExpensePropertyOption,
-} from "@/lib/services/expenses-queries";
-import type { LegalEntityOption } from "@/lib/services/properties-queries";
-
-const MXN = new Intl.NumberFormat("es-MX", {
-  style: "currency",
-  currency: "MXN",
-  maximumFractionDigits: 2,
-});
-
-const MXN_INT = new Intl.NumberFormat("es-MX", {
-  style: "currency",
-  currency: "MXN",
-  maximumFractionDigits: 0,
-});
-
-const PERIOD_FULL = new Intl.DateTimeFormat("es-MX", {
-  month: "long",
-  year: "numeric",
-  timeZone: "UTC",
-});
-
-const MONTHS_SHORT = [
-  "Ene", "Feb", "Mar", "Abr", "May", "Jun",
-  "Jul", "Ago", "Sep", "Oct", "Nov", "Dic",
-];
-
-const ENTITY_THEME: Record<
-  string,
-  { dot: string; ring: string; bg: string; text: string }
-> = {
-  CRT: { dot: "bg-orange-500", ring: "ring-orange-200", bg: "bg-orange-50 dark:bg-orange-950/30", text: "text-orange-700 dark:text-orange-300" },
-  TSR: { dot: "bg-blue-500", ring: "ring-blue-200", bg: "bg-blue-50 dark:bg-blue-950/30", text: "text-blue-700 dark:text-blue-300" },
-  QHS: { dot: "bg-emerald-500", ring: "ring-emerald-200", bg: "bg-emerald-50 dark:bg-emerald-950/30", text: "text-emerald-700 dark:text-emerald-300" },
-  JCL: { dot: "bg-violet-500", ring: "ring-violet-200", bg: "bg-violet-50 dark:bg-violet-950/30", text: "text-violet-700 dark:text-violet-300" },
-};
-
-const DEFAULT_THEME = {
-  dot: "bg-slate-500",
-  ring: "ring-slate-200",
-  bg: "bg-slate-50 dark:bg-slate-900/30",
-  text: "text-slate-700 dark:text-slate-300",
-};
-
-function themeFor(code: string) {
-  return ENTITY_THEME[code] ?? DEFAULT_THEME;
-}
+  ManagedExpenseCategory,
+} from "@/server/services/expenses-queries";
+import type { LegalEntityOption } from "@/server/services/properties-queries";
 
 interface EgresosYearlyViewProps {
   data: YearlyExpenses;
   availableYears: ReadonlyArray<number>;
   legalEntities: ReadonlyArray<LegalEntityOption>;
   categories: ReadonlyArray<ExpenseCategoryOption>;
+  managedCategories: ReadonlyArray<ManagedExpenseCategory>;
   properties: ReadonlyArray<ExpensePropertyOption>;
   canCreate: boolean;
   canUpdate: boolean;
+  missingRecurring: ReadonlyArray<MissingRecurringExpense>;
+}
+
+function entityMeta(g: YearlyExpenseEntityGroup): string {
+  return `${g.conceptCount} ${g.conceptCount === 1 ? "concepto" : "conceptos"}`;
 }
 
 export function EgresosYearlyView({
@@ -95,20 +61,27 @@ export function EgresosYearlyView({
   availableYears,
   legalEntities,
   categories,
+  managedCategories,
   properties,
   canCreate,
   canUpdate,
+  missingRecurring,
 }: EgresosYearlyViewProps) {
   const [entityFilter, setEntityFilter] = useState<string>("ALL");
   const [categoryFilter, setCategoryFilter] = useState<string>("ALL");
   const [registerTarget, setRegisterTarget] =
     useState<RegisterExpenseContext | null>(null);
   const [formMode, setFormMode] = useState<"create" | "edit" | null>(null);
+  const [collapsedEntities, setCollapsedEntities] = useState<Set<string>>(new Set());
 
-  const yearItems = useMemo<Record<string, string>>(
-    () => Object.fromEntries(availableYears.map((y) => [String(y), String(y)])),
-    [availableYears],
-  );
+  function toggleEntity(code: string) {
+    setCollapsedEntities((prev) => {
+      const next = new Set(prev);
+      if (next.has(code)) next.delete(code);
+      else next.add(code);
+      return next;
+    });
+  }
 
   const entityItems = useMemo<Record<string, string>>(
     () => ({
@@ -118,13 +91,21 @@ export function EgresosYearlyView({
     [data.entities],
   );
 
-  const categoryItems = useMemo<Record<string, string>>(
-    () => ({
-      ALL: "Todas las categorías",
-      ...Object.fromEntries(categories.map((c) => [c.id, c.name])),
-    }),
-    [categories],
-  );
+  // El filtro se arma con las categorías presentes en la matriz (no solo las
+  // activas), para poder filtrar por un concepto archivado que aún tiene egresos
+  // históricos visibles. La captura de egresos sí usa solo las activas.
+  const categoryItems = useMemo<Record<string, string>>(() => {
+    const present = new Map<string, string>();
+    for (const e of data.entities) {
+      for (const r of e.rows) {
+        if (!present.has(r.categoryId)) present.set(r.categoryId, r.categoryName);
+      }
+    }
+    const sorted = [...present.entries()].sort((a, b) =>
+      a[1].localeCompare(b[1], "es-MX"),
+    );
+    return { ALL: "Todas las categorías", ...Object.fromEntries(sorted) };
+  }, [data.entities]);
 
   const visibleEntities = useMemo<YearlyExpenseEntityGroup[]>(() => {
     return data.entities
@@ -152,19 +133,6 @@ export function EgresosYearlyView({
     return { expected, paid, balance: expected - paid, pct, concepts };
   }, [visibleEntities]);
 
-  function navigateYear(delta: number) {
-    const target = data.year + delta;
-    const url = new URL(window.location.href);
-    url.searchParams.set("year", String(target));
-    window.location.href = url.toString();
-  }
-
-  function selectYear(year: string) {
-    const url = new URL(window.location.href);
-    url.searchParams.set("year", year);
-    window.location.href = url.toString();
-  }
-
   function openRegister(
     entity: YearlyExpenseEntityGroup,
     row: YearlyExpenseRow,
@@ -187,40 +155,7 @@ export function EgresosYearlyView({
     <div className="space-y-6">
       {/* Toolbar */}
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => navigateYear(-1)}
-            aria-label="Año anterior"
-          >
-            <ChevronLeft className="size-4" />
-          </Button>
-          <Select
-            value={String(data.year)}
-            onValueChange={(v) => v && selectYear(v)}
-            items={yearItems}
-          >
-            <SelectTrigger className="w-28">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {availableYears.map((y) => (
-                <SelectItem key={y} value={String(y)}>
-                  {y}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => navigateYear(1)}
-            aria-label="Año siguiente"
-          >
-            <ChevronRight className="size-4" />
-          </Button>
-        </div>
+        <YearNavigator year={data.year} availableYears={availableYears} />
 
         <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap sm:items-center">
           <Select
@@ -257,33 +192,69 @@ export function EgresosYearlyView({
             </SelectContent>
           </Select>
 
+          {canUpdate ? (
+            <ManageCategoriesDialog categories={managedCategories} />
+          ) : null}
+
           {canCreate ? (
             <Button onClick={() => setFormMode("create")} className="w-full sm:w-auto">
               <Plus className="size-4" />
-              Nuevo egreso
+              Registrar egreso
             </Button>
           ) : null}
         </div>
       </div>
+
+      {missingRecurring.length > 0 ? (
+        <div className="flex flex-col gap-3 rounded-md border border-amber-300 bg-amber-50 p-4 text-sm sm:flex-row sm:items-center sm:justify-between dark:border-amber-900 dark:bg-amber-950/40">
+          <div className="flex items-start gap-2.5">
+            <BellRing className="mt-0.5 size-4 shrink-0 text-amber-700 dark:text-amber-300" />
+            <div>
+              <p className="font-medium text-amber-900 dark:text-amber-200">
+                Faltan {missingRecurring.length}{" "}
+                {missingRecurring.length === 1 ? "concepto" : "conceptos"} recurrente
+                {missingRecurring.length === 1 ? "" : "s"} de este mes
+              </p>
+              <p className="text-amber-800/80 dark:text-amber-300/80">
+                Se pagaron el mes pasado y todavía no tienen egreso capturado:{" "}
+                {missingRecurring
+                  .map((m) => `${m.categoryName} (${m.legalEntityCode})`)
+                  .join(", ")}
+                .
+              </p>
+            </div>
+          </div>
+          {canCreate ? (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setFormMode("create")}
+              className="shrink-0 border-amber-400 bg-transparent text-amber-900 hover:bg-amber-100 dark:border-amber-800 dark:text-amber-200 dark:hover:bg-amber-900/40"
+            >
+              Capturar egreso
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
 
       {/* KPI cards */}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <KpiCard
           icon={<TrendingDown className="size-4" />}
           label={`Estimado ${data.year}`}
-          value={MXN_INT.format(filteredTotals.expected)}
+          value={formatMXN(filteredTotals.expected)}
           accent="text-foreground"
         />
         <KpiCard
           icon={<Wallet className="size-4" />}
           label="Pagado"
-          value={MXN_INT.format(filteredTotals.paid)}
+          value={formatMXN(filteredTotals.paid)}
           accent="text-green-700 dark:text-green-300"
         />
         <KpiCard
           icon={<AlertTriangle className="size-4" />}
           label="Por pagar"
-          value={MXN_INT.format(filteredTotals.balance)}
+          value={formatMXN(filteredTotals.balance)}
           accent="text-destructive"
         />
         <KpiCard
@@ -296,12 +267,18 @@ export function EgresosYearlyView({
       </div>
 
       {/* Desglose por razón social */}
-      <EntityBreakdown
-        groups={data.entities}
-        totalExpected={data.entities.reduce(
-          (acc, g) => acc + g.expectedTotal,
-          0,
-        )}
+      <EntityBreakdownCard
+        items={data.entities.map((g) => ({
+          code: g.entityCode,
+          total: g.expectedTotal,
+          meta: entityMeta(g),
+          paidPct:
+            g.expectedTotal > 0
+              ? Math.round((g.paidTotal / g.expectedTotal) * 100)
+              : 0,
+        }))}
+        totalExpected={data.entities.reduce((acc, g) => acc + g.expectedTotal, 0)}
+        paidWord="pagado"
       />
 
       <Legend />
@@ -319,12 +296,28 @@ export function EgresosYearlyView({
               group={g}
               canUpdate={canUpdate}
               onCellClick={openRegister}
+              collapsed={collapsedEntities.has(g.entityCode)}
+              onToggle={() => toggleEntity(g.entityCode)}
             />
           ))
         )}
       </div>
 
-      <MonthlyTotalsBar totals={data.monthlyTotals} />
+      <MonthlyTotalsBar
+        rows={data.monthlyTotals.map((t) => ({
+          period: t.period,
+          expected: t.expected,
+          paid: t.paid,
+          paidCount: t.paidCount,
+          lastCount: t.pendingCount,
+        }))}
+        subtitle="12 meses · estimado vs. pagado"
+        expectedHeader="Estimado"
+        paidHeader="Pagado"
+        pctHeader="% Pagado"
+        lastHeader="Pendientes"
+        lastAccentClass="text-amber-700 dark:text-amber-300"
+      />
 
       <RegisterExpenseDialog
         target={registerTarget}
@@ -345,132 +338,6 @@ export function EgresosYearlyView({
         onClose={() => setFormMode(null)}
       />
     </div>
-  );
-}
-
-// ----------------------------------------------------------------------------
-// KPI Card
-// ----------------------------------------------------------------------------
-
-interface KpiCardProps {
-  icon: React.ReactNode;
-  label: string;
-  value: string;
-  accent: string;
-  progress?: number;
-}
-
-function KpiCard({ icon, label, value, accent, progress }: KpiCardProps) {
-  return (
-    <Card size="sm">
-      <CardContent className="space-y-2">
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <span className="text-muted-foreground/70">{icon}</span>
-          {label}
-        </div>
-        <p
-          className={cn(
-            "text-xl font-semibold tabular-nums leading-none",
-            accent,
-          )}
-        >
-          {value}
-        </p>
-        {typeof progress === "number" && (
-          <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
-            <div
-              className={cn(
-                "h-full rounded-full transition-all",
-                progress >= 80
-                  ? "bg-green-500"
-                  : progress >= 50
-                    ? "bg-amber-500"
-                    : "bg-red-500",
-              )}
-              style={{ width: `${Math.min(100, Math.max(0, progress))}%` }}
-            />
-          </div>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-
-// ----------------------------------------------------------------------------
-// Entity breakdown — desglose horizontal por razón social
-// ----------------------------------------------------------------------------
-
-function EntityBreakdown({
-  groups,
-  totalExpected,
-}: {
-  groups: ReadonlyArray<YearlyExpenseEntityGroup>;
-  totalExpected: number;
-}) {
-  if (groups.length === 0) return null;
-  return (
-    <Card size="sm">
-      <CardContent className="space-y-3">
-        <div className="flex items-center justify-between">
-          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            Desglose por razón social
-          </p>
-          <p className="text-xs text-muted-foreground">
-            Total:{" "}
-            <span className="font-semibold tabular-nums text-foreground">
-              {MXN_INT.format(totalExpected)}
-            </span>
-          </p>
-        </div>
-        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-          {groups.map((g) => {
-            const t = themeFor(g.entityCode);
-            const sharePct =
-              totalExpected > 0
-                ? Math.round((g.expectedTotal / totalExpected) * 100)
-                : 0;
-            const paidPct =
-              g.expectedTotal > 0
-                ? Math.round((g.paidTotal / g.expectedTotal) * 100)
-                : 0;
-            return (
-              <div
-                key={g.entityCode}
-                className={cn("rounded-lg border p-3 ring-1", t.bg, t.ring)}
-              >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className={cn("size-2.5 rounded-full", t.dot)} />
-                    <span className={cn("font-semibold", t.text)}>
-                      {g.entityCode}
-                    </span>
-                  </div>
-                  <span className="text-xs text-muted-foreground">
-                    {g.conceptCount}{" "}
-                    {g.conceptCount === 1 ? "concepto" : "conceptos"}
-                  </span>
-                </div>
-                <p className="mt-2 text-lg font-semibold tabular-nums">
-                  {MXN_INT.format(g.expectedTotal)}
-                </p>
-                <div className="mt-1 flex items-center justify-between text-[11px] text-muted-foreground">
-                  <span>{sharePct}% del total</span>
-                  <span className="text-green-700 dark:text-green-300">
-                    {paidPct}% pagado
-                  </span>
-                </div>
-                <div className="mt-1.5 h-1 w-full overflow-hidden rounded-full bg-background/60">
-                  <div
-                    className={cn("h-full rounded-full", t.dot)}
-                    style={{ width: `${Math.min(100, paidPct)}%` }}
-                  />
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </CardContent>
-    </Card>
   );
 }
 
@@ -510,10 +377,11 @@ interface EntitySectionProps {
     row: YearlyExpenseRow,
     cell: YearlyExpenseCell,
   ) => void;
+  collapsed: boolean;
+  onToggle: () => void;
 }
 
-function EntitySection({ group, canUpdate, onCellClick }: EntitySectionProps) {
-  const theme = themeFor(group.entityCode);
+function EntitySection({ group, canUpdate, onCellClick, collapsed, onToggle }: EntitySectionProps) {
   const paidPct =
     group.expectedTotal > 0
       ? Math.round((group.paidTotal / group.expectedTotal) * 100)
@@ -521,68 +389,38 @@ function EntitySection({ group, canUpdate, onCellClick }: EntitySectionProps) {
 
   return (
     <section className="space-y-3">
-      <div
-        className={cn(
-          "flex flex-wrap items-center justify-between gap-3 rounded-lg border px-4 py-2.5 ring-1",
-          theme.bg,
-          theme.ring,
-        )}
-      >
-        <div className="flex items-center gap-3">
-          <span
-            className={cn(
-              "inline-flex size-7 items-center justify-center rounded-md text-xs font-bold text-white",
-              theme.dot,
-            )}
-          >
-            {group.entityCode.slice(0, 1)}
-          </span>
-          <div>
-            <h2
-              className={cn("text-sm font-semibold leading-tight", theme.text)}
-            >
-              {group.entityCode}
-            </h2>
-            <p className="text-[11px] text-muted-foreground">
-              {group.conceptCount}{" "}
-              {group.conceptCount === 1 ? "concepto" : "conceptos"}
-            </p>
-          </div>
-        </div>
-        <div className="flex items-center gap-6 text-xs">
-          <div className="text-right">
-            <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
-              Estimado
-            </p>
-            <p className="font-semibold tabular-nums">
-              {MXN_INT.format(group.expectedTotal)}
-            </p>
-          </div>
-          <div className="text-right">
-            <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
-              Pagado
-            </p>
-            <p className="font-semibold tabular-nums text-green-700 dark:text-green-300">
-              {MXN_INT.format(group.paidTotal)}
-              <span className="ml-1 text-muted-foreground">({paidPct}%)</span>
-            </p>
-          </div>
-          <div className="text-right">
-            <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
-              Por pagar
-            </p>
-            <p className="font-semibold tabular-nums text-destructive">
-              {MXN_INT.format(group.expectedTotal - group.paidTotal)}
-            </p>
-          </div>
-        </div>
-      </div>
-
-      <ConceptMatrix
-        group={group}
-        canUpdate={canUpdate}
-        onCellClick={onCellClick}
+      <EntitySectionHeader
+        code={group.entityCode}
+        meta={entityMeta(group)}
+        collapsed={collapsed}
+        onToggle={onToggle}
+        stats={[
+          { label: "Estimado", value: formatMXN(group.expectedTotal) },
+          {
+            label: "Pagado",
+            value: (
+              <>
+                {formatMXN(group.paidTotal)}
+                <span className="ml-1 text-muted-foreground">({paidPct}%)</span>
+              </>
+            ),
+            className: "text-green-700 dark:text-green-300",
+          },
+          {
+            label: "Por pagar",
+            value: formatMXN(group.expectedTotal - group.paidTotal),
+            className: "text-destructive",
+          },
+        ]}
       />
+
+      {!collapsed && (
+        <ConceptMatrix
+          group={group}
+          canUpdate={canUpdate}
+          onCellClick={onCellClick}
+        />
+      )}
     </section>
   );
 }
@@ -616,21 +454,21 @@ function ConceptMatrix({ group, canUpdate, onCellClick }: ConceptMatrixProps) {
           </colgroup>
           <thead>
             <tr className="border-b bg-muted/10">
-              <th className="sticky left-0 z-20 border-r border-border bg-card px-3 py-2 text-left font-medium">
+              <th className="sticky left-0 z-20 border-r border-border bg-card px-3 py-2 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
                 Concepto
               </th>
-              <th className="px-3 py-2 text-left font-medium text-muted-foreground">
+              <th className="px-3 py-2 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
                 Categoría
               </th>
               {MONTHS_SHORT.map((m) => (
                 <th
                   key={m}
-                  className="px-1 py-2 text-center font-medium text-muted-foreground"
+                  className="px-1 py-2 text-center text-xs font-medium uppercase tracking-wide text-muted-foreground"
                 >
                   {m}
                 </th>
               ))}
-              <th className="px-3 py-2 text-right font-medium">Total</th>
+              <th className="px-3 py-2 text-right text-xs font-medium uppercase tracking-wide text-muted-foreground">Total</th>
             </tr>
           </thead>
           <tbody>
@@ -673,10 +511,10 @@ function ConceptMatrix({ group, canUpdate, onCellClick }: ConceptMatrixProps) {
               })}
               <td className="px-3 py-2 text-right text-xs tabular-nums">
                 <div className="font-semibold text-green-700 dark:text-green-300">
-                  {MXN_INT.format(group.paidTotal)}
+                  {formatMXN(group.paidTotal)}
                 </div>
                 <div className="text-muted-foreground">
-                  de {MXN_INT.format(group.expectedTotal)}
+                  de {formatMXN(group.expectedTotal)}
                 </div>
               </td>
             </tr>
@@ -685,12 +523,6 @@ function ConceptMatrix({ group, canUpdate, onCellClick }: ConceptMatrixProps) {
       </div>
     </div>
   );
-}
-
-function compactMxn(n: number): string {
-  if (n === 0) return "—";
-  if (n >= 1000) return `$${(n / 1000).toFixed(1)}k`;
-  return `$${Math.round(n)}`;
 }
 
 // ----------------------------------------------------------------------------
@@ -717,7 +549,14 @@ function ConceptRow({ entity, row, canUpdate, onCellClick }: ConceptRowProps) {
         </div>
       </td>
       <td className="px-3 py-1.5 text-xs text-muted-foreground">
-        {row.categoryName}
+        <span className="flex items-center gap-1.5">
+          {row.categoryName}
+          {row.isPayroll && (
+            <span className="rounded bg-violet-100 px-1 py-0.5 text-[9px] font-semibold text-violet-700 dark:bg-violet-900/40 dark:text-violet-300">
+              Nómina
+            </span>
+          )}
+        </span>
       </td>
       {row.cells.map((cell, i) => (
         <td key={i} className="px-1 py-1.5">
@@ -725,16 +564,16 @@ function ConceptRow({ entity, row, canUpdate, onCellClick }: ConceptRowProps) {
             cell={cell}
             canUpdate={canUpdate}
             onClick={() => onCellClick(entity, row, cell)}
-            tooltipHead={`${row.description} — ${capitalizeFirst(PERIOD_FULL.format(cell.period))}`}
+            tooltipHead={`${row.description} — ${formatPeriodLong(cell.period)}`}
           />
         </td>
       ))}
       <td className="px-3 py-1.5 text-right text-xs tabular-nums">
         <div className="font-medium text-green-700 dark:text-green-300">
-          {MXN_INT.format(row.paidTotal)}
+          {formatMXN(row.paidTotal)}
         </div>
         <div className="text-muted-foreground">
-          de {MXN_INT.format(row.expectedTotal)}
+          de {formatMXN(row.expectedTotal)}
         </div>
       </td>
     </tr>
@@ -824,7 +663,7 @@ function MatrixCell({ cell, canUpdate, onClick, tooltipHead }: MatrixCellProps) 
 
 function buildTooltip(cell: YearlyExpenseCell, head: string): string {
   if (cell.status === "EMPTY") return `${head} — Sin registro`;
-  const monto = MXN.format(cell.amount);
+  const monto = formatMXN(cell.amount, 2);
   switch (cell.status) {
     case "PAID":
       return `${head}\nPagado: ${monto}`;
@@ -837,98 +676,4 @@ function buildTooltip(cell: YearlyExpenseCell, head: string): string {
     default:
       return head;
   }
-}
-
-// ----------------------------------------------------------------------------
-// Monthly totals bar (footer)
-// ----------------------------------------------------------------------------
-
-function MonthlyTotalsBar({
-  totals,
-}: {
-  totals: YearlyExpenses["monthlyTotals"];
-}) {
-  const peakExpected = Math.max(...totals.map((t) => t.expected), 1);
-  return (
-    <div className="overflow-hidden rounded-lg border bg-card shadow-sm">
-      <div className="flex items-center justify-between border-b bg-muted/30 px-4 py-2.5">
-        <h3 className="text-sm font-semibold">Totales mensuales</h3>
-        <p className="text-xs text-muted-foreground">
-          12 meses · estimado vs. pagado
-        </p>
-      </div>
-      <div className="overflow-x-auto">
-        <table className="w-full text-xs">
-          <thead>
-            <tr className="border-b bg-muted/10 text-muted-foreground">
-              <th className="px-3 py-2 text-left font-medium">Mes</th>
-              <th className="px-3 py-2 text-right font-medium">Estimado</th>
-              <th className="px-3 py-2 text-right font-medium">Pagado</th>
-              <th className="px-3 py-2 text-left font-medium">% Pagado</th>
-              <th className="px-3 py-2 text-right font-medium">Pagados</th>
-              <th className="px-3 py-2 text-right font-medium">Pendientes</th>
-            </tr>
-          </thead>
-          <tbody>
-            {totals.map((t, i) => {
-              const pct =
-                t.expected > 0 ? Math.round((t.paid / t.expected) * 100) : 0;
-              const barWidth = (t.expected / peakExpected) * 100;
-              const fillWidth =
-                t.expected > 0 ? (t.paid / t.expected) * 100 : 0;
-              return (
-                <tr key={i} className="border-b last:border-b-0">
-                  <td className="px-3 py-1.5">
-                    {capitalizeFirst(PERIOD_FULL.format(t.period))}
-                  </td>
-                  <td className="px-3 py-1.5 text-right tabular-nums">
-                    {MXN_INT.format(t.expected)}
-                  </td>
-                  <td className="px-3 py-1.5 text-right tabular-nums text-green-700 dark:text-green-300">
-                    {MXN_INT.format(t.paid)}
-                  </td>
-                  <td className="px-3 py-1.5">
-                    <div className="flex items-center gap-2">
-                      <div
-                        className="relative h-2 overflow-hidden rounded-full bg-muted"
-                        style={{ width: `${Math.max(20, barWidth)}%` }}
-                      >
-                        <div
-                          className={cn(
-                            "h-full rounded-full",
-                            pct >= 80
-                              ? "bg-green-500"
-                              : pct >= 50
-                                ? "bg-amber-500"
-                                : pct > 0
-                                  ? "bg-red-500"
-                                  : "bg-transparent",
-                          )}
-                          style={{ width: `${Math.min(100, fillWidth)}%` }}
-                        />
-                      </div>
-                      <span className="tabular-nums text-muted-foreground">
-                        {pct}%
-                      </span>
-                    </div>
-                  </td>
-                  <td className="px-3 py-1.5 text-right tabular-nums">
-                    {t.paidCount}
-                  </td>
-                  <td
-                    className={cn(
-                      "px-3 py-1.5 text-right tabular-nums",
-                      t.pendingCount > 0 && "text-amber-700 dark:text-amber-300",
-                    )}
-                  >
-                    {t.pendingCount}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
 }

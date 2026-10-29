@@ -1,20 +1,11 @@
 "use client";
 
 import { Badge } from "@/components/ui/badge";
-import { rentStatusLabel, rentStatusVariant } from "@/lib/i18n/enums";
-import type { ContractRent } from "@/lib/services/contracts-queries";
-import { capitalizeFirst } from "@/lib/utils";
-
-const MXN = new Intl.NumberFormat("es-MX", {
-  style: "currency",
-  currency: "MXN",
-  maximumFractionDigits: 0,
-});
-
-const SHORT_MONTH = new Intl.DateTimeFormat("es-MX", {
-  month: "short",
-  timeZone: "UTC",
-});
+import { rentStatusLabel, rentStatusVariant } from "@/shared/i18n/enums";
+import type { ContractRent } from "@/server/services/contracts-queries";
+import { capitalizeFirst } from "@/shared/utils";
+import { formatMXN } from "@/shared/format-currency";
+import { formatMonthShort } from "@/shared/format-date";
 
 function bgFor(status: ContractRent["status"]): string {
   switch (status) {
@@ -80,7 +71,7 @@ export function RentCalendar({ rents }: RentCalendarProps) {
               >
                 <div className="flex items-center justify-between">
                   <span className="font-medium">
-                    {capitalizeFirst(SHORT_MONTH.format(r.period))}
+                    {formatMonthShort(r.period)}
                   </span>
                   <Badge
                     variant={rentStatusVariant(r.status)}
@@ -90,11 +81,11 @@ export function RentCalendar({ rents }: RentCalendarProps) {
                   </Badge>
                 </div>
                 <p className="mt-1 tabular-nums text-foreground">
-                  {MXN.format(Number(r.amountDue))}
+                  {formatMXN(r.amountDue)}
                 </p>
                 {Number(r.amountPaid) > 0 && r.status !== "PAID" ? (
                   <p className="text-[10px] tabular-nums text-muted-foreground">
-                    Pagado: {MXN.format(Number(r.amountPaid))}
+                    Pagado: {formatMXN(r.amountPaid)}
                   </p>
                 ) : null}
                 <p className="text-[10px] text-muted-foreground">

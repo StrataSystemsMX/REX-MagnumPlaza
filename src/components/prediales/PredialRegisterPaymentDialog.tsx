@@ -16,14 +16,9 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { actionRegisterCadastralPayment } from "@/lib/services/cadastral";
-import type { CadastralListItem } from "@/lib/services/cadastral-queries";
-
-const MXN = new Intl.NumberFormat("es-MX", {
-  style: "currency",
-  currency: "MXN",
-  maximumFractionDigits: 2,
-});
+import { actionRegisterCadastralPayment } from "@/server/services/cadastral";
+import type { CadastralListItem } from "@/server/services/cadastral-queries";
+import { formatMXN } from "@/shared/format-currency";
 
 interface Props {
   target: CadastralListItem | null;
@@ -93,7 +88,7 @@ export function PredialRegisterPaymentDialog({ target, onClose }: Props) {
                 Monto del predial
               </span>
               <span className="font-semibold tabular-nums">
-                {MXN.format(target.totalAmount)}
+                {formatMXN(target.totalAmount, 2)}
               </span>
             </div>
           </div>

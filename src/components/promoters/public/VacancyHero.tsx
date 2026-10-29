@@ -1,8 +1,9 @@
 import Image from "next/image";
 import { Building2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { propertyTypeLabel, unitStatusLabel, unitStatusVariant } from "@/lib/i18n/enums";
-import type { PublicVacancyData } from "@/lib/services/promoters-public";
+import { propertyTypeLabel, unitStatusLabel, unitStatusVariant } from "@/shared/i18n/enums";
+import { isPlaza } from "@/shared/i18n/unit-label";
+import type { PublicVacancyData } from "@/server/services/promoters-public";
 
 interface Props {
   unit: PublicVacancyData["unit"];
@@ -27,7 +28,7 @@ export function VacancyHero({ unit, property, tenant, coverUrl }: Props) {
             />
             <Image
               src={coverUrl}
-              alt={unit.name ?? unit.code}
+              alt={unit.name ?? property.name}
               fill
               priority
               sizes="(max-width: 1024px) 100vw, 1024px"
@@ -64,7 +65,8 @@ export function VacancyHero({ unit, property, tenant, coverUrl }: Props) {
 
       <div className="mt-5 px-1 sm:mt-6">
         <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-          {propertyTypeLabel(property.type)} · {unit.code}
+          {propertyTypeLabel(property.type)}
+          {isPlaza(property.type) ? ` · ${unit.code}` : ""}
         </p>
         <h1 className="mt-1.5 text-2xl font-semibold tracking-tight text-balance sm:text-3xl lg:text-4xl">
           {property.name}

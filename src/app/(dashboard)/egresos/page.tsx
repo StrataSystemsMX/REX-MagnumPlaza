@@ -1,13 +1,18 @@
 import { EgresosYearlyView } from "@/components/egresos/EgresosYearlyView";
-import { requireAuth } from "@/lib/auth/get-session";
-import { hasPermission } from "@/lib/auth/permissions";
-import { prisma } from "@/lib/prisma/client";
+import { MobileExpenses } from "@/components/mobile/MobileExpenses";
+import { getIsMobileView } from "@/server/mobile/viewport";
+import { getMobileMonthExpenses } from "@/server/services/mobile-queries";
+import { requireAuth } from "@/server/auth/get-session";
+import { hasPermission } from "@/server/auth/permissions";
+import { prisma } from "@/server/prisma/client";
 import {
   getExpenseCategories,
+  getManagedExpenseCategories,
+  getMissingRecurringExpenses,
   getPropertiesForExpenseForm,
   getYearlyExpensesMatrix,
-} from "@/lib/services/expenses-queries";
-import { getLegalEntities } from "@/lib/services/properties-queries";
+} from "@/server/services/expenses-queries";
+import { getLegalEntities } from "@/server/services/properties-queries";
 
 interface PageProps {
   searchParams: Promise<{ year?: string }>;
@@ -16,6 +21,10 @@ interface PageProps {
 export default async function EgresosPage({ searchParams }: PageProps) {
   const { tenantId, dbUser } = await requireAuth();
   const params = await searchParams;
+
+  if (await getIsMobileView()) {
+    return <MobileExpenses expenses={await getMobileMonthExpenses()} />;
+  }
 
   const requestedYear = Number(params.year);
   const year =
@@ -40,16 +49,21 @@ export default async function EgresosPage({ searchParams }: PageProps) {
     data,
     legalEntities,
     categories,
+    managedCategories,
     properties,
     canCreate,
     canUpdate,
+    missingRecurring,
   ] = await Promise.all([
     getYearlyExpensesMatrix(year),
     getLegalEntities(),
     getExpenseCategories(),
+    getManagedExpenseCategories(),
     getPropertiesForExpenseForm(),
     hasPermission(dbUser.id, "expense.create"),
     hasPermission(dbUser.id, "expense.update"),
+    // El aviso de "falta capturar" solo tiene sentido viendo el año corriente.
+    year === currentYear ? getMissingRecurringExpenses() : Promise.resolve([]),
   ]);
 
   return (
@@ -66,9 +80,11 @@ export default async function EgresosPage({ searchParams }: PageProps) {
         availableYears={availableYears}
         legalEntities={legalEntities}
         categories={categories}
+        managedCategories={managedCategories}
         properties={properties}
         canCreate={canCreate}
         canUpdate={canUpdate}
+        missingRecurring={missingRecurring}
       />
     </div>
   );

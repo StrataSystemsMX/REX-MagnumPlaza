@@ -1,7 +1,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useForm } from "react-hook-form";
+import { useForm, type Resolver } from "react-hook-form";
 import { useMemo, useTransition } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -22,17 +22,18 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { propertyStatusLabel, propertyTypeLabel } from "@/lib/i18n/enums";
+import { propertyStatusLabel, propertyTypeLabel } from "@/shared/i18n/enums";
 import {
   createPropertySchema,
   type CreatePropertyInput,
-} from "@/lib/validators/property";
+} from "@/shared/validators/property";
 import {
   actionCreateProperty,
   actionUpdateProperty,
-} from "@/lib/services/properties";
-import type { LegalEntityOption } from "@/lib/services/properties-queries";
+} from "@/server/services/properties";
+import type { LegalEntityOption } from "@/server/services/properties-queries";
 import type { PropertyStatus, PropertyType } from "@/generated/prisma/enums";
+import { CharacterCount } from "@/components/ui/character-count";
 
 const PROPERTY_TYPES: ReadonlyArray<PropertyType> = [
   "PLAZA_COMERCIAL",
@@ -45,7 +46,11 @@ const PROPERTY_TYPES: ReadonlyArray<PropertyType> = [
   "OTRO",
 ];
 
-const PROPERTY_STATUSES: ReadonlyArray<PropertyStatus> = ["ACTIVO", "BLOQUEADO"];
+const PROPERTY_STATUSES: ReadonlyArray<PropertyStatus> = [
+  "DISPONIBLE",
+  "EN_RENTA",
+  "BLOQUEADO",
+];
 
 export interface PropertyFormInitial {
   id?: string;
@@ -60,6 +65,9 @@ export interface PropertyFormInitial {
   longitude?: number | null;
   totalArea?: number | null;
   notes?: string | null;
+  insuranceProvider?: string | null;
+  insurancePolicyNumber?: string | null;
+  insuranceExpiresAt?: Date | string | null;
 }
 
 interface PropertyFormProps {
@@ -115,11 +123,13 @@ export function PropertyForm({
   );
 
   const form = useForm<CreatePropertyInput>({
-    resolver: zodResolver(createPropertySchema),
+    // El cast evita el mismatch input/output que introduce el z.preprocess de
+    // insuranceExpiresAt (mismo patrón que EditMaintenanceDialog).
+    resolver: zodResolver(createPropertySchema) as unknown as Resolver<CreatePropertyInput>,
     defaultValues: {
       name: initial?.name ?? "",
       type: initialType,
-      status: initial?.status ?? "ACTIVO",
+      status: initial?.status ?? "DISPONIBLE",
       address: initial?.address ?? "",
       ownerEntityId: initial?.ownerEntityId ?? "",
       managerEntityId: initial?.managerEntityId ?? "",
@@ -128,6 +138,11 @@ export function PropertyForm({
       longitude: initial?.longitude ?? undefined,
       totalArea: initial?.totalArea ?? undefined,
       notes: initial?.notes ?? "",
+      insuranceProvider: initial?.insuranceProvider ?? "",
+      insurancePolicyNumber: initial?.insurancePolicyNumber ?? "",
+      insuranceExpiresAt: initial?.insuranceExpiresAt
+        ? new Date(initial.insuranceExpiresAt)
+        : undefined,
     },
   });
 
@@ -162,8 +177,9 @@ export function PropertyForm({
               <FormItem className="md:col-span-2">
                 <FormLabel>Nombre</FormLabel>
                 <FormControl>
-                  <Input {...field} />
+                  <Input {...field} maxLength={50} />
                 </FormControl>
+                <CharacterCount current={field.value?.length ?? 0} max={50} />
                 <FormMessage />
               </FormItem>
             )}
@@ -204,8 +220,9 @@ export function PropertyForm({
               <FormItem>
                 <FormLabel>Clave catastral</FormLabel>
                 <FormControl>
-                  <Input {...field} value={field.value ?? ""} />
+                  <Input {...field} value={field.value ?? ""} maxLength={30} />
                 </FormControl>
+                <CharacterCount current={(field.value ?? "").length} max={30} />
                 <FormMessage />
               </FormItem>
             )}
@@ -217,8 +234,9 @@ export function PropertyForm({
               <FormItem className="md:col-span-2">
                 <FormLabel>Dirección</FormLabel>
                 <FormControl>
-                  <Input {...field} />
+                  <Input {...field} maxLength={120} />
                 </FormControl>
+                <CharacterCount current={field.value?.length ?? 0} max={120} />
                 <FormMessage />
               </FormItem>
             )}
@@ -317,7 +335,7 @@ export function PropertyForm({
               <div>
                 <h3 className="text-sm font-semibold">Ubicación y superficie</h3>
                 <p className="text-xs text-muted-foreground">
-                  Latitud, longitud y área total. Opcional.
+                  Latitud, longitud y área total. Se usa para el mapa en la página pública del promotor.
                 </p>
               </div>
               <span
@@ -414,6 +432,85 @@ export function PropertyForm({
               />
             </div>
           </details>
+
+          <details className="group md:col-span-2">
+            <summary className="flex cursor-pointer list-none items-start justify-between gap-3 rounded-md border bg-muted/30 px-3 py-2.5 hover:bg-muted/50">
+              <div>
+                <h3 className="text-sm font-semibold">Seguro del inmueble</h3>
+                <p className="text-xs text-muted-foreground">
+                  Aseguradora, póliza y vencimiento. El sistema avisa cuando el seguro
+                  está por vencer.
+                </p>
+              </div>
+              <span
+                aria-hidden
+                className="mt-1 inline-flex size-5 shrink-0 items-center justify-center rounded-full bg-background text-muted-foreground transition-transform group-open:rotate-180"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="size-3"
+                >
+                  <polyline points="6 9 12 15 18 9" />
+                </svg>
+              </span>
+            </summary>
+            <div className="grid grid-cols-1 gap-4 pt-4 md:grid-cols-2">
+              <FormField
+                control={form.control}
+                name="insuranceProvider"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Aseguradora</FormLabel>
+                    <FormControl>
+                      <Input {...field} value={field.value ?? ""} maxLength={80} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="insurancePolicyNumber"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Número de póliza</FormLabel>
+                    <FormControl>
+                      <Input {...field} value={field.value ?? ""} maxLength={50} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="insuranceExpiresAt"
+                render={({ field }) => (
+                  <FormItem className="md:col-span-2">
+                    <FormLabel>Vence el seguro</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="date"
+                        {...field}
+                        value={
+                          field.value instanceof Date
+                            ? field.value.toISOString().slice(0, 10)
+                            : (field.value as string | undefined) ?? ""
+                        }
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+          </details>
+
           <FormField
             control={form.control}
             name="notes"
@@ -421,8 +518,9 @@ export function PropertyForm({
               <FormItem className="md:col-span-2">
                 <FormLabel>Notas</FormLabel>
                 <FormControl>
-                  <Textarea rows={3} {...field} value={field.value ?? ""} />
+                  <Textarea rows={3} {...field} value={field.value ?? ""} maxLength={1000} />
                 </FormControl>
+                <CharacterCount current={(field.value ?? "").length} max={1000} />
                 <FormMessage />
               </FormItem>
             )}

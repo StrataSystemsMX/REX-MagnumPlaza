@@ -1,36 +1,76 @@
 import { AlertTriangle, CheckCircle2, FileText } from "lucide-react";
 import { ContractTable } from "@/components/contracts/ContractTable";
 import { MetricCard } from "@/components/shared/metric-card";
+import { MobileContracts, type ContractsSegment } from "@/components/mobile/MobileContracts";
+import { getIsMobileView } from "@/server/mobile/viewport";
+import { PropertyFilterTabs } from "@/components/shared/PropertyFilterTabs";
+import { INMUEBLES_TAB_VALUE } from "@/components/shared/property-filter-constants";
 import {
   getAvailableUnits,
   getContracts,
-} from "@/lib/services/contracts-queries";
+} from "@/server/services/contracts-queries";
 
-export default async function ContractsPage() {
-  const [contracts, availableUnits] = await Promise.all([
+export default async function ContractsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ plaza?: string; seg?: string }>;
+}) {
+  const { plaza, seg } = await searchParams;
+  const activePlazaId = plaza ?? null;
+
+  if (await getIsMobileView()) {
+    const segment: ContractsSegment =
+      seg === "por-renovar" || seg === "todos" ? seg : "activos";
+    return <MobileContracts contracts={await getContracts()} segment={segment} />;
+  }
+
+  const [allContracts, availableUnits] = await Promise.all([
     getContracts(),
     getAvailableUnits(),
   ]);
 
-  const active = contracts.filter((c) => c.status === "ACTIVE");
-  const draft = contracts.filter((c) => c.status === "DRAFT").length;
+  // Tabs solo para plazas comerciales
+  const propertyMap = new Map<string, { id: string; name: string }>();
+  let hasInmuebles = false;
+  for (const c of allContracts) {
+    const p = c.unit.property;
+    if (p.type === "PLAZA_COMERCIAL") {
+      if (!propertyMap.has(p.id)) propertyMap.set(p.id, { id: p.id, name: p.name });
+    } else {
+      hasInmuebles = true;
+    }
+  }
+  const tabProperties = Array.from(propertyMap.values()).sort((a, b) =>
+    a.name.localeCompare(b.name),
+  );
+
+  // Metrics siempre sobre el total
+  const active = allContracts.filter((c) => c.status === "ACTIVE");
+  const draft = allContracts.filter((c) => c.status === "DRAFT").length;
   const expiringSoon = active.filter(
     (c) => c.daysToExpire >= 0 && c.daysToExpire <= 60,
   ).length;
 
+  // Tabla filtrada por plaza/inmuebles si hay tab activo
+  const tableContracts =
+    activePlazaId === INMUEBLES_TAB_VALUE
+      ? allContracts.filter((c) => c.unit.property.type !== "PLAZA_COMERCIAL")
+      : activePlazaId
+        ? allContracts.filter((c) => c.unit.property.id === activePlazaId)
+        : allContracts;
+
   return (
-    <div className="-m-4 space-y-6 bg-gradient-to-b from-[#8899AC]/40 to-transparent bg-[length:100%_180px] bg-no-repeat p-4 sm:-m-6 sm:p-6 lg:-m-8 lg:p-8 dark:from-[#8899AC]/30">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Contratos</h1>
-        <p className="text-sm text-muted-foreground">
-          Gestiona contratos de arrendamiento, renovaciones y terminaciones.
-        </p>
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Contratos</h1>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-3">
         <MetricCard
           label="Total"
-          value={contracts.length}
+          value={allContracts.length}
           subValue={`${draft} en borrador`}
           icon={FileText}
         />
@@ -49,7 +89,13 @@ export default async function ContractsPage() {
         />
       </div>
 
-      <ContractTable contracts={contracts} availableUnits={availableUnits} />
+      <PropertyFilterTabs
+        properties={tabProperties}
+        activePlazaId={activePlazaId}
+        showInmueblesTab={hasInmuebles}
+      />
+
+      <ContractTable contracts={tableContracts} availableUnits={availableUnits} />
     </div>
   );
 }

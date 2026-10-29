@@ -27,8 +27,9 @@ import { PaymentMethod } from "@/generated/prisma/enums";
 import {
   actionRegisterExpense,
   actionToggleExpenseNotRequired,
-} from "@/lib/services/expenses";
-import { capitalizeFirst } from "@/lib/utils";
+} from "@/server/services/expenses";
+import { formatMXN } from "@/shared/format-currency";
+import { formatPeriodLong } from "@/shared/format-date";
 
 export interface RegisterExpenseContext {
   id: string;
@@ -52,18 +53,6 @@ const PAYMENT_METHOD_LABEL: Record<PaymentMethod, string> = {
   CARD: "Tarjeta",
   OTHER: "Otro",
 };
-
-const MXN = new Intl.NumberFormat("es-MX", {
-  style: "currency",
-  currency: "MXN",
-  maximumFractionDigits: 2,
-});
-
-const DATE = new Intl.DateTimeFormat("es-MX", {
-  year: "numeric",
-  month: "long",
-  timeZone: "UTC",
-});
 
 interface Props {
   target: RegisterExpenseContext | null;
@@ -150,7 +139,7 @@ export function RegisterExpenseDialog({ target, onClose }: Props) {
           <DialogDescription>
             Indica el monto real que se pagó este mes. El estimado actual es{" "}
             <span className="font-medium">
-              {target ? MXN.format(target.amount) : ""}
+              {target ? formatMXN(target.amount, 2) : ""}
             </span>
             .
           </DialogDescription>
@@ -160,7 +149,7 @@ export function RegisterExpenseDialog({ target, onClose }: Props) {
           <div className="rounded-md border bg-muted/40 p-3 text-sm">
             <div className="flex items-center justify-between gap-2">
               <span className="text-muted-foreground">
-                {capitalizeFirst(DATE.format(target.expenseDate))}
+                {formatPeriodLong(target.expenseDate)}
               </span>
               <span className="font-medium">{target.legalEntityCode}</span>
             </div>

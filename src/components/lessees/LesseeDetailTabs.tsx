@@ -1,7 +1,10 @@
 "use client";
 
-import Link from "next/link";
+import { Plus } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   Table,
   TableBody,
@@ -11,32 +14,24 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ContractWizard } from "@/components/contracts/ContractWizard";
 import { LesseeForm } from "@/components/forms/LesseeForm";
 import { LesseeStatement } from "@/components/lessees/LesseeStatement";
 import { NotificationLogTable } from "@/components/lessees/NotificationLogTable";
+import { OverdueNoticesPanel } from "@/components/lessees/OverdueNoticesPanel";
 import {
   contractStatusLabel,
   contractTypeLabel,
   paymentMethodLabel,
-} from "@/lib/i18n/enums";
-import type { LesseeDetail } from "@/lib/services/lessees-queries";
-import type { NotificationLogRow } from "@/lib/services/notifications-queries";
-import type { LesseePayment, LesseeStatement as LesseeStatementData } from "@/lib/services/payments-queries";
+} from "@/shared/i18n/enums";
+import { isPlaza, unitWithProperty } from "@/shared/i18n/unit-label";
+import type { AvailableUnit } from "@/server/services/contracts-queries";
+import type { LesseeDetail, LesseeOverdueRent } from "@/server/services/lessees-queries";
+import type { NotificationLogRow } from "@/server/services/notifications-queries";
+import type { LesseePayment, LesseeStatement as LesseeStatementData } from "@/server/services/payments-queries";
 import type { ContractStatus } from "@/generated/prisma/enums";
-import { capitalizeFirst } from "@/lib/utils";
-
-const MXN = new Intl.NumberFormat("es-MX", {
-  style: "currency",
-  currency: "MXN",
-  maximumFractionDigits: 2,
-});
-
-const DATE = new Intl.DateTimeFormat("es-MX", {
-  year: "numeric",
-  month: "short",
-  day: "2-digit",
-  timeZone: "UTC",
-});
+import { formatMXN } from "@/shared/format-currency";
+import { formatDate } from "@/shared/format-date";
 
 function statusVariant(s: ContractStatus): "default" | "secondary" | "destructive" | "outline" {
   switch (s) {
@@ -59,6 +54,8 @@ interface LesseeDetailTabsProps {
   statement: LesseeStatementData;
   payments: ReadonlyArray<LesseePayment>;
   notifications: ReadonlyArray<NotificationLogRow>;
+  overdueRents: ReadonlyArray<LesseeOverdueRent>;
+  availableUnits: ReadonlyArray<AvailableUnit>;
 }
 
 export function LesseeDetailTabs({
@@ -66,19 +63,36 @@ export function LesseeDetailTabs({
   statement,
   payments,
   notifications,
+  overdueRents,
+  availableUnits,
 }: LesseeDetailTabsProps) {
+  const router = useRouter();
+  const [tab, setTab] = useState("info");
+  const [createContractOpen, setCreateContractOpen] = useState(false);
   return (
-    <Tabs defaultValue="info" className="w-full">
-      <div className="-mx-1 overflow-x-auto px-1">
-        <TabsList variant="line">
-          <TabsTrigger value="info">Información general</TabsTrigger>
-          <TabsTrigger value="contracts">
-            Contratos ({lessee.contracts.length})
-          </TabsTrigger>
-          <TabsTrigger value="statement">Estado de cuenta</TabsTrigger>
-          <TabsTrigger value="payments">Pagos históricos ({payments.length})</TabsTrigger>
-          <TabsTrigger value="comms">Comunicaciones</TabsTrigger>
-        </TabsList>
+    <Tabs value={tab} onValueChange={setTab} className="w-full">
+      <div className="flex items-center gap-3">
+        <div className="-mx-1 min-w-0 flex-1 overflow-x-auto px-1">
+          <TabsList variant="line">
+            <TabsTrigger value="info">Información general</TabsTrigger>
+            <TabsTrigger value="contracts">
+              Contratos ({lessee.contracts.length})
+            </TabsTrigger>
+            <TabsTrigger value="statement">Estado de cuenta</TabsTrigger>
+            <TabsTrigger value="payments">Pagos históricos ({payments.length})</TabsTrigger>
+            <TabsTrigger value="comms">Comunicaciones</TabsTrigger>
+          </TabsList>
+        </div>
+        {tab === "contracts" ? (
+          <Button
+            size="sm"
+            className="shrink-0"
+            onClick={() => setCreateContractOpen(true)}
+          >
+            <Plus className="size-4" />
+            Registrar contrato
+          </Button>
+        ) : null}
       </div>
 
       <TabsContent value="info" className="mt-4 rounded-md border bg-card p-6">
@@ -120,28 +134,40 @@ export function LesseeDetailTabs({
                 </TableRow>
               ) : (
                 lessee.contracts.map((c) => (
-                  <TableRow key={c.id}>
+                  <TableRow
+                    key={c.id}
+                    tabIndex={0}
+                    role="link"
+                    aria-label={`Ver contrato ${c.id.slice(-8)}`}
+                    className="cursor-pointer transition-colors hover:bg-muted/40 focus-visible:bg-muted/60 focus-visible:outline-none"
+                    onClick={() => router.push(`/contracts/${c.id}`)}
+                    onMouseEnter={() => router.prefetch(`/contracts/${c.id}`)}
+                    onFocus={() => router.prefetch(`/contracts/${c.id}`)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        router.push(`/contracts/${c.id}`);
+                      }
+                    }}
+                  >
                     <TableCell className="font-mono text-xs">
-                      <Link
-                        href={`/contracts/${c.id}`}
-                        className="hover:underline"
-                      >
-                        {c.id.slice(-8)}
-                      </Link>
+                      {c.id.slice(-8)}
                     </TableCell>
                     <TableCell className="text-sm">
                       <p className="font-medium">{c.unit.property.name}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {c.unit.code}
-                        {c.unit.name ? ` — ${c.unit.name}` : ""}
-                      </p>
+                      {isPlaza(c.unit.property.type) ? (
+                        <p className="text-xs text-muted-foreground">
+                          {c.unit.code}
+                          {c.unit.name ? ` — ${c.unit.name}` : ""}
+                        </p>
+                      ) : null}
                     </TableCell>
                     <TableCell className="text-sm">{contractTypeLabel(c.type)}</TableCell>
                     <TableCell className="text-center text-xs">
-                      {capitalizeFirst(DATE.format(c.startDate))} → {capitalizeFirst(DATE.format(c.endDate))}
+                      {formatDate(c.startDate)} → {formatDate(c.endDate)}
                     </TableCell>
                     <TableCell className="text-right tabular-nums">
-                      {MXN.format(Number(c.monthlyAmount))}
+                      {formatMXN(c.monthlyAmount, 2)}
                     </TableCell>
                     <TableCell className="text-center">
                       <Badge variant={statusVariant(c.status)}>
@@ -154,6 +180,14 @@ export function LesseeDetailTabs({
             </TableBody>
           </Table>
         </div>
+
+        <ContractWizard
+          availableUnits={availableUnits}
+          open={createContractOpen}
+          onOpenChange={setCreateContractOpen}
+          onCreated={() => router.refresh()}
+          initialLessee={{ id: lessee.id, legalName: lessee.legalName }}
+        />
       </TabsContent>
 
       <TabsContent value="statement" className="mt-4">
@@ -184,16 +218,16 @@ export function LesseeDetailTabs({
                 payments.map((p) => (
                   <TableRow key={p.id}>
                     <TableCell className="text-center text-xs tabular-nums">
-                      {capitalizeFirst(DATE.format(p.paymentDate))}
+                      {formatDate(p.paymentDate)}
                     </TableCell>
                     <TableCell className="text-sm">
-                      {p.rent.contract.unit.property.name} {p.rent.contract.unit.code}
+                      {unitWithProperty(p.rent.contract.unit, " ")}
                     </TableCell>
                     <TableCell className="text-xs capitalize">
                       {p.rent.period.toISOString().slice(0, 7)}
                     </TableCell>
                     <TableCell className="text-right tabular-nums font-medium">
-                      {MXN.format(Number(p.amount))}
+                      {formatMXN(p.amount, 2)}
                     </TableCell>
                     <TableCell className="text-center">
                       <Badge variant="secondary">{paymentMethodLabel(p.method)}</Badge>
@@ -207,7 +241,16 @@ export function LesseeDetailTabs({
         </div>
       </TabsContent>
 
-      <TabsContent value="comms" className="mt-4 space-y-3">
+      <TabsContent value="comms" className="mt-4 space-y-4">
+        <OverdueNoticesPanel
+          lessee={{
+            legalName: lessee.legalName,
+            whatsapp: lessee.whatsapp,
+            email: lessee.email,
+            preferredChannel: lessee.preferredChannel,
+          }}
+          rents={overdueRents}
+        />
         <NotificationLogTable logs={notifications} />
       </TabsContent>
     </Tabs>

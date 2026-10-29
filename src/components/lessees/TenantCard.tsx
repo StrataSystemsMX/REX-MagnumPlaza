@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
-import { communicationChannelLabel } from "@/lib/i18n/enums";
-import { cn } from "@/lib/utils";
-import type { LesseeListItem } from "@/lib/services/lessees-queries";
+import { communicationChannelLabel } from "@/shared/i18n/enums";
+import { cn } from "@/shared/utils";
+import type { LesseeListItem } from "@/server/services/lessees-queries";
 
 interface TenantCardProps {
   lessee: LesseeListItem;

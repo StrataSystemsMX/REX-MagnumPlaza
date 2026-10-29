@@ -25,16 +25,17 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { includedServiceLabel, unitStatusLabel } from "@/lib/i18n/enums";
+import { includedServiceLabel, unitStatusLabel } from "@/shared/i18n/enums";
 import {
   createUnitSchema,
   type CreateUnitInput,
-} from "@/lib/validators/unit";
+} from "@/shared/validators/unit";
+import { CharacterCount } from "@/components/ui/character-count";
 import {
   actionCreateUnit,
   actionUngroupUnit,
   actionUpdateUnit,
-} from "@/lib/services/units";
+} from "@/server/services/units";
 import type { IncludedService, UnitStatus } from "@/generated/prisma/enums";
 
 const UNIT_STATUSES: ReadonlyArray<UnitStatus> = [
@@ -82,7 +83,7 @@ interface UnitFormProps {
   initial: UnitFormInitial;
   /** Locales del mismo inmueble que pueden funcionar como padre. Excluye el actual y los que ya son hijos. */
   eligibleParents?: ReadonlyArray<ParentUnitOption>;
-  /** Hijos agrupados bajo esta unit. Se muestran arriba de Notas con un botón Desagrupar. */
+  /** Hijos agrupados bajo esta unit. Se muestran con un botón Desagrupar. */
   groupedChildren?: ReadonlyArray<{ id: string; code: string }>;
   onSuccess?: () => void;
   submitLabel?: string;
@@ -177,8 +178,9 @@ export function UnitForm({
               <FormItem>
                 <FormLabel>Identificador</FormLabel>
                 <FormControl>
-                  <Input {...field} />
+                  <Input {...field} maxLength={20} />
                 </FormControl>
+                <CharacterCount current={field.value?.length ?? 0} max={20} />
                 <FormMessage />
               </FormItem>
             )}
@@ -190,8 +192,9 @@ export function UnitForm({
               <FormItem>
                 <FormLabel>Nombre / Inquilino actual</FormLabel>
                 <FormControl>
-                  <Input {...field} value={field.value ?? ""} />
+                  <Input {...field} value={field.value ?? ""} maxLength={50} />
                 </FormControl>
+                <CharacterCount current={(field.value ?? "").length} max={50} />
                 <FormMessage />
               </FormItem>
             )}
@@ -502,8 +505,9 @@ export function UnitForm({
             <FormItem>
               <FormLabel>Notas internas</FormLabel>
               <FormControl>
-                <Textarea rows={3} {...field} value={field.value ?? ""} />
+                <Textarea rows={3} {...field} value={field.value ?? ""} maxLength={1000} />
               </FormControl>
+              <CharacterCount current={(field.value ?? "").length} max={1000} />
               <FormMessage />
             </FormItem>
           )}

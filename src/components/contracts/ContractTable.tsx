@@ -1,8 +1,8 @@
 "use client";
 
 import { Building2, ChevronDown, ChevronRight, Plus, Search, Store } from "lucide-react";
-import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,7 +14,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  Table,
   TableBody,
   TableCell,
   TableHead,
@@ -26,13 +25,16 @@ import {
   contractStatusLabel,
   contractStatusVariant,
   contractTypeLabel,
-} from "@/lib/i18n/enums";
+} from "@/shared/i18n/enums";
+import { isPlaza } from "@/shared/i18n/unit-label";
 import type {
   AvailableUnit,
   ContractListItem,
-} from "@/lib/services/contracts-queries";
+} from "@/server/services/contracts-queries";
 import type { ContractStatus, PropertyType } from "@/generated/prisma/enums";
-import { capitalizeFirst, cn } from "@/lib/utils";
+import { cn } from "@/shared/utils";
+import { formatMXN } from "@/shared/format-currency";
+import { formatDate } from "@/shared/format-date";
 
 type StatusFilter = ContractStatus | "ALL";
 type ExpiryFilter = "ALL" | "30" | "60" | "90";
@@ -57,19 +59,6 @@ const expiryFilterItems: Record<string, string> = {
   "60": "Vence en ≤ 60 días",
   "90": "Vence en ≤ 90 días",
 };
-
-const MXN = new Intl.NumberFormat("es-MX", {
-  style: "currency",
-  currency: "MXN",
-  maximumFractionDigits: 2,
-});
-
-const DATE = new Intl.DateTimeFormat("es-MX", {
-  year: "numeric",
-  month: "short",
-  day: "2-digit",
-  timeZone: "UTC",
-});
 
 const TABLE_COLUMN_COUNT = 5;
 
@@ -112,11 +101,28 @@ function groupByProperty(items: ReadonlyArray<ContractListItem>): PropertyGroup[
 
 export function ContractTable({ contracts, availableUnits }: ContractTableProps) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("ALL");
   const [expiryFilter, setExpiryFilter] = useState<ExpiryFilter>("ALL");
   const [search, setSearch] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+
+  // Lanzamiento externo del wizard: "Rentar" en cobranza navega aquí con
+  // ?nuevo=1&unitId=... para crear el contrato con esa unidad preseleccionada.
+  // Se calcula en render (no en effect) para que el wizard ya nazca con la
+  // unidad; el effect solo abre el diálogo y limpia la URL.
+  const initialUnitId =
+    searchParams.get("nuevo") === "1" ? searchParams.get("unitId") : null;
+
+  useEffect(() => {
+    if (searchParams.get("nuevo") === "1") {
+      setCreateOpen(true);
+      router.replace("/contracts", { scroll: false });
+    }
+    // Solo al montar: la URL se limpia enseguida para no reabrir al refrescar.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -205,31 +211,33 @@ export function ContractTable({ contracts, availableUnits }: ContractTableProps)
 
         <Button onClick={() => setCreateOpen(true)} className="w-full sm:w-auto">
           <Plus className="size-4" />
-          Nuevo contrato
+          Registrar contrato
         </Button>
       </div>
 
-      <div className="overflow-hidden rounded-lg border bg-card">
-        <Table className="min-w-[860px]">
-          <TableHeader>
-            <TableRow className="hover:bg-transparent">
-              <TableHead className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                Inquilino
-              </TableHead>
-              <TableHead className="text-xs font-medium uppercase tracking-wide text-muted-foreground text-center">
-                Vigencia
-              </TableHead>
-              <TableHead className="text-xs font-medium uppercase tracking-wide text-muted-foreground text-right">
-                Renta
-              </TableHead>
-              <TableHead className="text-xs font-medium uppercase tracking-wide text-muted-foreground text-center">
-                Estado
-              </TableHead>
-              <TableHead className="text-xs font-medium uppercase tracking-wide text-muted-foreground text-center">
-                Vence
-              </TableHead>
-            </TableRow>
-          </TableHeader>
+      <div className="overflow-x-auto rounded-lg border bg-card">
+        <table className="w-full min-w-[860px] caption-bottom text-sm">
+          {groups.length > 0 ? (
+            <TableHeader>
+              <TableRow className="hover:bg-transparent">
+                <TableHead className="bg-card shadow-[inset_0_-1px_0_0_var(--border)] text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  Inquilino
+                </TableHead>
+                <TableHead className="bg-card shadow-[inset_0_-1px_0_0_var(--border)] text-center text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  Vigencia
+                </TableHead>
+                <TableHead className="bg-card shadow-[inset_0_-1px_0_0_var(--border)] text-right text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  Renta
+                </TableHead>
+                <TableHead className="bg-card shadow-[inset_0_-1px_0_0_var(--border)] text-center text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  Estado
+                </TableHead>
+                <TableHead className="bg-card shadow-[inset_0_-1px_0_0_var(--border)] text-center text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  Vence
+                </TableHead>
+              </TableRow>
+            </TableHeader>
+          ) : null}
           <TableBody>
             {groups.length === 0 ? (
               <TableRow>
@@ -258,7 +266,7 @@ export function ContractTable({ contracts, availableUnits }: ContractTableProps)
               })
             )}
           </TableBody>
-        </Table>
+        </table>
       </div>
 
       <p className="text-xs text-muted-foreground">
@@ -272,6 +280,7 @@ export function ContractTable({ contracts, availableUnits }: ContractTableProps)
         open={createOpen}
         onOpenChange={setCreateOpen}
         onCreated={() => router.refresh()}
+        initialUnitId={initialUnitId}
       />
     </>
   );
@@ -340,9 +349,15 @@ function PropertyGroupRows({
                 <p className="truncate font-medium">{c.lessee.legalName}</p>
                 <p className="truncate text-[10px] text-muted-foreground">
                   <span className="font-mono">{c.id.slice(-8)}</span>
-                  {" · "}
-                  {c.unit.code}
-                  {c.unit.name ? ` — ${c.unit.name}` : ""}
+                  {/* El encabezado del grupo ya nombra el inmueble; el código
+                      del local solo aporta en plazas con varios locales. */}
+                  {isPlaza(c.unit.property.type) ? (
+                    <>
+                      {" · "}
+                      {c.unit.code}
+                      {c.unit.name ? ` — ${c.unit.name}` : ""}
+                    </>
+                  ) : null}
                   {" · "}
                   {contractTypeLabel(c.type)}
                   {c.lessee.contactName ? ` · ${c.lessee.contactName}` : ""}
@@ -351,14 +366,14 @@ function PropertyGroupRows({
             </TableCell>
             <TableCell className="py-3">
               <div className="text-center text-xs tabular-nums text-muted-foreground">
-                {capitalizeFirst(DATE.format(c.startDate))}
+                {formatDate(c.startDate)}
                 <span className="mx-1 text-foreground/30">→</span>
-                {capitalizeFirst(DATE.format(c.endDate))}
+                {formatDate(c.endDate)}
               </div>
             </TableCell>
             <TableCell className="py-3">
               <div className="text-right font-medium tabular-nums">
-                {MXN.format(Number(c.monthlyAmount))}
+                {formatMXN(c.monthlyAmount, 2)}
               </div>
             </TableCell>
             <TableCell className="py-3">

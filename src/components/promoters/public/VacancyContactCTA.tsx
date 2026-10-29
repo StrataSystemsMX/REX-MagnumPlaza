@@ -1,8 +1,10 @@
-import { MessageCircle } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { buildWhatsAppUrl } from "@/lib/utils/whatsapp-link";
+import { VacancyLeadButton } from "@/components/promoters/public/VacancyLeadButton";
+import { buildWhatsAppUrl } from "@/shared/utils/whatsapp-link";
+import { formatMXN } from "@/shared/format-currency";
 
 interface Props {
+  token: string;
+  source: "DIGITAL" | "PHYSICAL";
   contactPhone: string | null;
   tenantName: string;
   promoterFullName: string;
@@ -11,13 +13,9 @@ interface Props {
   estimatedRent: number | null;
 }
 
-const MXN = new Intl.NumberFormat("es-MX", {
-  style: "currency",
-  currency: "MXN",
-  maximumFractionDigits: 0,
-});
-
 export function VacancyContactCTA({
+  token,
+  source,
   contactPhone,
   tenantName,
   promoterFullName,
@@ -36,15 +34,17 @@ export function VacancyContactCTA({
         <div className="min-w-0 flex-1">
           <p className="text-xs text-muted-foreground">Renta mensual</p>
           <p className="truncate text-base font-semibold">
-            {estimatedRent != null ? MXN.format(estimatedRent) : "Consultar"}
+            {estimatedRent != null ? formatMXN(estimatedRent) : "Consultar"}
           </p>
         </div>
-        <a href={url} target="_blank" rel="noopener noreferrer" className="shrink-0">
-          <Button size="lg" className="bg-green-600 hover:bg-green-700">
-            <MessageCircle className="size-4" />
-            WhatsApp
-          </Button>
-        </a>
+        <div className="shrink-0">
+          <VacancyLeadButton
+            token={token}
+            whatsappUrl={url}
+            label="Me interesa"
+            source={source}
+          />
+        </div>
       </div>
     </div>
   );

@@ -16,18 +16,18 @@ import {
   auditActionLabel,
   contractTypeLabel,
   guaranteeStatusLabel,
-} from "@/lib/i18n/enums";
+} from "@/shared/i18n/enums";
+import { isPlaza, unitCode } from "@/shared/i18n/unit-label";
 import type {
   ContractAuditEntry,
   ContractDetail,
-} from "@/lib/services/contracts-queries";
-import { capitalizeFirst } from "@/lib/utils";
+} from "@/server/services/contracts-queries";
+import { describeAuditDetail } from "@/shared/audit/describe";
+import { capitalizeFirst } from "@/shared/utils";
+import { formatMXN } from "@/shared/format-currency";
 
-const MXN = new Intl.NumberFormat("es-MX", {
-  style: "currency",
-  currency: "MXN",
-  maximumFractionDigits: 2,
-});
+// Alias local: mismo output que la const Intl que existía aquí (2 decimales).
+const mxn = (v: number | string) => formatMXN(v, 2);
 
 const DATE = new Intl.DateTimeFormat("es-MX", {
   year: "numeric",
@@ -69,15 +69,14 @@ export function ContractDetailTabs({
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           <Card title="Unidad">
             <p className="font-medium">{contract.unit.property.name}</p>
-            <p className="text-sm text-muted-foreground">
-              {[
-                contract.unit.code,
-                ...(contract.unit.childUnits ?? []).map((c) => c.code),
-              ]
-                .sort()
-                .join("-")}
-              {contract.unit.name ? ` — ${contract.unit.name}` : ""}
-            </p>
+            {/* El nombre del inmueble ya identifica un inmueble individual; el
+                código de local solo se muestra en plazas. */}
+            {isPlaza(contract.unit.property.type) ? (
+              <p className="text-sm text-muted-foreground">
+                {unitCode(contract.unit)}
+                {contract.unit.name ? ` — ${contract.unit.name}` : ""}
+              </p>
+            ) : null}
             {(contract.unit.childUnits ?? []).length > 0 ? (
               <p className="mt-1 text-xs text-emerald-700">
                 Cubre {(contract.unit.childUnits ?? []).length + 1} locales
@@ -102,7 +101,7 @@ export function ContractDetailTabs({
             <Row label="Tipo">{contractTypeLabel(contract.type)}</Row>
             <Row label="Renta mensual">
               <span className="font-medium tabular-nums">
-                {MXN.format(Number(contract.monthlyAmount))}
+                {mxn(Number(contract.monthlyAmount))}
               </span>
             </Row>
             <Row label="Vigencia">
@@ -154,7 +153,7 @@ export function ContractDetailTabs({
                 <li key={g.id} className="rounded-md border p-3">
                   <div className="flex items-center justify-between">
                     <span className="font-medium tabular-nums">
-                      {MXN.format(Number(g.amount))}
+                      {mxn(Number(g.amount))}
                     </span>
                     <Badge variant="secondary">
                       {guaranteeStatusLabel(g.status)}
@@ -215,8 +214,17 @@ export function ContractDetailTabs({
                     <TableCell className="text-center">
                       <Badge variant="secondary">{auditActionLabel(a.action)}</Badge>
                     </TableCell>
-                    <TableCell className="font-mono text-[10px] text-muted-foreground">
-                      {a.changes ? JSON.stringify(a.changes) : "—"}
+                    <TableCell
+                      className="text-sm text-muted-foreground"
+                      // El JSON crudo sigue disponible al pasar el cursor, por si
+                      // se necesita el detalle exacto para una revisión.
+                      title={a.changes ? JSON.stringify(a.changes) : undefined}
+                    >
+                      {describeAuditDetail({
+                        action: a.action,
+                        entityType: "Contract",
+                        changes: a.changes,
+                      })}
                     </TableCell>
                   </TableRow>
                 ))

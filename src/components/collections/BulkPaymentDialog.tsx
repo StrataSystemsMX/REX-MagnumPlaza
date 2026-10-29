@@ -16,16 +16,17 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { EnumSelect } from "@/components/ui/enum-select";
 import { Separator } from "@/components/ui/separator";
-import { paymentMethodLabel } from "@/lib/i18n/enums";
+import { paymentMethodLabel } from "@/shared/i18n/enums";
 import {
   actionGetOutstandingRentsForLessee,
   actionRegisterBulkPayment,
-} from "@/lib/services/payments";
-import { actionSearchLessees, type LesseeSearchResult } from "@/lib/services/lessees";
-import { bulkPaymentSchema } from "@/lib/validators/payment";
-import type { OutstandingRentLite } from "@/lib/services/payments-queries";
+} from "@/server/services/payments";
+import { actionSearchLessees, type LesseeSearchResult } from "@/server/services/lessees";
+import { bulkPaymentSchema } from "@/shared/validators/payment";
+import type { OutstandingRentLite } from "@/server/services/payments-queries";
 import type { PaymentMethod } from "@/generated/prisma/enums";
-import { capitalizeFirst } from "@/lib/utils";
+import { formatMXN } from "@/shared/format-currency";
+import { formatPeriodShort } from "@/shared/format-date";
 
 const METHODS: ReadonlyArray<PaymentMethod> = [
   "TRANSFER",
@@ -35,18 +36,6 @@ const METHODS: ReadonlyArray<PaymentMethod> = [
   "CARD",
   "OTHER",
 ];
-
-const MXN = new Intl.NumberFormat("es-MX", {
-  style: "currency",
-  currency: "MXN",
-  maximumFractionDigits: 2,
-});
-
-const PERIOD = new Intl.DateTimeFormat("es-MX", {
-  month: "short",
-  year: "numeric",
-  timeZone: "UTC",
-});
 
 interface BulkPaymentDialogProps {
   open: boolean;
@@ -117,7 +106,7 @@ export function BulkPaymentDialog({
     setSearch(query);
     startSearch(async () => {
       try {
-        const r = await actionSearchLessees(query);
+        const r = await actionSearchLessees(query, query.trim() ? 10 : 100);
         setResults(r);
       } catch {
         // silent
@@ -168,7 +157,7 @@ export function BulkPaymentDialog({
     setSelected(next);
     if (remaining > 0.01) {
       toast.info(
-        `Sobran ${MXN.format(remaining)} sin aplicar (excedió el saldo total pendiente).`,
+        `Sobran ${formatMXN(remaining, 2)} sin aplicar (excedió el saldo total pendiente).`,
       );
     }
   }
@@ -204,7 +193,7 @@ export function BulkPaymentDialog({
       try {
         const r = await actionRegisterBulkPayment(parsed.data);
         toast.success(
-          `${MXN.format(parsed.data.amount)} aplicados a ${r.rentsUpdated} renta${r.rentsUpdated === 1 ? "" : "s"}.`,
+          `${formatMXN(parsed.data.amount, 2)} aplicados a ${r.rentsUpdated} renta${r.rentsUpdated === 1 ? "" : "s"}.`,
         );
         onOpenChange(false);
         router.refresh();
@@ -231,13 +220,16 @@ export function BulkPaymentDialog({
             <Input
               value={search}
               onChange={(e) => runSearch(e.target.value)}
+              onFocus={() => { if (results.length === 0) runSearch(""); }}
+              placeholder="Filtrar por nombre o RFC..."
+              autoFocus
             />
             <div className="rounded-md border max-h-64 overflow-auto">
               {searching ? (
                 <p className="p-3 text-center text-sm text-muted-foreground">Buscando...</p>
               ) : results.length === 0 ? (
                 <p className="p-3 text-center text-sm text-muted-foreground">
-                  Empieza a escribir para buscar.
+                  {search ? "Sin coincidencias." : "Sin inquilinos activos."}
                 </p>
               ) : (
                 <ul className="divide-y">
@@ -358,13 +350,13 @@ export function BulkPaymentDialog({
                           />
                           <div className="flex-1">
                             <p className="font-medium">
-                              {capitalizeFirst(PERIOD.format(r.period))} · {r.propertyName} {r.unitCode}
+                              {formatPeriodShort(r.period)} · {r.unitLabel}
                             </p>
                             <p className="text-xs text-muted-foreground">
-                              Cargo {MXN.format(Number(r.amountDue))} · Pagado{" "}
-                              {MXN.format(Number(r.amountPaid))} · Saldo{" "}
+                              Cargo {formatMXN(r.amountDue, 2)} · Pagado{" "}
+                              {formatMXN(r.amountPaid, 2)} · Saldo{" "}
                               <span className="font-medium">
-                                {MXN.format(Number(r.balance))}
+                                {formatMXN(r.balance, 2)}
                               </span>
                             </p>
                           </div>
@@ -388,7 +380,7 @@ export function BulkPaymentDialog({
 
             <div className="rounded-md border bg-card p-3 text-sm">
               <Row label={`Total a aplicar (${splitByRent.length} renta${splitByRent.length === 1 ? "" : "s"})`}>
-                <span className="text-base font-semibold">{MXN.format(total)}</span>
+                <span className="text-base font-semibold">{formatMXN(total, 2)}</span>
               </Row>
             </div>
           </div>
@@ -402,7 +394,7 @@ export function BulkPaymentDialog({
           <Button onClick={onSubmit} disabled={pending || !lesseeId || splitByRent.length === 0}>
             {pending
               ? "Registrando..."
-              : `Aplicar ${MXN.format(total)} a ${splitByRent.length} renta${splitByRent.length === 1 ? "" : "s"}`}
+              : `Aplicar ${formatMXN(total, 2)} a ${splitByRent.length} renta${splitByRent.length === 1 ? "" : "s"}`}
           </Button>
         </DialogFooter>
       </DialogContent>

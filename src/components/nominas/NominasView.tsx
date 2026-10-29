@@ -1,13 +1,16 @@
 "use client";
 
 import {
-  Building2,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
+  ChevronUp,
   Loader2,
   MoreHorizontal,
   Pencil,
   Plus,
+  Receipt,
+  Search,
   Trash2,
   Users2,
   Wallet,
@@ -33,6 +36,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -41,20 +45,31 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { PayrollFormDialog } from "@/components/nominas/PayrollFormDialog";
-import { actionDeletePayroll } from "@/lib/services/payroll";
+import { PayrollDetailDialog } from "@/components/nominas/PayrollDetailDialog";
+import { themeFor } from "@/components/cierres/MonthlyPivotTable";
+import { actionDeletePayroll } from "@/server/services/payroll";
 import type {
   PayrollEntityTotal,
   PayrollListItem,
-} from "@/lib/services/payroll-queries";
-import type { LegalEntityOption } from "@/lib/services/properties-queries";
-import { payrollTypeLabel } from "@/lib/i18n/enums";
+} from "@/server/services/payroll-queries";
+import type { LegalEntityOption } from "@/server/services/properties-queries";
+import { payrollTypeLabel } from "@/shared/i18n/enums";
 import type { PayrollType } from "@/generated/prisma/enums";
+import { cn } from "@/shared/utils";
+import { formatMXN } from "@/shared/format-currency";
 
-const MXN = new Intl.NumberFormat("es-MX", {
-  style: "currency",
-  currency: "MXN",
-  maximumFractionDigits: 2,
-});
+// Alias local: mismo output que la const Intl que existía aquí (2 decimales).
+const mxn = (v: number | string) => formatMXN(v, 2);
+
+// Clasificación contable: operativos (gente real) vs estrategia fiscal
+// (vehículos fiscales). Usado para sub-agrupar dentro de cada card.
+const FISCAL_STRATEGY_TYPES: ReadonlySet<PayrollType> = new Set([
+  "STRATEGY_NOMINA",
+  "ADMIN_SERVICE_INVOICE",
+]);
+function isFiscalStrategy(t: PayrollType): boolean {
+  return FISCAL_STRATEGY_TYPES.has(t);
+}
 
 const MONTH_LABELS = [
   "Enero",
@@ -100,6 +115,16 @@ const TYPE_TONES: Record<PayrollType, string> = {
     "bg-pink-100 text-pink-700 hover:bg-pink-100 dark:bg-pink-950 dark:text-pink-200",
 };
 
+// Template de grid compartido entre las dos subsecciones (Operativos /
+// Estrategia fiscal) para que las columnas queden alineadas a la misma X,
+// análogo a PREDIAL_GRID_COLS en PredialesTable.
+// Tipo | Concepto(+notas) | Sin IVA | IVA | Total | Acciones
+const PAYROLL_GRID_COLS =
+  "minmax(140px, 1fr) minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) 40px";
+// Con columna Mes (vista anual) antepuesta.
+const PAYROLL_GRID_COLS_WITH_MONTH =
+  "minmax(140px, 1fr) minmax(0, 0.9fr) minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) 40px";
+
 interface Props {
   payrolls: ReadonlyArray<PayrollListItem>;
   legalEntities: ReadonlyArray<LegalEntityOption>;
@@ -112,6 +137,8 @@ interface Props {
   canCreate: boolean;
   canUpdate: boolean;
   canDelete: boolean;
+  /** Restringe los tipos seleccionables en el dialog. */
+  allowedTypes?: ReadonlyArray<PayrollType>;
 }
 
 export function NominasView({
@@ -125,6 +152,7 @@ export function NominasView({
   canCreate,
   canUpdate,
   canDelete,
+  allowedTypes,
 }: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -138,6 +166,19 @@ export function NominasView({
   const [deleteTarget, setDeleteTarget] = useState<PayrollListItem | null>(
     null,
   );
+  const [detailTarget, setDetailTarget] = useState<PayrollListItem | null>(
+    null,
+  );
+  const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
+
+  function toggleGroup(entityId: string) {
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      if (next.has(entityId)) next.delete(entityId);
+      else next.add(entityId);
+      return next;
+    });
+  }
 
   const yearItems: Record<string, string> = useMemo(
     () => Object.fromEntries(yearsAvailable.map((y) => [String(y), String(y)])),
@@ -179,40 +220,67 @@ export function NominasView({
     pushParams({ year: String(y), month: String(m) });
   }
 
-  // Totales del periodo visible.
-  const periodTotal = useMemo(
-    () => payrolls.reduce((sum, p) => sum + p.amount, 0),
-    [payrolls],
-  );
-  const periodTaxTotal = useMemo(
-    () => payrolls.reduce((sum, p) => sum + (p.taxAmount ?? 0), 0),
-    [payrolls],
-  );
+  const [search, setSearch] = useState("");
+
+  // Filtro de texto sobre el periodo ya cargado (concepto, tipo o razón social).
+  const visiblePayrolls = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return payrolls;
+    return payrolls.filter((p) => {
+      const hay = `${p.description ?? ""} ${payrollTypeLabel(p.type)} ${p.legalEntity.code}`;
+      return hay.toLowerCase().includes(q);
+    });
+  }, [payrolls, search]);
+
+  // Totales del periodo visible — separados operativo vs estrategia fiscal.
+  const { periodOperationalTotal, periodFiscalTotal } = useMemo(() => {
+    let op = 0;
+    let fisc = 0;
+    for (const p of visiblePayrolls) {
+      if (isFiscalStrategy(p.type)) fisc += p.amount;
+      else op += p.amount;
+    }
+    return { periodOperationalTotal: op, periodFiscalTotal: fisc };
+  }, [visiblePayrolls]);
   const annualTotal = useMemo(
     () => annualTotals.reduce((sum, e) => sum + e.total, 0),
     [annualTotals],
   );
 
-  // Agrupa los pagos del periodo por LegalEntity.
+  // Agrupa los pagos del periodo por LegalEntity y dentro de cada entidad
+  // separa operativos de estrategia fiscal.
   const byEntity = useMemo(() => {
     const groups = new Map<
       string,
       {
         entity: PayrollListItem["legalEntity"];
-        items: PayrollListItem[];
+        operationalItems: PayrollListItem[];
+        fiscalItems: PayrollListItem[];
+        operationalTotal: number;
+        fiscalTotal: number;
         total: number;
       }
     >();
-    for (const p of payrolls) {
+    for (const p of visiblePayrolls) {
       const key = p.legalEntity.id;
+      const fiscal = isFiscalStrategy(p.type);
       const cur = groups.get(key);
       if (cur) {
-        cur.items.push(p);
+        if (fiscal) {
+          cur.fiscalItems.push(p);
+          cur.fiscalTotal += p.amount;
+        } else {
+          cur.operationalItems.push(p);
+          cur.operationalTotal += p.amount;
+        }
         cur.total += p.amount;
       } else {
         groups.set(key, {
           entity: p.legalEntity,
-          items: [p],
+          operationalItems: fiscal ? [] : [p],
+          fiscalItems: fiscal ? [p] : [],
+          operationalTotal: fiscal ? 0 : p.amount,
+          fiscalTotal: fiscal ? p.amount : 0,
           total: p.amount,
         });
       }
@@ -220,7 +288,7 @@ export function NominasView({
     return Array.from(groups.values()).sort((a, b) =>
       a.entity.code.localeCompare(b.entity.code, "es-MX"),
     );
-  }, [payrolls]);
+  }, [visiblePayrolls]);
 
   function periodLabel(): string {
     if (selectedMonth === null) return `Año ${selectedYear}`;
@@ -257,92 +325,95 @@ export function NominasView({
   return (
     <>
       {/* Filtros */}
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div className="flex flex-wrap items-end gap-3">
-          <FilterField label="Año">
-            <Select
-              value={String(selectedYear)}
-              onValueChange={(v) => v && pushParams({ year: v })}
-              items={yearItems}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="relative w-full sm:w-56">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Buscar concepto..."
+              className="pl-8"
+            />
+          </div>
+          <Select
+            value={String(selectedYear)}
+            onValueChange={(v) => v && pushParams({ year: v })}
+            items={yearItems}
+          >
+            <SelectTrigger className="w-28">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {yearsAvailable.map((y) => (
+                <SelectItem key={y} value={String(y)}>
+                  {y}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <div className="flex items-center gap-1">
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => shiftMonth(-1)}
+              disabled={selectedMonth === null}
+              aria-label="Mes anterior"
             >
-              <SelectTrigger className="w-28">
+              <ChevronLeft className="size-4" />
+            </Button>
+            <Select
+              value={String(selectedMonth ?? 0)}
+              onValueChange={(v) => v && changeMonthParam(v)}
+              items={MONTH_ITEMS}
+            >
+              <SelectTrigger className="w-44">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {yearsAvailable.map((y) => (
-                  <SelectItem key={y} value={String(y)}>
-                    {y}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </FilterField>
-
-          <FilterField label="Periodo">
-            <div className="flex items-center gap-1">
-              <Button
-                variant="outline"
-                size="icon"
-                onClick={() => shiftMonth(-1)}
-                disabled={selectedMonth === null}
-                aria-label="Mes anterior"
-              >
-                <ChevronLeft className="size-4" />
-              </Button>
-              <Select
-                value={String(selectedMonth ?? 0)}
-                onValueChange={(v) => v && changeMonthParam(v)}
-                items={MONTH_ITEMS}
-              >
-                <SelectTrigger className="w-44">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {Object.entries(MONTH_ITEMS).map(([value, label]) => (
-                    <SelectItem key={value} value={value}>
-                      {label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Button
-                variant="outline"
-                size="icon"
-                onClick={() => shiftMonth(1)}
-                disabled={selectedMonth === null}
-                aria-label="Mes siguiente"
-              >
-                <ChevronRight className="size-4" />
-              </Button>
-            </div>
-          </FilterField>
-
-          <FilterField label="Razón social">
-            <Select
-              value={selectedEntityId ?? "ALL"}
-              onValueChange={(v) =>
-                v && pushParams({ entity: v === "ALL" ? null : v })
-              }
-              items={entityItems}
-            >
-              <SelectTrigger className="w-40">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {Object.entries(entityItems).map(([value, label]) => (
+                {Object.entries(MONTH_ITEMS).map(([value, label]) => (
                   <SelectItem key={value} value={value}>
                     {label}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
-          </FilterField>
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => shiftMonth(1)}
+              disabled={selectedMonth === null}
+              aria-label="Mes siguiente"
+            >
+              <ChevronRight className="size-4" />
+            </Button>
+          </div>
+
+          <Select
+            value={selectedEntityId ?? "ALL"}
+            onValueChange={(v) =>
+              v && pushParams({ entity: v === "ALL" ? null : v })
+            }
+            items={entityItems}
+          >
+            <SelectTrigger className="w-40">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {Object.entries(entityItems).map(([value, label]) => (
+                <SelectItem key={value} value={value}>
+                  {label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
         {canCreate ? (
           <Button onClick={() => openCreate(null)}>
             <Plus className="size-4" />
-            Nuevo pago
+            Registrar nómina
           </Button>
         ) : null}
       </div>
@@ -350,9 +421,9 @@ export function NominasView({
       {/* Stats */}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Stat
-          icon={<Wallet className="size-4" />}
-          label={`Total ${periodLabel().toLowerCase()}`}
-          value={MXN.format(periodTotal)}
+          icon={<Receipt className="size-4" />}
+          label={`Nómina ${periodLabel().toLowerCase()}`}
+          value={mxn(periodOperationalTotal + periodFiscalTotal)}
           tone="primary"
         />
         <Stat
@@ -360,51 +431,18 @@ export function NominasView({
           label="Movimientos"
           value={String(payrolls.length)}
           subtitle={
-            payrolls.length === 1 ? "1 pago registrado" : `${payrolls.length} pagos registrados`
+            payrolls.length === 1 ? "1 pago en el periodo" : `${payrolls.length} pagos en el periodo`
           }
-        />
-        <Stat
-          icon={<Building2 className="size-4" />}
-          label={`IVA ${periodLabel().toLowerCase()}`}
-          value={MXN.format(periodTaxTotal)}
-          tone="muted"
         />
         <Stat
           icon={<Wallet className="size-4" />}
           label={`Total año ${selectedYear}`}
-          value={MXN.format(annualTotal)}
+          value={mxn(annualTotal)}
           tone="positive"
         />
       </div>
 
-      {/* Resumen anual por entidad — sólo si la lista no está vacía */}
-      {annualTotals.length > 0 ? (
-        <div className="rounded-md border bg-card p-4">
-          <p className="mb-3 text-xs uppercase tracking-wide text-muted-foreground">
-            Acumulado anual por razón social
-          </p>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-            {annualTotals.map((e) => (
-              <div
-                key={e.id}
-                className="flex flex-col gap-1 rounded-md border bg-background p-3"
-              >
-                <Badge variant="secondary" className="w-fit">
-                  {e.code}
-                </Badge>
-                <p className="truncate text-xs text-muted-foreground">
-                  {e.legalName}
-                </p>
-                <p className="text-base font-semibold tabular-nums">
-                  {MXN.format(e.total)}
-                </p>
-              </div>
-            ))}
-          </div>
-        </div>
-      ) : null}
-
-      {/* Cards por razón social */}
+      {/* Cards por razón social — color por entidad, sub-secciones operativo/estrategia */}
       <div className="space-y-4">
         {byEntity.length === 0 ? (
           <EmptyState
@@ -413,132 +451,96 @@ export function NominasView({
             onCreate={() => openCreate(null)}
           />
         ) : (
-          byEntity.map((group) => (
-            <div
-              key={group.entity.id}
-              className="overflow-hidden rounded-xl border bg-card"
-            >
-              <div className="flex flex-wrap items-center justify-between gap-3 border-b bg-muted/30 px-4 py-3">
-                <div className="flex items-center gap-3">
-                  <div className="flex size-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                    <Building2 className="size-4" />
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <Badge variant="secondary">{group.entity.code}</Badge>
-                      <span className="text-sm font-medium">
-                        {group.entity.legalName}
-                      </span>
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      {group.items.length}{" "}
-                      {group.items.length === 1 ? "movimiento" : "movimientos"}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3">
-                  <div className="text-right">
-                    <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                      Total
-                    </p>
-                    <p className="text-base font-semibold tabular-nums">
-                      {MXN.format(group.total)}
-                    </p>
-                  </div>
-                  {canCreate ? (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => openCreate(group.entity.id)}
-                    >
-                      <Plus className="size-3.5" />
-                      Agregar
-                    </Button>
-                  ) : null}
-                </div>
-              </div>
-
-              <ul className="divide-y">
-                {group.items.map((item) => (
-                  <li
-                    key={item.id}
-                    className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 hover:bg-muted/20"
+          byEntity.map((group) => {
+            const theme = themeFor(group.entity.code);
+            const totalCount = group.operationalItems.length + group.fiscalItems.length;
+            const expanded = !collapsed.has(group.entity.id);
+            return (
+              <div
+                key={group.entity.id}
+                className={cn(
+                  "overflow-hidden rounded-xl border bg-card ring-1",
+                  theme.ring,
+                )}
+              >
+                {/* Header colapsable. La zona izquierda (info + total) hace
+                    toggle; el botón "Agregar" queda fuera para no anidar. */}
+                <div
+                  className={cn(
+                    "flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3",
+                    theme.soft,
+                  )}
+                >
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    aria-expanded={expanded}
+                    onClick={() => toggleGroup(group.entity.id)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        toggleGroup(group.entity.id);
+                      }
+                    }}
+                    className="flex flex-1 cursor-pointer items-center gap-3 rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
-                    <div className="min-w-0 flex-1">
+                    <span className="shrink-0 text-muted-foreground">
+                      {expanded ? (
+                        <ChevronUp className="size-4" />
+                      ) : (
+                        <ChevronDown className="size-4" />
+                      )}
+                    </span>
+                    <span
+                      className={cn("size-2.5 shrink-0 rounded-full", theme.dot)}
+                      aria-hidden
+                    />
+                    <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
-                        <Badge className={TYPE_TONES[item.type]}>
-                          {payrollTypeLabel(item.type)}
-                        </Badge>
-                        {selectedMonth === null ? (
-                          <span className="text-xs text-muted-foreground">
-                            {MONTH_LABELS[item.month - 1]}
-                          </span>
-                        ) : null}
-                        {item.description ? (
-                          <span className="truncate text-sm">
-                            {item.description}
-                          </span>
-                        ) : null}
-                      </div>
-                      {item.notes ? (
-                        <p className="mt-1 truncate text-xs text-muted-foreground">
-                          {item.notes}
-                        </p>
-                      ) : null}
-                    </div>
-
-                    <div className="flex items-center gap-4">
-                      <div className="text-right">
-                        <p className="text-base font-semibold tabular-nums">
-                          {MXN.format(item.amount)}
-                        </p>
-                        {item.amountWithoutTax !== null ||
-                        item.taxAmount !== null ? (
-                          <p className="text-[11px] text-muted-foreground tabular-nums">
-                            {item.amountWithoutTax !== null
-                              ? `Sin IVA ${MXN.format(item.amountWithoutTax)}`
-                              : null}
-                            {item.amountWithoutTax !== null &&
-                            item.taxAmount !== null
-                              ? " · "
-                              : null}
-                            {item.taxAmount !== null
-                              ? `IVA ${MXN.format(item.taxAmount)}`
-                              : null}
-                          </p>
-                        ) : null}
-                      </div>
-
-                      <DropdownMenu>
-                        <DropdownMenuTrigger
-                          render={<Button variant="ghost" size="icon" />}
+                        <span className="text-lg font-semibold tracking-tight">
+                          {group.entity.code}
+                        </span>
+                        <span
+                          className={cn(
+                            "rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider",
+                            theme.badge,
+                          )}
                         >
-                          <MoreHorizontal className="size-4" />
-                          <span className="sr-only">Acciones</span>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          {canUpdate ? (
-                            <DropdownMenuItem onClick={() => openEdit(item)}>
-                              <Pencil className="size-4" />
-                              Editar
-                            </DropdownMenuItem>
-                          ) : null}
-                          {canDelete ? (
-                            <DropdownMenuItem
-                              onClick={() => setDeleteTarget(item)}
-                            >
-                              <Trash2 className="size-4 text-destructive" />
-                              Eliminar
-                            </DropdownMenuItem>
-                          ) : null}
-                        </DropdownMenuContent>
-                      </DropdownMenu>
+                          {totalCount}{" "}
+                          {totalCount === 1 ? "movimiento" : "movimientos"}
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          — {group.entity.legalName}
+                        </span>
+                      </div>
                     </div>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className="text-right">
+                      <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                        Total
+                      </p>
+                      <p className="text-lg font-semibold tabular-nums">
+                        {mxn(group.total)}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {expanded ? (
+                  <PayrollSubsection
+                    items={[...group.operationalItems, ...group.fiscalItems]}
+                    showMonth={selectedMonth === null}
+                    canUpdate={canUpdate}
+                    canDelete={canDelete}
+                    onEdit={openEdit}
+                    onDelete={setDeleteTarget}
+                    onSelect={setDetailTarget}
+                  />
+                ) : null}
+              </div>
+            );
+          })
         )}
       </div>
 
@@ -549,10 +551,26 @@ export function NominasView({
         defaultYear={selectedYear}
         defaultMonth={selectedMonth ?? new Date().getUTCMonth() + 1}
         prefillEntityId={formPrefillEntity}
+        allowedTypes={allowedTypes}
         onClose={() => {
           setFormMode(null);
           setFormInitial(null);
           setFormPrefillEntity(null);
+        }}
+      />
+
+      <PayrollDetailDialog
+        item={detailTarget}
+        canUpdate={canUpdate}
+        canDelete={canDelete}
+        onClose={() => setDetailTarget(null)}
+        onEdit={(item) => {
+          setDetailTarget(null);
+          openEdit(item);
+        }}
+        onDelete={(item) => {
+          setDetailTarget(null);
+          setDeleteTarget(item);
         }}
       />
 
@@ -565,7 +583,7 @@ export function NominasView({
             <AlertDialogTitle>¿Eliminar pago de nómina?</AlertDialogTitle>
             <AlertDialogDescription>
               {deleteTarget
-                ? `Se borrará el pago de ${MXN.format(deleteTarget.amount)} de ${deleteTarget.legalEntity.code} (${MONTH_LABELS[deleteTarget.month - 1]} ${deleteTarget.year}). Esta acción no se puede deshacer.`
+                ? `Se borrará el pago de ${mxn(deleteTarget.amount)} de ${deleteTarget.legalEntity.code} (${MONTH_LABELS[deleteTarget.month - 1]} ${deleteTarget.year}). Esta acción no se puede deshacer.`
                 : ""}
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -585,21 +603,6 @@ export function NominasView({
         </AlertDialogContent>
       </AlertDialog>
     </>
-  );
-}
-
-function FilterField({
-  label,
-  children,
-}: {
-  label: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="flex flex-col gap-1">
-      <span className="text-xs uppercase text-muted-foreground">{label}</span>
-      {children}
-    </div>
   );
 }
 
@@ -642,6 +645,176 @@ function Stat({
   );
 }
 
+function PayrollSubsection({
+  items,
+  showMonth,
+  canUpdate,
+  canDelete,
+  onEdit,
+  onDelete,
+  onSelect,
+}: {
+  items: PayrollListItem[];
+  showMonth: boolean;
+  canUpdate: boolean;
+  canDelete: boolean;
+  onEdit: (item: PayrollListItem) => void;
+  onDelete: (item: PayrollListItem) => void;
+  onSelect: (item: PayrollListItem) => void;
+}) {
+  if (items.length === 0) return null;
+
+  const gridCols = showMonth
+    ? PAYROLL_GRID_COLS_WITH_MONTH
+    : PAYROLL_GRID_COLS;
+
+  return (
+    <div>
+      {/* Tabla en grid (template compartido para alinear columnas) */}
+      <div className="overflow-x-auto">
+      <div role="table" aria-label="Nóminas" className="min-w-[640px]">
+        <div
+          role="row"
+          className="grid items-center border-b bg-muted/30 text-[11px] font-medium uppercase text-muted-foreground"
+          style={{ gridTemplateColumns: gridCols }}
+        >
+          <div role="columnheader" className="px-3 py-2">
+            Tipo
+          </div>
+          {showMonth ? (
+            <div role="columnheader" className="px-3 py-2">
+              Mes
+            </div>
+          ) : null}
+          <div role="columnheader" className="px-3 py-2">
+            Concepto
+          </div>
+          <div role="columnheader" className="px-3 py-2 text-right">
+            Sin IVA
+          </div>
+          <div role="columnheader" className="px-3 py-2 text-right">
+            IVA
+          </div>
+          <div role="columnheader" className="px-3 py-2 text-right">
+            Total
+          </div>
+          <div role="columnheader" aria-label="Acciones" />
+        </div>
+        {items.map((item) => (
+          <PayrollRow
+            key={item.id}
+            item={item}
+            gridCols={gridCols}
+            showMonth={showMonth}
+            canUpdate={canUpdate}
+            canDelete={canDelete}
+            onEdit={onEdit}
+            onDelete={onDelete}
+            onSelect={onSelect}
+          />
+        ))}
+      </div>
+      </div>
+    </div>
+  );
+}
+
+function PayrollRow({
+  item,
+  gridCols,
+  showMonth,
+  canUpdate,
+  canDelete,
+  onEdit,
+  onDelete,
+  onSelect,
+}: {
+  item: PayrollListItem;
+  gridCols: string;
+  showMonth: boolean;
+  canUpdate: boolean;
+  canDelete: boolean;
+  onEdit: (item: PayrollListItem) => void;
+  onDelete: (item: PayrollListItem) => void;
+  onSelect: (item: PayrollListItem) => void;
+}) {
+  return (
+    <div
+      role="row"
+      onClick={() => onSelect(item)}
+      className="grid cursor-pointer items-center border-b text-sm transition-colors last:border-b-0 hover:bg-muted/50"
+      style={{ gridTemplateColumns: gridCols }}
+    >
+      <div role="cell" className="overflow-hidden px-3 py-2.5">
+        <Badge className={TYPE_TONES[item.type]}>
+          {payrollTypeLabel(item.type)}
+        </Badge>
+      </div>
+      {showMonth ? (
+        <div
+          role="cell"
+          className="px-3 py-2.5 text-xs text-muted-foreground"
+        >
+          {MONTH_LABELS[item.month - 1]}
+        </div>
+      ) : null}
+      <div role="cell" className="min-w-0 px-3 py-2.5">
+        <p className="line-clamp-2">{item.description ?? "—"}</p>
+        {item.notes ? (
+          <p className="truncate text-xs text-muted-foreground">
+            {item.notes}
+          </p>
+        ) : null}
+      </div>
+      <div
+        role="cell"
+        className="px-3 py-2.5 text-right tabular-nums text-muted-foreground"
+      >
+        {item.amountWithoutTax !== null
+          ? mxn(item.amountWithoutTax)
+          : "—"}
+      </div>
+      <div
+        role="cell"
+        className="px-3 py-2.5 text-right tabular-nums text-muted-foreground"
+      >
+        {item.taxAmount !== null ? mxn(item.taxAmount) : "—"}
+      </div>
+      <div
+        role="cell"
+        className="px-3 py-2.5 text-right font-semibold tabular-nums"
+      >
+        {mxn(item.amount)}
+      </div>
+      <div role="cell" className="flex justify-end pr-1">
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            render={<Button variant="ghost" size="icon" />}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <MoreHorizontal className="size-4" />
+            <span className="sr-only">Acciones</span>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            {canUpdate ? (
+              <DropdownMenuItem onClick={() => onEdit(item)}>
+                <Pencil className="size-4" />
+                Editar
+              </DropdownMenuItem>
+            ) : null}
+            {canDelete ? (
+              <DropdownMenuItem onClick={() => onDelete(item)}>
+                <Trash2 className="size-4 text-destructive" />
+                Eliminar
+              </DropdownMenuItem>
+            ) : null}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+    </div>
+  );
+}
+
 function EmptyState({
   periodLabel,
   canCreate,
@@ -665,7 +838,7 @@ function EmptyState({
       {canCreate ? (
         <Button onClick={onCreate}>
           <Plus className="size-4" />
-          Registrar pago
+          Registrar nómina
         </Button>
       ) : null}
     </div>

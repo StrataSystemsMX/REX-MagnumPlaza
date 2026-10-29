@@ -14,26 +14,18 @@ import {
   RegisterPaymentDialog,
   type RegisterPaymentDialogContext,
 } from "@/components/collections/RegisterPaymentDialog";
-import { capitalizeFirst, cn } from "@/lib/utils";
+import { capitalizeFirst, cn } from "@/shared/utils";
 import type {
   MonthlyUnitStatus,
   YearlyCell,
   YearlyCollections,
   YearlyPropertyGroup,
   YearlyUnitRow,
-} from "@/lib/services/payments-queries";
+} from "@/server/services/payments-queries";
+import { formatMXN } from "@/shared/format-currency";
 
-const MXN = new Intl.NumberFormat("es-MX", {
-  style: "currency",
-  currency: "MXN",
-  maximumFractionDigits: 2,
-});
-
-const MXN_INT = new Intl.NumberFormat("es-MX", {
-  style: "currency",
-  currency: "MXN",
-  maximumFractionDigits: 0,
-});
+// Alias local: mismo output que la const Intl que existía aquí (2 decimales).
+const mxn = (v: number | string) => formatMXN(v, 2);
 
 const PERIOD_FULL = new Intl.DateTimeFormat("es-MX", {
   month: "long",
@@ -42,6 +34,13 @@ const PERIOD_FULL = new Intl.DateTimeFormat("es-MX", {
 });
 
 const MONTHS_SHORT = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
+
+// Línea divisora gris superpuesta (pseudo-elemento absoluto, no afecta el
+// layout de la tabla) en el borde derecho de la columna del mes actual: separa
+// el mes en curso de los meses siguientes. Se aplica solo cuando el año
+// mostrado es el año en curso. `pointer-events-none` para no bloquear clicks.
+const CURRENT_MONTH_DIVIDER =
+  "relative after:pointer-events-none after:absolute after:inset-y-0 after:right-0 after:w-0.5 after:bg-slate-300 after:content-[''] dark:after:bg-slate-600";
 
 interface YearlyCollectionsMatrixProps {
   data: YearlyCollections;
@@ -99,6 +98,12 @@ export function YearlyCollectionsMatrix({
     return { expected, paid, balance: expected - paid };
   }, [visibleGroups]);
 
+  // Índice (0-11) de la columna del mes actual para dibujar el divisor; null si
+  // el año mostrado no es el año en curso (no hay "mes actual" que marcar).
+  const now = new Date();
+  const dividerMonthIndex =
+    data.year === now.getFullYear() ? now.getMonth() : null;
+
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -141,19 +146,19 @@ export function YearlyCollectionsMatrix({
           <div>
             <p className="text-xs text-muted-foreground">Esperado</p>
             <p className="font-semibold tabular-nums">
-              {MXN_INT.format(filteredTotals.expected)}
+              {formatMXN(filteredTotals.expected)}
             </p>
           </div>
           <div>
             <p className="text-xs text-muted-foreground">Cobrado</p>
             <p className="font-semibold tabular-nums text-green-700 dark:text-green-300">
-              {MXN_INT.format(filteredTotals.paid)}
+              {formatMXN(filteredTotals.paid)}
             </p>
           </div>
           <div>
             <p className="text-xs text-muted-foreground">Por cobrar</p>
             <p className="font-semibold tabular-nums text-destructive">
-              {MXN_INT.format(filteredTotals.balance)}
+              {formatMXN(filteredTotals.balance)}
             </p>
           </div>
         </div>
@@ -189,6 +194,7 @@ export function YearlyCollectionsMatrix({
               key={g.propertyId}
               group={g}
               onCellClick={setPaymentContext}
+              dividerMonthIndex={dividerMonthIndex}
             />
           ))
         )}
@@ -213,9 +219,8 @@ function Legend() {
   const items: Array<{ status: MonthlyUnitStatus; label: string }> = [
     { status: "PAID", label: "Pagado" },
     { status: "PARTIAL", label: "Parcial" },
-    { status: "ABONO", label: "Abono" },
-    { status: "PRE_PAGADO", label: "Pre-pagado" },
     { status: "SIN_PAGO", label: "Sin pago" },
+    { status: "FUTURO", label: "No vencido" },
     { status: "VACANT", label: "Vacío" },
   ];
   return (
@@ -256,9 +261,10 @@ function dotColorFor(propertyId: string): string {
 interface PropertyMatrixProps {
   group: YearlyPropertyGroup;
   onCellClick: (ctx: RegisterPaymentDialogContext) => void;
+  dividerMonthIndex: number | null;
 }
 
-function PropertyMatrix({ group, onCellClick }: PropertyMatrixProps) {
+function PropertyMatrix({ group, onCellClick, dividerMonthIndex }: PropertyMatrixProps) {
   const collected =
     Number(group.expectedTotal) > 0
       ? Math.round((Number(group.paidTotal) / Number(group.expectedTotal)) * 100)
@@ -278,13 +284,13 @@ function PropertyMatrix({ group, onCellClick }: PropertyMatrixProps) {
           <div>
             <span className="text-muted-foreground">Esperado: </span>
             <span className="font-semibold tabular-nums">
-              {MXN_INT.format(Number(group.expectedTotal))}
+              {formatMXN(Number(group.expectedTotal))}
             </span>
           </div>
           <div>
             <span className="text-muted-foreground">Cobrado: </span>
             <span className="font-semibold tabular-nums text-green-700 dark:text-green-300">
-              {MXN_INT.format(Number(group.paidTotal))}
+              {formatMXN(Number(group.paidTotal))}
             </span>
             <span className="ml-1 text-muted-foreground">({collected}%)</span>
           </div>
@@ -295,16 +301,22 @@ function PropertyMatrix({ group, onCellClick }: PropertyMatrixProps) {
         <table className="w-full border-collapse text-xs">
           <thead>
             <tr className="border-b bg-muted/10">
-              <th className="sticky left-0 z-10 bg-muted/10 px-3 py-2 text-left font-medium">
+              <th className="sticky left-0 z-10 bg-muted/10 px-3 py-2 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
                 Local
               </th>
-              <th className="px-3 py-2 text-left font-medium">Inquilino</th>
-              {MONTHS_SHORT.map((m) => (
-                <th key={m} className="px-1 py-2 text-center font-medium text-muted-foreground">
+              <th className="px-3 py-2 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Inquilino</th>
+              {MONTHS_SHORT.map((m, i) => (
+                <th
+                  key={m}
+                  className={cn(
+                    "px-1 py-2 text-center font-medium text-muted-foreground",
+                    i === dividerMonthIndex && CURRENT_MONTH_DIVIDER,
+                  )}
+                >
                   {m}
                 </th>
               ))}
-              <th className="px-3 py-2 text-right font-medium">Total</th>
+              <th className="px-3 py-2 text-right text-xs font-medium uppercase tracking-wide text-muted-foreground">Total</th>
             </tr>
           </thead>
           <tbody>
@@ -314,6 +326,7 @@ function PropertyMatrix({ group, onCellClick }: PropertyMatrixProps) {
                 row={u}
                 propertyName={group.propertyName}
                 onCellClick={onCellClick}
+                dividerMonthIndex={dividerMonthIndex}
               />
             ))}
           </tbody>
@@ -331,9 +344,10 @@ interface UnitMatrixRowProps {
   row: YearlyUnitRow;
   propertyName: string;
   onCellClick: (ctx: RegisterPaymentDialogContext) => void;
+  dividerMonthIndex: number | null;
 }
 
-function UnitMatrixRow({ row, propertyName, onCellClick }: UnitMatrixRowProps) {
+function UnitMatrixRow({ row, propertyName, onCellClick, dividerMonthIndex }: UnitMatrixRowProps) {
   return (
     <tr className="border-b last:border-b-0 hover:bg-muted/20">
       <td className="sticky left-0 z-10 bg-card px-3 py-1.5 font-mono text-xs">
@@ -347,7 +361,10 @@ function UnitMatrixRow({ row, propertyName, onCellClick }: UnitMatrixRowProps) {
         )}
       </td>
       {row.cells.map((cell, i) => (
-        <td key={i} className="px-1 py-1.5">
+        <td
+          key={i}
+          className={cn("px-1 py-1.5", i === dividerMonthIndex && CURRENT_MONTH_DIVIDER)}
+        >
           <MatrixCell
             cell={cell}
             unitCode={row.unitCode}
@@ -359,10 +376,10 @@ function UnitMatrixRow({ row, propertyName, onCellClick }: UnitMatrixRowProps) {
       ))}
       <td className="px-3 py-1.5 text-right text-xs tabular-nums">
         <div className="font-medium text-green-700 dark:text-green-300">
-          {MXN_INT.format(Number(row.paidTotal))}
+          {formatMXN(Number(row.paidTotal))}
         </div>
         <div className="text-muted-foreground">
-          de {MXN_INT.format(Number(row.expectedTotal))}
+          de {formatMXN(Number(row.expectedTotal))}
         </div>
       </td>
     </tr>
@@ -376,9 +393,8 @@ function UnitMatrixRow({ row, propertyName, onCellClick }: UnitMatrixRowProps) {
 const CELL_BG: Record<MonthlyUnitStatus, string> = {
   PAID: "bg-green-500 hover:bg-green-600 dark:bg-green-600 dark:hover:bg-green-500",
   PARTIAL: "bg-amber-400 hover:bg-amber-500 dark:bg-amber-500",
-  ABONO: "bg-amber-400 hover:bg-amber-500 dark:bg-amber-500",
-  PRE_PAGADO: "bg-blue-500 hover:bg-blue-600 dark:bg-blue-600",
   SIN_PAGO: "bg-red-500 hover:bg-red-600 dark:bg-red-600",
+  FUTURO: "bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600",
   WAIVED: "bg-blue-300 hover:bg-blue-400 dark:bg-blue-400 dark:hover:bg-blue-300",
   VACANT: "bg-muted hover:bg-muted-foreground/20",
 };
@@ -404,7 +420,6 @@ function MatrixCell({ cell, unitCode, propertyName, lesseeName, onClick }: Matri
         className={cn(
           "relative mx-auto h-6 w-6 rounded transition-colors",
           CELL_BG[cell.status],
-          cell.status === "PRE_PAGADO" && "ring-1 ring-blue-300",
           cell.overdueLevel === 3 && "ring-2 ring-red-700",
           hasWaiver && "ring-2 ring-black",
         )}
@@ -459,15 +474,13 @@ function buildTooltip(cell: YearlyCell, lesseeName: string | null): string {
   const head = lesseeName ? `${lesseeName} — ${period}` : period;
   switch (cell.status) {
     case "PAID":
-      return `${head}\nPagado ${MXN.format(Number(cell.amountPaid))}`;
+      return `${head}\nPagado ${mxn(Number(cell.amountPaid))}`;
     case "PARTIAL":
-      return `${head}\nParcial: ${MXN.format(Number(cell.amountPaid))} de ${MXN.format(Number(cell.amountDue))}`;
-    case "ABONO":
-      return `${head}\nAbono: ${MXN.format(Number(cell.amountPaid))} (renta ${MXN.format(Number(cell.amountDue))})`;
-    case "PRE_PAGADO":
-      return `${head}\nPre-pagado${cell.prePaidMonths ? ` (+${cell.prePaidMonths} meses)` : ""}`;
+      return `${head}\nParcial: ${mxn(Number(cell.amountPaid))} de ${mxn(Number(cell.amountDue))}`;
     case "SIN_PAGO":
-      return `${head}\nSin pago — ${MXN.format(Number(cell.amountDue))}${cell.overdueLevel ? ` · Escalón ${cell.overdueLevel}` : ""}`;
+      return `${head}\nSin pago — ${mxn(Number(cell.amountDue))}${cell.overdueLevel ? ` · Escalón ${cell.overdueLevel}` : ""}`;
+    case "FUTURO":
+      return `${head}\nNo vencido — ${mxn(Number(cell.amountDue))}`;
     default:
       return head;
   }
@@ -487,12 +500,12 @@ function MonthlyTotalsBar({
       <table className="w-full text-xs">
         <thead>
           <tr className="border-b bg-muted/30">
-            <th className="px-3 py-2 text-left font-medium">Mes</th>
-            <th className="px-3 py-2 text-right font-medium">Esperado</th>
-            <th className="px-3 py-2 text-right font-medium">Cobrado</th>
-            <th className="px-3 py-2 text-right font-medium">% Cobrado</th>
-            <th className="px-3 py-2 text-right font-medium">Pagados</th>
-            <th className="px-3 py-2 text-right font-medium">Sin pago</th>
+            <th className="px-3 py-2 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Mes</th>
+            <th className="px-3 py-2 text-right text-xs font-medium uppercase tracking-wide text-muted-foreground">Esperado</th>
+            <th className="px-3 py-2 text-right text-xs font-medium uppercase tracking-wide text-muted-foreground">Cobrado</th>
+            <th className="px-3 py-2 text-right text-xs font-medium uppercase tracking-wide text-muted-foreground">% Cobrado</th>
+            <th className="px-3 py-2 text-right text-xs font-medium uppercase tracking-wide text-muted-foreground">Pagados</th>
+            <th className="px-3 py-2 text-right text-xs font-medium uppercase tracking-wide text-muted-foreground">Sin pago</th>
           </tr>
         </thead>
         <tbody>
@@ -504,10 +517,10 @@ function MonthlyTotalsBar({
               <tr key={i} className="border-b last:border-b-0">
                 <td className="px-3 py-1.5">{capitalizeFirst(PERIOD_FULL.format(t.period))}</td>
                 <td className="px-3 py-1.5 text-right tabular-nums">
-                  {MXN_INT.format(expected)}
+                  {formatMXN(expected)}
                 </td>
                 <td className="px-3 py-1.5 text-right tabular-nums text-green-700 dark:text-green-300">
-                  {MXN_INT.format(paid)}
+                  {formatMXN(paid)}
                 </td>
                 <td className="px-3 py-1.5 text-right tabular-nums">{pct}%</td>
                 <td className="px-3 py-1.5 text-right tabular-nums">{t.paidCount}</td>

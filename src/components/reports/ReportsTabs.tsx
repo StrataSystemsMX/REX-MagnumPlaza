@@ -23,27 +23,19 @@ import {
   contractTypeLabel,
   propertyTypeLabel,
   unitStatusLabel,
-} from "@/lib/i18n/enums";
+} from "@/shared/i18n/enums";
 import type {
   ContractStatus,
   PropertyType,
   UnitStatus,
 } from "@/generated/prisma/enums";
-import type { ReportsBundle } from "@/lib/services/reports-queries";
-import { capitalizeFirst } from "@/lib/utils";
-
-const MXN = new Intl.NumberFormat("es-MX", {
-  style: "currency",
-  currency: "MXN",
-  maximumFractionDigits: 0,
-});
-
-const DATE = new Intl.DateTimeFormat("es-MX", {
-  day: "2-digit",
-  month: "short",
-  year: "numeric",
-  timeZone: "UTC",
-});
+import type { ReportsBundle } from "@/server/services/reports-queries";
+import {
+  ExpensesByCategoryChart,
+  OccupancyChart,
+} from "@/components/dashboard/charts";
+import { formatMXN, formatPercent } from "@/shared/format-currency";
+import { formatDate } from "@/shared/format-date";
 
 const MONTH_NAMES = [
   "Ene",
@@ -63,12 +55,12 @@ const MONTH_NAMES = [
 function money(v: string | number): string {
   const n = Number(v);
   if (!Number.isFinite(n) || n === 0) return "—";
-  return MXN.format(n);
+  return formatMXN(n);
 }
 
 function moneyZero(v: string | number): string {
   const n = Number(v);
-  return MXN.format(Number.isFinite(n) ? n : 0);
+  return formatMXN(Number.isFinite(n) ? n : 0);
 }
 
 interface ReportsTabsProps {
@@ -131,7 +123,7 @@ function AgingTab({ data }: { data: ReportsBundle["aging"] }) {
           <CardTitle>Adeudo por inquilino</CardTitle>
           <CardDescription>
             Distribución del saldo pendiente según antigüedad. Corte al{" "}
-            {capitalizeFirst(DATE.format(data.asOf))}.
+            {formatDate(data.asOf)}.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -258,6 +250,24 @@ function OccupancyTab({ data }: { data: ReportsBundle["occupancy"] }) {
           subValue="Estimado mensual de unidades disponibles"
         />
       </div>
+
+      {data.rows.length > 0 ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Ocupación por inmueble</CardTitle>
+            <CardDescription>% de unidades rentadas por inmueble.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <OccupancyChart
+              data={data.rows.map((r) => ({
+                propertyName: r.propertyName,
+                occupancyRate: r.occupancyRate,
+                totalUnits: r.totalUnits,
+              }))}
+            />
+          </CardContent>
+        </Card>
+      ) : null}
 
       <Card>
         <CardHeader>
@@ -472,6 +482,15 @@ function ExpensesByCategoryTab({
         {data.rows.length === 0 ? (
           <EmptyState message="Sin egresos registrados este año." />
         ) : (
+          <>
+          <div className="mb-6">
+            <ExpensesByCategoryChart
+              data={data.rows.map((r) => ({
+                categoryName: r.categoryName,
+                total: r.total,
+              }))}
+            />
+          </div>
           <Table>
             <TableHeader>
               <TableRow>
@@ -482,6 +501,7 @@ function ExpensesByCategoryTab({
                   </TableHead>
                 ))}
                 <TableHead className="text-right">Total</TableHead>
+                <TableHead className="text-right">% del total</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -495,6 +515,9 @@ function ExpensesByCategoryTab({
                   ))}
                   <TableCell className="text-right font-semibold tabular-nums">
                     {moneyZero(row.total)}
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums text-muted-foreground">
+                    {formatPercent(row.pct)}
                   </TableCell>
                 </TableRow>
               ))}
@@ -511,9 +534,28 @@ function ExpensesByCategoryTab({
                 <TableCell className="text-right font-bold tabular-nums">
                   {moneyZero(data.totals.total)}
                 </TableCell>
+                <TableCell className="text-right font-bold tabular-nums">
+                  {formatPercent(1)}
+                </TableCell>
+              </TableRow>
+              <TableRow className="bg-muted/10">
+                <TableCell className="text-xs text-muted-foreground">
+                  % del total
+                </TableCell>
+                {data.legalEntityCodes.map((code) => (
+                  <TableCell
+                    key={code}
+                    className="text-right text-xs tabular-nums text-muted-foreground"
+                  >
+                    {formatPercent(data.totals.pctByLegalEntity[code] ?? 0)}
+                  </TableCell>
+                ))}
+                <TableCell />
+                <TableCell />
               </TableRow>
             </TableBody>
           </Table>
+          </>
         )}
       </CardContent>
     </Card>
@@ -666,7 +708,7 @@ function ExpiringTable({
                 {c.propertyName} · {c.unitCode}
               </TableCell>
               <TableCell className="text-center">
-                {capitalizeFirst(DATE.format(c.endDate))}
+                {formatDate(c.endDate)}
                 <span className="ml-2 text-xs text-muted-foreground">
                   ({mode === "upcoming" ? `en ${days}d` : `hace ${days}d`})
                 </span>

@@ -6,7 +6,7 @@ import {
   ChevronUp,
   Landmark,
   Percent,
-  Target,
+  PlusCircle,
   Wallet,
 } from "lucide-react";
 import { useState } from "react";
@@ -20,23 +20,19 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { cn } from "@/lib/utils";
+import { cn } from "@/shared/utils";
 import type {
   InversionesKpis,
   InvestmentProjectListItem,
-} from "@/lib/services/inversiones-queries";
+} from "@/server/services/inversiones-queries";
+import type { LegalEntityOption } from "@/server/services/properties-queries";
+import { NewInvestmentProjectDialog } from "./NewInvestmentProjectDialog";
+import { RegisterInvestmentPaymentDialog } from "./RegisterInvestmentPaymentDialog";
+import { YearNavigator } from "@/components/shared/yearly-matrix/YearlyMatrixParts";
+import { formatMXN } from "@/shared/format-currency";
 
-const MXN = new Intl.NumberFormat("es-MX", {
-  style: "currency",
-  currency: "MXN",
-  maximumFractionDigits: 2,
-});
-
-const MXN_INT = new Intl.NumberFormat("es-MX", {
-  style: "currency",
-  currency: "MXN",
-  maximumFractionDigits: 0,
-});
+// Alias local: mismo output que la const Intl que existía aquí (2 decimales).
+const mxn = (v: number | string) => formatMXN(v, 2);
 
 const DATE_MED = new Intl.DateTimeFormat("es-MX", {
   day: "2-digit",
@@ -53,16 +49,38 @@ const ENTITY_THEME: Record<string, { dot: string; text: string; badge: string }>
 const DEFAULT_THEME = { dot: "bg-slate-500", text: "text-slate-700", badge: "bg-slate-100 text-slate-700" };
 function themeFor(code: string) { return ENTITY_THEME[code] ?? DEFAULT_THEME; }
 
+interface PropertyOption { id: string; name: string; }
+
 interface Props {
   kpis: InversionesKpis;
   projects: InvestmentProjectListItem[];
+  legalEntities: ReadonlyArray<LegalEntityOption>;
+  properties: ReadonlyArray<PropertyOption>;
+  canCreate: boolean;
+  year: number;
+  availableYears: ReadonlyArray<number>;
 }
 
-export function InversionesView({ kpis, projects }: Props) {
+export function InversionesView({
+  kpis,
+  projects,
+  legalEntities,
+  properties,
+  canCreate,
+  year,
+  availableYears,
+}: Props) {
   return (
     <div className="space-y-6">
       <KpiCards kpis={kpis} />
-      <ProjectsSection projects={projects} />
+      <ProjectsSection
+        projects={projects}
+        legalEntities={legalEntities}
+        properties={properties}
+        canCreate={canCreate}
+        year={year}
+        availableYears={availableYears}
+      />
     </div>
   );
 }
@@ -83,14 +101,14 @@ function KpiCards({ kpis }: { kpis: InversionesKpis }) {
       <KpiCard
         icon={<Landmark className="size-4" />}
         label="Inversión total"
-        value={MXN_INT.format(kpis.totalProjectBudget)}
+        value={formatMXN(kpis.totalProjectBudget)}
         sub="Suma contratada"
       />
       <KpiCard
         icon={<Wallet className="size-4" />}
         label="Ejecutado"
-        value={MXN_INT.format(kpis.totalProjectExecuted)}
-        sub={`${MXN_INT.format(remaining)} por entregar`}
+        value={formatMXN(kpis.totalProjectExecuted)}
+        sub={`${formatMXN(remaining)} por entregar`}
         valueClass="text-green-700 dark:text-green-300"
       />
       <KpiCard
@@ -161,15 +179,35 @@ const PROJECT_STATUS_VARIANT: Record<string, "default" | "secondary" | "destruct
   CANCELLED: "destructive",
 };
 
-function ProjectsSection({ projects }: { projects: InvestmentProjectListItem[] }) {
+function ProjectsSection({
+  projects,
+  legalEntities,
+  properties,
+  canCreate,
+  year,
+  availableYears,
+}: {
+  projects: InvestmentProjectListItem[];
+  legalEntities: ReadonlyArray<LegalEntityOption>;
+  properties: ReadonlyArray<PropertyOption>;
+  canCreate: boolean;
+  year: number;
+  availableYears: ReadonlyArray<number>;
+}) {
   return (
     <div className="space-y-3">
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <Building2 className="size-4 text-muted-foreground" />
         <h2 className="text-base font-semibold">Proyectos de Inversión</h2>
-        <Badge variant="secondary" className="ml-auto">
+        <Badge variant="secondary">
           {projects.length} proyecto{projects.length !== 1 ? "s" : ""}
         </Badge>
+        <div className="ml-auto flex items-center gap-3">
+          <YearNavigator year={year} availableYears={availableYears} />
+          {canCreate && (
+            <NewInvestmentProjectDialog legalEntities={legalEntities} properties={properties} />
+          )}
+        </div>
       </div>
 
       {projects.length === 0 ? (
@@ -178,15 +216,16 @@ function ProjectsSection({ projects }: { projects: InvestmentProjectListItem[] }
         </div>
       ) : (
         <div className="space-y-3">
-          {projects.map((p) => <ProjectCard key={p.id} project={p} />)}
+          {projects.map((p) => <ProjectCard key={p.id} project={p} canCreate={canCreate} />)}
         </div>
       )}
     </div>
   );
 }
 
-function ProjectCard({ project }: { project: InvestmentProjectListItem }) {
+function ProjectCard({ project, canCreate }: { project: InvestmentProjectListItem; canCreate: boolean }) {
   const [expanded, setExpanded] = useState(false);
+  const [paymentOpen, setPaymentOpen] = useState(false);
   const remaining = project.budgetAmount - project.executedAmount;
   const progress =
     project.budgetAmount > 0
@@ -219,6 +258,16 @@ function ProjectCard({ project }: { project: InvestmentProjectListItem }) {
             {project.property && (
               <span className="text-xs text-muted-foreground">· {project.property.name}</span>
             )}
+            {canCreate && project.status !== "COMPLETED" && project.status !== "CANCELLED" && (
+              <button
+                type="button"
+                onClick={() => setPaymentOpen(true)}
+                className="ml-auto flex items-center gap-1 rounded-md border px-2 py-1 text-xs font-medium hover:bg-muted"
+              >
+                <PlusCircle className="size-3" />
+                Registrar avance
+              </button>
+            )}
           </div>
           {project.description && (
             <p className="mt-1 text-sm text-muted-foreground">{project.description}</p>
@@ -228,12 +277,12 @@ function ProjectCard({ project }: { project: InvestmentProjectListItem }) {
           <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
             <div>
               <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Total contratado</div>
-              <div className="font-mono text-sm font-semibold">{MXN_INT.format(project.budgetAmount)}</div>
+              <div className="font-mono text-sm font-semibold">{formatMXN(project.budgetAmount)}</div>
             </div>
             <div>
               <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Entregado</div>
               <div className="font-mono text-sm font-semibold text-green-700 dark:text-green-300">
-                {MXN_INT.format(project.executedAmount)}
+                {formatMXN(project.executedAmount)}
               </div>
             </div>
             <div>
@@ -242,7 +291,7 @@ function ProjectCard({ project }: { project: InvestmentProjectListItem }) {
                 "font-mono text-sm font-semibold",
                 remaining < 0 ? "text-destructive" : "text-amber-700 dark:text-amber-300",
               )}>
-                {MXN_INT.format(remaining)}
+                {formatMXN(remaining)}
               </div>
             </div>
             <div className="col-span-2 sm:col-span-1">
@@ -259,6 +308,13 @@ function ProjectCard({ project }: { project: InvestmentProjectListItem }) {
           </div>
         </div>
       </div>
+
+      <RegisterInvestmentPaymentDialog
+        projectId={project.id}
+        projectName={project.name}
+        open={paymentOpen}
+        onClose={() => setPaymentOpen(false)}
+      />
 
       {/* Expanded: payments table */}
       {expanded && (
@@ -283,7 +339,7 @@ function ProjectCard({ project }: { project: InvestmentProjectListItem }) {
                     {DATE_MED.format(new Date(pay.paymentDate))}
                   </TableCell>
                   <TableCell className="text-right font-mono text-sm">
-                    {MXN.format(pay.amount)}
+                    {mxn(pay.amount)}
                   </TableCell>
                   <TableCell className="text-center">
                     <Badge variant={pay.isPaid ? "secondary" : "outline"} className="text-xs">

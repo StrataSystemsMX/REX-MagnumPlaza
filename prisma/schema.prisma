@@ -25,19 +25,23 @@ datasource db {
 
 model Tenant {
   id        String   @id @default(cuid())
-  slug      String   @unique // ej. "crt-plazas-magnum"
-  name      String // "Plazas Magnum"
+  slug      String   @unique @db.VarChar(50) // ej. "crt-plazas-magnum"
+  name      String   @db.VarChar(120) // "Plazas Magnum"
   plan      Plan     @default(STARTER)
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   // Configuración por cliente
-  brandPrimaryColor String? // hex sin #
-  brandLogoUrl      String?
-  contactPhone      String? // teléfono para CTA WhatsApp en links públicos de promotores (E.164 sin "+")
-  timezone          String  @default("America/Hermosillo")
-  currency          String  @default("MXN")
+  brandPrimaryColor String? @db.VarChar(6) // hex sin #
+  brandLogoUrl      String? @db.VarChar(512)
+  contactPhone      String? @db.VarChar(20) // teléfono para CTA WhatsApp en links públicos de promotores (E.164 sin "+")
+  // Contacto de la oficina (Eli): recibe COPIA de los avisos de cobranza
+  // (inquilino + oficina). officeWhatsapp en E.164 sin "+".
+  officeEmail       String? @db.VarChar(254)
+  officeWhatsapp    String? @db.VarChar(20)
+  timezone          String  @default("America/Hermosillo") @db.VarChar(50)
+  currency          String  @default("MXN") @db.VarChar(3)
 
   // Notificaciones automáticas (Prompt 9 — WhatsApp)
   // OVERDUE_3M nunca se envía automáticamente aunque este flag esté en true:
@@ -70,6 +74,9 @@ model Tenant {
   loanPayments         LoanPayment[]
   investmentProjects   InvestmentProject[]
   investmentPayments   InvestmentPayment[]
+  leads                Lead[]
+  documentTemplates    DocumentTemplate[]
+  cadastralPayments    CadastralPayment[]
 
   @@map("tenants")
 }
@@ -90,10 +97,10 @@ enum Plan {
 model User {
   id        String   @id @default(cuid())
   tenantId  String
-  email     String
-  name      String
-  phone     String?
-  clerkId   String?  @unique // Si usamos Clerk
+  email     String   @db.VarChar(254)
+  name      String   @db.VarChar(120)
+  phone     String?  @db.VarChar(20)
+  clerkId   String?  @unique @db.VarChar(50) // Si usamos Clerk
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -110,8 +117,8 @@ model User {
 model Role {
   id          String   @id @default(cuid())
   code        RoleCode @unique
-  name        String
-  description String?
+  name        String   @db.VarChar(80)
+  description String?  @db.VarChar(255)
 
   permissions RolePermission[]
   users       UserRole[]
@@ -123,6 +130,7 @@ enum RoleCode {
   MASTER // Juan Carlos. Ve todo, autoriza decisiones críticas.
   ADMIN // Eli, Leonardo. Operación completa con permisos granulares.
   ACCOUNTANT // Solo lectura financiera, exporta para despacho contable.
+  OWNER // Dueño: solo consulta (read-only) de vistas operativas, sin editar.
   PROMOTER // Externo, ve solo inmuebles asignados.
   LESSEE // Inquilino, ve su estado de cuenta (futuro).
 }
@@ -139,8 +147,8 @@ model UserRole {
 
 model Permission {
   id   String @id @default(cuid())
-  code String @unique // ej. "contract.delete", "finance.view", "tenant.export"
-  name String
+  code String @unique @db.VarChar(80) // ej. "contract.delete", "finance.view", "tenant.export"
+  name String @db.VarChar(120)
 
   roles RolePermission[]
 
@@ -168,10 +176,10 @@ model RolePermission {
 model LegalEntity {
   id         String   @id @default(cuid())
   tenantId   String
-  code       String // "CRT", "TSR", "QHS"
-  legalName  String // razón social completa
-  rfc        String?
-  address    String?
+  code       String   @db.VarChar(10) // "CRT", "TSR", "QHS"
+  legalName  String   @db.VarChar(200) // razón social completa
+  rfc        String?  @db.VarChar(13)
+  address    String?  @db.VarChar(255)
   isOperator Boolean  @default(false) // ¿es la que opera/factura?
   isActive   Boolean  @default(true)
   createdAt  DateTime @default(now())
@@ -208,15 +216,20 @@ model Property {
   tenantId        String
   ownerEntityId   String // dueña legal (puede ser QHS)
   managerEntityId String // quién factura/administra (puede ser CRT)
-  name            String // "Plaza Magnum Progreso"
+  name            String         @db.VarChar(50) // "Plaza Magnum Progreso"
   type            PropertyType
-  status          PropertyStatus @default(ACTIVO) // BLOQUEADO = no se renta (ej. casa del dueño)
-  address         String
-  cadastralKey    String? // clave catastral
+  status          PropertyStatus @default(DISPONIBLE) // EN_RENTA con contrato; BLOQUEADO = solo administrado
+  address         String         @db.VarChar(120)
+  cadastralKey    String?        @db.VarChar(30) // clave catastral
   latitude        Float?
   longitude       Float?
   totalArea       Float? // m²
   notes           String?
+  // Seguro del inmueble (opcional). insuranceExpiresAt alimenta las alertas de
+  // vencimiento (dashboard + vista del inmueble).
+  insuranceProvider     String?   @db.VarChar(80) // aseguradora
+  insurancePolicyNumber String?   @db.VarChar(50) // número de póliza
+  insuranceExpiresAt    DateTime? // vencimiento de la póliza
   isActive        Boolean      @default(true)
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
@@ -229,10 +242,12 @@ model Property {
   maintenances       Maintenance[]
   documents          Document[]
   investmentProjects InvestmentProject[]
+  budgetLines        BudgetLine[]
 
   @@index([tenantId])
   @@index([ownerEntityId])
   @@index([managerEntityId])
+  @@index([insuranceExpiresAt])
   @@map("properties")
 }
 
@@ -248,16 +263,17 @@ enum PropertyType {
 }
 
 enum PropertyStatus {
-  ACTIVO // estado normal: rentable / con contrato
-  BLOQUEADO // no se renta (ej. casa del dueño); UI oculta renta/inquilino
+  DISPONIBLE // genera egresos pero no ingresos (sin contrato activo)
+  EN_RENTA // genera ingresos y egresos (con contrato activo)
+  BLOQUEADO // solo administrado: no genera nada (ej. casa del dueño)
 }
 
 model Unit {
   id                String            @id @default(cuid())
   tenantId          String
   propertyId        String
-  code              String // "L1", "L2", "LP" (local principal), "OF", "E" (espectacular)
-  name              String? // alias amigable opcional
+  code              String            @db.VarChar(20) // "L1", "L2", "LP" (local principal), "OF", "E" (espectacular)
+  name              String?           @db.VarChar(50) // alias amigable opcional
   area              Float? // m²
   estimatedRent     Decimal?          @db.Decimal(12, 2)
   status            UnitStatus        @default(DISPONIBLE)
@@ -317,12 +333,12 @@ enum IncludedService {
 model Lessee {
   id               String               @id @default(cuid())
   tenantId         String
-  legalName        String // ej. "Farmacias Benavides S.A.B de C.V."
-  contactName      String? // ej. "Juan Pablo Martinez"
-  rfc              String?
-  email            String?
-  phone            String?
-  whatsapp         String? // canal preferido del cliente
+  legalName        String               @db.VarChar(100) // ej. "Farmacias Benavides S.A.B de C.V."
+  contactName      String?              @db.VarChar(50) // ej. "Juan Pablo Martinez"
+  rfc              String?              @db.VarChar(13)
+  email            String?              @db.VarChar(254)
+  phone            String?              @db.VarChar(15)
+  whatsapp         String?              @db.VarChar(15) // canal preferido del cliente
   preferredChannel CommunicationChannel @default(WHATSAPP)
   notes            String?
   isActive         Boolean              @default(true)
@@ -366,6 +382,10 @@ model Contract {
   paymentDay        Int      @default(1) // día del mes en que se cobra
   lateFeePercentage Decimal? @db.Decimal(5, 2) // interés moratorio
   autoRenew         Boolean  @default(false)
+  // Política de morosidad (protocolo de 2 meses): el aviso fuerte/desalojo a los
+  // 2 meses es el detonante automático. El recordatorio amable previo (1 mes) es
+  // OPCIONAL y se activa por contrato con este flag (default off).
+  friendlyReminderEnabled Boolean @default(false)
 
   // Casos especiales que detectamos en el Excel:
   paidInAdvance    Boolean   @default(false) // tipo Bluecell que pagó 6 meses
@@ -384,6 +404,7 @@ model Contract {
   documents  Document[]
 
   @@index([tenantId])
+  @@index([tenantId, status]) // listados/cron filtran ACTIVE por tenant
   @@index([unitId])
   @@index([lesseeId])
   @@index([endDate]) // para alertas de vencimiento
@@ -424,6 +445,10 @@ model Rent {
   amountDue     Decimal    @db.Decimal(12, 2)
   amountPaid    Decimal    @default(0) @db.Decimal(12, 2)
   amountWaived  Decimal    @default(0) @db.Decimal(12, 2) // monto condonado (parcial o total)
+  // Interés moratorio acumulado (snapshot). Lo recalcula el cron diario y cada
+  // pago vía recalcRentInTx, con calculateLateFee sobre el saldo de principal.
+  // Se suma al adeudo total (computeBalance) — política CRT: 5% mensual prorrateado.
+  lateFeeAccrued Decimal   @default(0) @db.Decimal(12, 2)
   status        RentStatus @default(PENDING)
   dueDate       DateTime
   notes         String?
@@ -437,6 +462,8 @@ model Rent {
 
   @@unique([contractId, period])
   @@index([tenantId])
+  @@index([tenantId, status]) // cron de morosidad y cobranza filtran por ambos
+  @@index([tenantId, period]) // matrices anuales/mensuales de cobranza
   @@index([dueDate])
   @@index([status])
   @@map("rents")
@@ -467,7 +494,7 @@ model Payment {
   amount      Decimal       @db.Decimal(12, 2)
   paymentDate DateTime
   method      PaymentMethod
-  reference   String? // número de transferencia, cheque, etc.
+  reference   String?       @db.VarChar(120) // número de transferencia, cheque, etc.
   notes       String?
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
@@ -534,10 +561,13 @@ enum GuaranteeStatus {
 model ExpenseCategory {
   id          String      @id @default(cuid())
   tenantId    String
-  code        String // "PREDIAL", "NOMINA_DIRECCION", "CFE", etc.
-  name        String
+  code        String      @db.VarChar(60) // "PREDIAL", "NOMINA_DIRECCION", "CFE", etc.
+  name        String      @db.VarChar(120)
   type        ExpenseType
   isRecurring Boolean     @default(false)
+  // Archivar un concepto lo oculta de la captura de egresos sin borrar el
+  // historial: los egresos ya registrados bajo él siguen apareciendo en reportes.
+  isActive    Boolean     @default(true)
   parentId    String? // permite jerarquía (Servicios > CFE)
 
   tenant      Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
@@ -573,9 +603,9 @@ model Expense {
   propertyId    String? // si aplica a una propiedad específica
   amount        Decimal        @db.Decimal(12, 2)
   expenseDate   DateTime
-  description   String
-  vendor        String?
-  invoiceNumber String? // folio fiscal / referencia
+  description   String         @db.VarChar(200)
+  vendor        String?        @db.VarChar(120)
+  invoiceNumber String?        @db.VarChar(80) // folio fiscal / referencia
   paymentMethod PaymentMethod?
   isPaid        Boolean        @default(true)
   // "Sin egreso": el usuario decide manualmente que en este mes no aplica
@@ -592,6 +622,8 @@ model Expense {
 
   @@index([tenantId])
   @@index([legalEntityId])
+  @@index([categoryId]) // joins/filtros de reportes por concepto
+  @@index([propertyId]) // reportes por inmueble
   @@index([expenseDate])
   @@map("expenses")
 }
@@ -622,11 +654,12 @@ model CadastralPayment {
   payerEntityId        String?
   // Tercero externo al tenant que paga (no es LegalEntity).
   // Ej: "JC" paga prediales de inmuebles administrados por CRT. Solo aplica cuando no es payerEntityId.
-  paidByThirdPartyName String?
+  paidByThirdPartyName String?   @db.VarChar(80)
   notes                String?
   createdAt            DateTime  @default(now())
   updatedAt            DateTime  @updatedAt
 
+  tenant      Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   property    Property     @relation(fields: [propertyId], references: [id], onDelete: Cascade)
   payerEntity LegalEntity? @relation("CadastralPayer", fields: [payerEntityId], references: [id])
   documents   Document[]
@@ -652,7 +685,7 @@ model Payroll {
   amount           Decimal     @db.Decimal(12, 2)
   amountWithoutTax Decimal?    @db.Decimal(12, 2)
   taxAmount        Decimal?    @db.Decimal(12, 2)
-  description      String?
+  description      String?     @db.VarChar(120)
   notes            String?
   createdAt        DateTime    @default(now())
   updatedAt        DateTime    @updatedAt
@@ -688,14 +721,14 @@ model Maintenance {
   type              MaintenanceType
   status            MaintenanceStatus         @default(PLANNED)
   responsibility    MaintenanceResponsibility @default(OWNER)
-  title             String
+  title             String                    @db.VarChar(80)
   description       String?
   scheduledDate     DateTime?
   completedDate     DateTime?
   cost              Decimal?                  @db.Decimal(12, 2)
-  vendor            String?
+  vendor            String?                   @db.VarChar(100)
   isRecurring       Boolean                   @default(false)
-  recurrencePattern String? // cron-like, ej. "yearly:may" para techos pre-lluvia
+  recurrencePattern String?                   @db.VarChar(100) // cron-like, ej. "yearly:may" para techos pre-lluvia
   notes             String?
   createdAt         DateTime                  @default(now())
   updatedAt         DateTime                  @updatedAt
@@ -742,10 +775,10 @@ enum MaintenanceResponsibility {
 model Promoter {
   id        String   @id @default(cuid())
   tenantId  String
-  fullName  String
-  phone     String
-  email     String?
-  agency    String? // "NEX", "Independiente", etc.
+  fullName  String   @db.VarChar(50)
+  phone     String   @db.VarChar(15)
+  email     String?  @db.VarChar(100)
+  agency    String?  @db.VarChar(60) // "NEX", "Independiente", etc.
   rating    Int? // 1-5, basado en éxito histórico
   notes     String?
   isActive  Boolean  @default(true)
@@ -764,7 +797,7 @@ model PromoterLink {
   tenantId       String
   promoterId     String
   unitId         String
-  publicToken    String   @unique // token único para URL pública
+  publicToken    String   @unique @db.VarChar(100) // token único para URL pública
   expiresAt      DateTime
   isActive       Boolean  @default(true)
   visitCount     Int      @default(0)
@@ -776,11 +809,62 @@ model PromoterLink {
   tenant   Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   promoter Promoter @relation(fields: [promoterId], references: [id])
   unit     Unit     @relation(fields: [unitId], references: [id])
+  leads    Lead[]
 
   @@index([tenantId])
   @@index([publicToken])
   @@index([expiresAt])
   @@map("promoter_links")
+}
+
+// Lead capturado desde la página pública de una vacante ("Me interesa").
+// Sin auth: lo crea un visitante anónimo; tenantId/promoterLinkId se derivan
+// del token de la liga en el servidor.
+enum LeadSource {
+  DIGITAL // liga compartida (WhatsApp, redes)
+  PHYSICAL // QR escaneado de una lona/impreso físico
+}
+
+model Lead {
+  id             String     @id @default(cuid())
+  tenantId       String
+  promoterLinkId String
+  name           String?    @db.VarChar(120)
+  email          String?    @db.VarChar(254)
+  phone          String?    @db.VarChar(20)
+  message        String?    @db.VarChar(500)
+  source         LeadSource @default(DIGITAL) // canal de origen del interesado
+  contacted      Boolean    @default(false) // el admin ya dio seguimiento
+  createdAt      DateTime   @default(now())
+
+  tenant       Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  promoterLink PromoterLink @relation(fields: [promoterLinkId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([promoterLinkId])
+  @@map("leads")
+}
+
+// Plantilla editable de aviso de mora por tenant y nivel ("1M"/"2M"/"3M").
+// Si existe una fila para (tenantId, level) se usa en vez del texto fijo de
+// template-config.ts (fallback). Los campos admiten tokens {lesseeName}, etc.
+model DocumentTemplate {
+  id        String   @id @default(cuid())
+  tenantId  String
+  level     String   @db.VarChar(4) // nivel de aviso: "1M" | "2M" | "3M"
+  title     String   @db.VarChar(120)
+  greeting  String   @db.VarChar(300)
+  body      String // largo; admite tokens
+  legalNote String // largo; admite tokens
+  closing   String   @db.VarChar(600)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, level])
+  @@index([tenantId])
+  @@map("document_templates")
 }
 
 // ============================================================================
@@ -813,8 +897,9 @@ model BudgetLine {
   id           String            @id @default(cuid())
   budgetId     String
   categoryId   String? // si es egreso
+  propertyId   String? // si es ingreso atado a un inmueble específico
   conceptType  BudgetConceptType
-  conceptLabel String // "PLAZA PROGRESO", "Predial CRT", etc.
+  conceptLabel String            @db.VarChar(120) // "PLAZA PROGRESO", "Predial CRT", etc.
   // 12 columnas para los 12 meses del año
   jan          Decimal           @default(0) @db.Decimal(12, 2)
   feb          Decimal           @default(0) @db.Decimal(12, 2)
@@ -831,8 +916,10 @@ model BudgetLine {
 
   budget   Budget           @relation(fields: [budgetId], references: [id], onDelete: Cascade)
   category ExpenseCategory? @relation(fields: [categoryId], references: [id])
+  property Property?        @relation(fields: [propertyId], references: [id])
 
   @@index([budgetId])
+  @@index([propertyId])
   @@map("budget_lines")
 }
 
@@ -857,9 +944,9 @@ model Document {
   id           String       @id @default(cuid())
   tenantId     String
   type         DocumentType
-  filename     String
-  url          String // R2/S3 URL
-  mimeType     String?
+  filename     String       @db.VarChar(255)
+  url          String       @db.VarChar(512) // R2/S3 URL
+  mimeType     String?      @db.VarChar(100)
   sizeBytes    Int?
   uploadedById String?
   notes        String?
@@ -913,16 +1000,16 @@ model NotificationLog {
   id            String                    @id @default(cuid())
   tenantId      String
   recipientType NotificationRecipientType
-  recipientId   String // lesseeId, promoterId, userId, etc.
+  recipientId   String                    @db.VarChar(50) // lesseeId, promoterId, userId, etc.
   channel       CommunicationChannel
-  templateCode  String? // "RENT_REMINDER_1M", "EVICTION_NOTICE"
-  subject       String?
+  templateCode  String?                   @db.VarChar(80) // "RENT_REMINDER_1M", "EVICTION_NOTICE"
+  subject       String?                   @db.VarChar(255)
   body          String                    @db.Text
   status        NotificationStatus        @default(PENDING)
   sentAt        DateTime?
   deliveredAt   DateTime?
-  failureReason String?
-  externalId    String? // ID de WhatsApp/email provider
+  failureReason String?                   @db.VarChar(500)
+  externalId    String?                   @db.VarChar(100) // ID de WhatsApp/email provider
   createdAt     DateTime                  @default(now())
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
@@ -938,6 +1025,7 @@ enum NotificationRecipientType {
   PROMOTER
   USER
   EXTERNAL
+  OFFICE // copia interna a la oficina (Eli)
 }
 
 enum NotificationStatus {
@@ -961,10 +1049,10 @@ model AuditLog {
   tenantId   String
   userId     String?
   action     AuditAction
-  entityType String // "Contract", "Payment", etc.
-  entityId   String
+  entityType String      @db.VarChar(50) // "Contract", "Payment", etc.
+  entityId   String      @db.VarChar(50)
   changes    Json? // diff de antes/después
-  ipAddress  String?
+  ipAddress  String?     @db.VarChar(45)
   userAgent  String?
   createdAt  DateTime    @default(now())
 
@@ -1002,8 +1090,8 @@ model Loan {
   id             String     @id @default(cuid())
   tenantId       String
   legalEntityId  String
-  name           String // "Crédito Toyota Hilux", "Crédito Ford Expedition"
-  lender         String? // banco/institución financiera
+  name           String     @db.VarChar(120) // "Crédito Toyota Hilux", "Crédito Ford Expedition"
+  lender         String?    @db.VarChar(120) // banco/institución financiera
   type           LoanType
   originalAmount Decimal    @db.Decimal(12, 2)
   currentBalance Decimal    @db.Decimal(12, 2)
@@ -1071,7 +1159,7 @@ model InvestmentProject {
   tenantId       String
   legalEntityId  String
   propertyId     String? // obra asociada a una propiedad específica
-  name           String // "Etapa Final Plaza Quiroga"
+  name           String                  @db.VarChar(120) // "Etapa Final Plaza Quiroga"
   description    String?
   budgetAmount   Decimal                 @db.Decimal(12, 2)
   executedAmount Decimal                 @default(0) @db.Decimal(12, 2)
@@ -1103,7 +1191,7 @@ model InvestmentPayment {
   id          String   @id @default(cuid())
   tenantId    String
   projectId   String
-  description String
+  description String   @db.VarChar(255)
   amount      Decimal  @db.Decimal(12, 2)
   paymentDate DateTime
   isPaid      Boolean  @default(false)

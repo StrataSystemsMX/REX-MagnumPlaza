@@ -1,12 +1,13 @@
 "use client";
 
-import { useTransition, useState, useEffect } from "react";
-import { Link2, Link2Off, UserCheck, UserX, Plus, Copy } from "lucide-react";
+import { useTransition, useState, useEffect, useMemo } from "react";
+import { Link2, Link2Off, UserCheck, UserX, Copy, QrCode, Printer, Search } from "lucide-react";
 import { toast } from "sonner";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm, type Resolver } from "react-hook-form";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -22,7 +23,6 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -42,22 +42,12 @@ import {
   actionCreatePromoterLink,
   actionDeactivatePromoterLink,
   actionTogglePromoterActive,
-} from "@/lib/services/promoters";
-import { createPromoterLinkSchema, type CreatePromoterLinkInput } from "@/lib/validators/promoter";
-import type { PromoterRow, UnitForLink } from "@/lib/services/promoters-queries";
-
-const DATE = new Intl.DateTimeFormat("es-MX", {
-  day: "2-digit",
-  month: "short",
-  year: "numeric",
-  timeZone: "UTC",
-});
-
-const MXN = new Intl.NumberFormat("es-MX", {
-  style: "currency",
-  currency: "MXN",
-  maximumFractionDigits: 0,
-});
+} from "@/server/services/promoters";
+import { createPromoterLinkSchema, type CreatePromoterLinkInput } from "@/shared/validators/promoter";
+import type { PromoterRow, UnitForLink } from "@/server/services/promoters-queries";
+import { unitWithProperty } from "@/shared/i18n/unit-label";
+import { formatMXN } from "@/shared/format-currency";
+import { formatDate } from "@/shared/format-date";
 
 function LinkDialog({ promoterId, units }: { promoterId: string; units: UnitForLink[] }) {
   const [open, setOpen] = useState(false);
@@ -71,11 +61,8 @@ function LinkDialog({ promoterId, units }: { promoterId: string; units: UnitForL
   // Para plazas mostramos el local específico; para inmuebles independientes
   // (oficina, casa, espectacular, etc.) basta con el nombre del inmueble.
   function formatUnitLabel(u: UnitForLink): string {
-    const base =
-      u.property.type === "PLAZA_COMERCIAL"
-        ? `${u.property.name} · ${u.code}`
-        : u.property.name;
-    return u.estimatedRent ? `${base} — ${MXN.format(u.estimatedRent)}` : base;
+    const base = unitWithProperty(u);
+    return u.estimatedRent ? `${base} — ${formatMXN(u.estimatedRent)}` : base;
   }
 
   const unitLabels = Object.fromEntries(units.map((u) => [u.id, formatUnitLabel(u)]));
@@ -130,7 +117,7 @@ function LinkDialog({ promoterId, units }: { promoterId: string; units: UnitForL
                 name="unitId"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Local o inmueble disponible</FormLabel>
+                    <FormLabel>Local o inmueble</FormLabel>
                     <Select onValueChange={field.onChange} value={field.value} items={unitLabels}>
                       <FormControl>
                         <SelectTrigger className="w-full">
@@ -202,6 +189,19 @@ interface Props {
 export function PromotersTable({ promoters, units, canManage }: Props) {
   const [isPending, startTransition] = useTransition();
   const [origin, setOrigin] = useState("");
+  const [search, setSearch] = useState("");
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return promoters;
+    return promoters.filter((p) => {
+      const linkFields = p.links
+        .map((l) => `${l.unit.code} ${l.unit.name ?? ""} ${l.unit.property.name}`)
+        .join(" ");
+      const hay = `${p.fullName} ${p.agency ?? ""} ${p.phone} ${linkFields}`;
+      return hay.toLowerCase().includes(q);
+    });
+  }, [promoters, search]);
 
   useEffect(() => {
     setOrigin(window.location.origin);
@@ -210,6 +210,24 @@ export function PromotersTable({ promoters, units, canManage }: Props) {
   function copyLink(url: string) {
     navigator.clipboard.writeText(url);
     toast.success("Link copiado.");
+  }
+
+  // QR imprimible de la liga pública. Import dinámico: mantiene la lib qrcode
+  // fuera del bundle inicial. La variante `physical` agrega ?src=fisica para
+  // atribuir los leads escaneados de una lona al canal físico.
+  async function downloadQr(url: string, token: string, physical = false) {
+    try {
+      const QRCode = (await import("qrcode")).default;
+      const target = physical ? `${url}?src=fisica` : url;
+      const dataUrl = await QRCode.toDataURL(target, { width: 512, margin: 2 });
+      const a = document.createElement("a");
+      a.href = dataUrl;
+      a.download = `qr-${physical ? "lona" : "liga"}-${token.slice(0, 8)}.png`;
+      a.click();
+      toast.success(physical ? "QR de lona descargado." : "QR descargado.");
+    } catch {
+      toast.error("No se pudo generar el QR.");
+    }
   }
 
   function toggleActive(promoterId: string, current: boolean) {
@@ -237,7 +255,7 @@ export function PromotersTable({ promoters, units, canManage }: Props) {
           <p className="text-muted-foreground">No hay promotores registrados.</p>
           {canManage && (
             <p className="text-sm text-muted-foreground">
-              Usa el botón &ldquo;Nuevo promotor&rdquo; para agregar el primero.
+              Usa el botón &ldquo;Registrar promotor&rdquo; para agregar el primero.
             </p>
           )}
         </CardContent>
@@ -246,8 +264,28 @@ export function PromotersTable({ promoters, units, canManage }: Props) {
   }
 
   return (
-    <div className={`space-y-4 ${isPending ? "opacity-60" : ""}`}>
-      {promoters.map((p) => (
+    <div className="space-y-4">
+      <div className="relative w-full sm:w-72">
+        <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+        <Input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Buscar promotor, local o inquilino..."
+          className="pl-8"
+        />
+      </div>
+
+      {filtered.length === 0 ? (
+        <Card>
+          <CardContent className="flex flex-col items-center justify-center gap-2 py-16 text-center">
+            <p className="text-muted-foreground">
+              No hay promotores que coincidan con &ldquo;{search}&rdquo;.
+            </p>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className={`space-y-4 ${isPending ? "opacity-60" : ""}`}>
+          {filtered.map((p) => (
         <Card key={p.id}>
           <CardHeader className="flex flex-row items-start justify-between gap-3 pb-3">
             <div>
@@ -295,6 +333,7 @@ export function PromotersTable({ promoters, units, canManage }: Props) {
                     <TableHead>Local</TableHead>
                     <TableHead>Vence</TableHead>
                     <TableHead className="text-right">Visitas</TableHead>
+                    <TableHead className="text-right">Interesados</TableHead>
                     <TableHead>¿Rentó?</TableHead>
                     {canManage && <TableHead />}
                   </TableRow>
@@ -307,7 +346,7 @@ export function PromotersTable({ promoters, units, canManage }: Props) {
                         <TableCell className="text-sm">
                           <div className="flex flex-col gap-1">
                             <span className="font-medium">
-                              {l.unit.property.name} · {l.unit.code}
+                              {unitWithProperty(l.unit)}
                             </span>
                             <div className="flex items-center gap-1.5">
                               <a
@@ -327,14 +366,46 @@ export function PromotersTable({ promoters, units, canManage }: Props) {
                               >
                                 <Copy className="size-3" />
                               </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="size-6 shrink-0 p-0 text-muted-foreground"
+                                onClick={() => downloadQr(url, l.publicToken)}
+                                title="Descargar QR (liga digital)"
+                              >
+                                <QrCode className="size-3" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="size-6 shrink-0 p-0 text-muted-foreground"
+                                onClick={() => downloadQr(url, l.publicToken, true)}
+                                title="Descargar QR para lona (mide escaneos físicos)"
+                              >
+                                <Printer className="size-3" />
+                              </Button>
                             </div>
                           </div>
                         </TableCell>
                         <TableCell className="text-sm text-muted-foreground">
-                          {DATE.format(l.expiresAt)}
+                          {formatDate(l.expiresAt)}
                         </TableCell>
                         <TableCell className="text-right tabular-nums text-sm">
                           {l.visitCount}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums text-sm">
+                          {l.leadCount > 0 ? (
+                            <span className="font-medium">
+                              {l.leadCount}
+                              {l.physicalLeadCount > 0 ? (
+                                <span className="ml-1 text-xs font-normal text-muted-foreground">
+                                  ({l.physicalLeadCount} lona)
+                                </span>
+                              ) : null}
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground">0</span>
+                          )}
                         </TableCell>
                         <TableCell>
                           {l.resultedInRent ? (
@@ -363,7 +434,9 @@ export function PromotersTable({ promoters, units, canManage }: Props) {
             </CardContent>
           )}
         </Card>
-      ))}
+          ))}
+        </div>
+      )}
     </div>
   );
 }

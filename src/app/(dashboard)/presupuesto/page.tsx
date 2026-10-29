@@ -1,21 +1,8 @@
 import { Target, TrendingUp, TrendingDown, BarChart2 } from "lucide-react";
-import { BudgetGrid } from "@/components/budgets/BudgetGrid";
-import { CreateBudgetForm } from "@/components/budgets/CreateBudgetForm";
+import { ConsolidatedBudgetView } from "@/components/budgets/ConsolidatedBudgetView";
 import { MetricCard } from "@/components/shared/metric-card";
-import { requireAuth } from "@/lib/auth/get-session";
-import { hasPermission } from "@/lib/auth/permissions";
-import {
-  getBudgetForYear,
-  getBudgetYears,
-  getLegalEntitiesForBudget,
-  MONTH_KEYS,
-} from "@/lib/services/budgets-queries";
-
-const MXN = new Intl.NumberFormat("es-MX", {
-  style: "currency",
-  currency: "MXN",
-  maximumFractionDigits: 0,
-});
+import { getRealConsolidatedBudgetForYear } from "@/server/services/budgets-queries";
+import { formatMXN, formatPercent } from "@/shared/format-currency";
 
 interface SearchParams { year?: string }
 
@@ -25,44 +12,34 @@ export default async function PresupuestoPage({
   searchParams: Promise<SearchParams>;
 }) {
   const sp = await searchParams;
-  const { dbUser } = await requireAuth();
 
   const currentYear = new Date().getUTCFullYear();
-  const years = await getBudgetYears();
-  const selectedYear = sp.year ? Number(sp.year) || currentYear : (years[0] ?? currentYear);
+  const selectedYear = sp.year ? Number(sp.year) || currentYear : currentYear;
+  const years = [currentYear, currentYear - 1, currentYear + 1];
 
-  const [budget, legalEntities, canManage] = await Promise.all([
-    getBudgetForYear(selectedYear),
-    getLegalEntitiesForBudget(),
-    hasPermission(dbUser.id, "expense.create"),
-  ]);
+  const consolidated = await getRealConsolidatedBudgetForYear(selectedYear);
 
-  // KPIs
-  const incomeLines = budget?.lines.filter((l) =>
-    ["INCOME_RENT", "INCOME_BILLBOARD", "INCOME_GUARANTEE", "INCOME_OTHER"].includes(l.conceptType),
-  ) ?? [];
-  const expenseLines = budget?.lines.filter((l) =>
-    ["EXPENSE", "TAX_STRATEGY", "DEBT_SERVICE"].includes(l.conceptType),
-  ) ?? [];
-
-  const totalIncome = incomeLines.reduce((acc, l) => acc + l.annual, 0);
-  const totalExpense = expenseLines.reduce((acc, l) => acc + l.annual, 0);
-  const netBudget = totalIncome - totalExpense;
-
+  const { totals } = consolidated;
   const currentMonthIdx = new Date().getUTCMonth();
-  const currentMonthKey = MONTH_KEYS[currentMonthIdx];
-  const monthlyTarget = currentMonthKey
-    ? incomeLines.reduce((acc, l) => acc + l.months[currentMonthKey], 0)
+  const monthlyTarget = totals.monthlyIncome[currentMonthIdx] ?? 0;
+  const marginPct = totals.annualIncome > 0
+    ? totals.annualOperatingProfit / totals.annualIncome
     : 0;
 
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-semibold tracking-tight">
-          Presupuesto {selectedYear}
-        </h1>
-        {years.length > 1 && (
-          <div className="flex gap-2">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">
+            Presupuesto {selectedYear}
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            Vista consolidada por razón social. Los datos se jalan de Ingresos,
+            Egresos, Nóminas y Préstamos.
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="flex gap-1">
             {years.map((y) => (
               <a
                 key={y}
@@ -77,49 +54,43 @@ export default async function PresupuestoPage({
               </a>
             ))}
           </div>
-        )}
+        </div>
       </div>
 
-      {budget ? (
-        <>
-          <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-            <MetricCard
-              label="Ingresos presupuestados"
-              value={<span className="tabular-nums">{MXN.format(totalIncome)}</span>}
-              subValue={`${incomeLines.length} concepto${incomeLines.length === 1 ? "" : "s"}`}
-              icon={TrendingUp}
-              color="success"
-            />
-            <MetricCard
-              label="Egresos presupuestados"
-              value={<span className="tabular-nums">{MXN.format(totalExpense)}</span>}
-              subValue={`${expenseLines.length} concepto${expenseLines.length === 1 ? "" : "s"}`}
-              icon={TrendingDown}
-            />
-            <MetricCard
-              label="Utilidad proyectada"
-              value={<span className="tabular-nums">{MXN.format(netBudget)}</span>}
-              subValue={
-                totalIncome > 0
-                  ? `Margen ${new Intl.NumberFormat("es-MX", { style: "percent", maximumFractionDigits: 1 }).format(netBudget / totalIncome)}`
-                  : "Sin ingresos"
-              }
-              icon={BarChart2}
-              color={netBudget >= 0 ? "success" : "danger"}
-            />
-            <MetricCard
-              label="Meta del mes actual"
-              value={<span className="tabular-nums">{MXN.format(monthlyTarget)}</span>}
-              subValue="en ingresos por renta"
-              icon={Target}
-            />
-          </div>
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <MetricCard
+          label="Ingresos registrados"
+          value={<span className="tabular-nums">{formatMXN(totals.annualIncome)}</span>}
+          subValue={`${consolidated.entities.length} razón${consolidated.entities.length === 1 ? "" : "es"} social${consolidated.entities.length === 1 ? "" : "es"}`}
+          icon={TrendingUp}
+          color="success"
+        />
+        <MetricCard
+          label="Egresos registrados"
+          value={<span className="tabular-nums">{formatMXN(totals.annualExpense)}</span>}
+          subValue="Operativos · sin reparto"
+          icon={TrendingDown}
+        />
+        <MetricCard
+          label="Utilidad operativa"
+          value={<span className="tabular-nums">{formatMXN(totals.annualOperatingProfit)}</span>}
+          subValue={
+            totals.annualIncome > 0
+              ? `Margen ${formatPercent(marginPct)}`
+              : "Sin ingresos"
+          }
+          icon={BarChart2}
+          color={totals.annualOperatingProfit >= 0 ? "success" : "danger"}
+        />
+        <MetricCard
+          label="Ingresos del mes actual"
+          value={<span className="tabular-nums">{formatMXN(monthlyTarget)}</span>}
+          subValue="en ingresos"
+          icon={Target}
+        />
+      </div>
 
-          <BudgetGrid budget={budget} canManage={canManage} />
-        </>
-      ) : (
-        <CreateBudgetForm legalEntities={legalEntities} currentYear={selectedYear} />
-      )}
+      <ConsolidatedBudgetView consolidated={consolidated} />
     </div>
   );
 }

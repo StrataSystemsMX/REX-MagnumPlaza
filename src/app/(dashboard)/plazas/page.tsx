@@ -5,14 +5,18 @@ import { InmueblesTable } from "@/components/properties/InmueblesTable";
 import { PlazasTable } from "@/components/properties/PlazasTable";
 import { PropertiesTabs } from "@/components/properties/PropertiesTabs";
 import { MetricCard } from "@/components/shared/metric-card";
+import { MobileProperties } from "@/components/mobile/MobileProperties";
+import { currentPeriodStart } from "@/shared/mobile/format";
+import { getIsMobileView } from "@/server/mobile/viewport";
+import { getMonthlyCollectionsByProperty } from "@/server/services/payments-queries";
 import {
   parsePropertiesViewMode,
   PROPERTIES_VIEW_COOKIE,
-} from "@/lib/properties-view-mode";
+} from "@/shared/properties-view-mode";
 import {
   getLegalEntities,
   getProperties,
-} from "@/lib/services/properties-queries";
+} from "@/server/services/properties-queries";
 
 export default async function PropiedadesPage({
   searchParams,
@@ -21,6 +25,12 @@ export default async function PropiedadesPage({
 }) {
   const { tab } = await searchParams;
   const activeTab = tab === "inmuebles" ? "inmuebles" : "plazas";
+
+  // Rex móvil: una sola lista con plazas e inmuebles individuales.
+  if (await getIsMobileView()) {
+    const monthly = await getMonthlyCollectionsByProperty(currentPeriodStart());
+    return <MobileProperties properties={monthly.properties} />;
+  }
 
   const cookieStore = await cookies();
   const initialView = parsePropertiesViewMode(

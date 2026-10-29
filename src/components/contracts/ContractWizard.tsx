@@ -18,17 +18,20 @@ import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { LesseeForm } from "@/components/forms/LesseeForm";
 import { EnumSelect } from "@/components/ui/enum-select";
-import { contractTypeLabel, unitStatusLabel } from "@/lib/i18n/enums";
-import { cn } from "@/lib/utils";
-import { actionCreateContract } from "@/lib/services/contracts";
-import { actionSearchLessees, type LesseeSearchResult } from "@/lib/services/lessees";
+import { contractTypeLabel, propertyTypeLabel, unitStatusLabel } from "@/shared/i18n/enums";
+import { isPlaza, unitCode } from "@/shared/i18n/unit-label";
+import { cn } from "@/shared/utils";
+import { actionCreateContract } from "@/server/services/contracts";
+import { actionSearchLessees, type LesseeSearchResult } from "@/server/services/lessees";
 import {
   createContractSchema,
   type CreateContractInput,
-} from "@/lib/validators/contract";
-import type { AvailableUnit } from "@/lib/services/contracts-queries";
+} from "@/shared/validators/contract";
+import type { AvailableUnit } from "@/server/services/contracts-queries";
+import { CharacterCount } from "@/components/ui/character-count";
 import type { ContractType } from "@/generated/prisma/enums";
-import { capitalizeFirst } from "@/lib/utils";
+import { capitalizeFirst } from "@/shared/utils";
+import { formatMXN } from "@/shared/format-currency";
 
 const CONTRACT_TYPES: ReadonlyArray<ContractType> = [
   "ARRENDAMIENTO",
@@ -36,12 +39,6 @@ const CONTRACT_TYPES: ReadonlyArray<ContractType> = [
   "ADMINISTRACION_INTERNA",
   "COMPRAVENTA",
 ];
-
-const MXN = new Intl.NumberFormat("es-MX", {
-  style: "currency",
-  currency: "MXN",
-  maximumFractionDigits: 2,
-});
 
 const DATE = new Intl.DateTimeFormat("es-MX", {
   year: "numeric",
@@ -57,6 +54,16 @@ interface ContractWizardProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onCreated: () => void;
+  /**
+   * Inquilino pre-seleccionado. Cuando se lanza el wizard desde el detalle de
+   * un inquilino ya conocemos quién es, así que arrancamos el paso 2 resuelto.
+   */
+  initialLessee?: { id: string; legalName: string };
+  /**
+   * Unidad pre-seleccionada. Cuando se lanza desde "Rentar" en cobranza ya
+   * sabemos qué local se va a contratar, así que arrancamos el paso 1 resuelto.
+   */
+  initialUnitId?: string | null;
 }
 
 interface DraftTerms {
@@ -68,6 +75,7 @@ interface DraftTerms {
   paymentDay: string;
   lateFeePercentage: string;
   autoRenew: boolean;
+  friendlyReminderEnabled: boolean;
   paidInAdvance: boolean;
   advancePaidUntil: string;
   notes: string;
@@ -82,6 +90,7 @@ const initialTerms: DraftTerms = {
   paymentDay: "1",
   lateFeePercentage: "5",
   autoRenew: false,
+  friendlyReminderEnabled: false,
   paidInAdvance: false,
   advancePaidUntil: "",
   notes: "",
@@ -92,11 +101,13 @@ export function ContractWizard({
   open,
   onOpenChange,
   onCreated,
+  initialLessee,
+  initialUnitId,
 }: ContractWizardProps) {
   const [step, setStep] = useState<Step>(1);
-  const [unitId, setUnitId] = useState<string | null>(null);
-  const [lesseeId, setLesseeId] = useState<string | null>(null);
-  const [lesseeLabel, setLesseeLabel] = useState<string>("");
+  const [unitId, setUnitId] = useState<string | null>(initialUnitId ?? null);
+  const [lesseeId, setLesseeId] = useState<string | null>(initialLessee?.id ?? null);
+  const [lesseeLabel, setLesseeLabel] = useState<string>(initialLessee?.legalName ?? "");
   const [search, setSearch] = useState("");
   const [results, setResults] = useState<LesseeSearchResult[]>([]);
   const [terms, setTerms] = useState<DraftTerms>(initialTerms);
@@ -111,9 +122,9 @@ export function ContractWizard({
 
   function reset() {
     setStep(1);
-    setUnitId(null);
-    setLesseeId(null);
-    setLesseeLabel("");
+    setUnitId(initialUnitId ?? null);
+    setLesseeId(initialLessee?.id ?? null);
+    setLesseeLabel(initialLessee?.legalName ?? "");
     setSearch("");
     setResults([]);
     setTerms(initialTerms);
@@ -179,6 +190,7 @@ export function ContractWizard({
       lateFeePercentage:
         terms.lateFeePercentage === "" ? undefined : Number(terms.lateFeePercentage),
       autoRenew: terms.autoRenew,
+      friendlyReminderEnabled: terms.friendlyReminderEnabled,
       paidInAdvance: terms.paidInAdvance,
       advancePaidUntil:
         terms.paidInAdvance && terms.advancePaidUntil ? terms.advancePaidUntil : undefined,
@@ -256,6 +268,7 @@ export function ContractWizard({
               onSearch={runSearch}
               onPick={pickLessee}
               onCreateNew={() => setCreateLesseeOpen(true)}
+              locked={Boolean(initialLessee)}
             />
           ) : null}
 
@@ -330,12 +343,6 @@ export function ContractWizard({
 // Steps
 // =============================================================================
 
-const MXN_RENT = new Intl.NumberFormat("es-MX", {
-  style: "currency",
-  currency: "MXN",
-  maximumFractionDigits: 0,
-});
-
 function StepUnit({
   units,
   value,
@@ -360,14 +367,17 @@ function StepUnit({
   // Agrupa unidades por inmueble para mostrarlas organizadas (la plaza es el
   // contexto, el local es lo que se contrata).
   const groups = useMemo(() => {
-    const map = new Map<string, { name: string; units: AvailableUnit[] }>();
+    const map = new Map<
+      string,
+      { name: string; type: AvailableUnit["property"]["type"]; units: AvailableUnit[] }
+    >();
     for (const u of filtered) {
       const key = u.property.id;
       const existing = map.get(key);
       if (existing) {
         existing.units.push(u);
       } else {
-        map.set(key, { name: u.property.name, units: [u] });
+        map.set(key, { name: u.property.name, type: u.property.type, units: [u] });
       }
     }
     return Array.from(map.values());
@@ -403,7 +413,9 @@ function StepUnit({
         {groups.map((g) => (
           <div key={g.name} className="space-y-1.5">
             <p className="px-1 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
-              {g.name}
+              {/* En plazas el encabezado es el nombre; en inmuebles individuales
+                  la card ya muestra el nombre, así que arriba va el tipo. */}
+              {isPlaza(g.type) ? g.name : propertyTypeLabel(g.type)}
             </p>
             <div className="space-y-1.5">
               {g.units.map((u) => {
@@ -422,17 +434,25 @@ function StepUnit({
                   >
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-base font-semibold leading-tight">
-                        {u.code}
-                        {u.name ? (
-                          <span className="font-normal text-foreground/80">
-                            {" "}
-                            — {u.name}
-                          </span>
-                        ) : null}
+                        {isPlaza(u.property.type) ? (
+                          <>
+                            {unitCode(u)}
+                            {u.name ? (
+                              <span className="font-normal text-foreground/80">
+                                {" "}
+                                — {u.name}
+                              </span>
+                            ) : null}
+                          </>
+                        ) : (
+                          // Un inmueble individual ES el espacio rentable: lo
+                          // identificamos por su nombre, no por un código "LP".
+                          u.property.name
+                        )}
                       </p>
                       <p className="mt-0.5 text-xs text-muted-foreground">
                         {u.estimatedRent !== null
-                          ? `Renta estimada: ${MXN_RENT.format(u.estimatedRent)}/mes`
+                          ? `Renta estimada: ${formatMXN(u.estimatedRent)}/mes`
                           : "Sin renta estimada"}
                       </p>
                     </div>
@@ -468,6 +488,7 @@ function StepLessee({
   onSearch,
   onPick,
   onCreateNew,
+  locked,
 }: {
   search: string;
   results: LesseeSearchResult[];
@@ -477,7 +498,22 @@ function StepLessee({
   onSearch: (q: string) => void;
   onPick: (l: LesseeSearchResult) => void;
   onCreateNew: () => void;
+  locked: boolean;
 }) {
+  // Cuando el wizard se lanza desde el detalle de un inquilino, éste viene fijo:
+  // no mostramos búsqueda ni lista, solo confirmamos quién es.
+  if (locked) {
+    return (
+      <div className="space-y-3">
+        <Label>Inquilino</Label>
+        <div className="rounded-md border bg-secondary/40 p-3 text-sm">
+          <span className="text-muted-foreground">Seleccionado: </span>
+          <span className="font-medium">{selectedLabel}</span>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-3">
       <div className="flex items-end gap-2">
@@ -623,6 +659,17 @@ function StepTerms({
           Auto-renovar al vencer
         </label>
       </div>
+      <div className="md:col-span-2 flex items-end gap-2">
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={terms.friendlyReminderEnabled}
+            onChange={(e) => set("friendlyReminderEnabled", e.target.checked)}
+          />
+          Enviar recordatorio amable al primer mes de atraso (el aviso fuerte a
+          los 2 meses se manda siempre)
+        </label>
+      </div>
 
       <div className="md:col-span-2 space-y-2 rounded-md border p-3">
         <label className="flex items-center gap-2 text-sm">
@@ -631,7 +678,7 @@ function StepTerms({
             checked={terms.paidInAdvance}
             onChange={(e) => set("paidInAdvance", e.target.checked)}
           />
-          Pago adelantado (estilo Bluecell)
+          Pago adelantado
         </label>
         {terms.paidInAdvance ? (
           <div className="space-y-1">
@@ -642,7 +689,9 @@ function StepTerms({
               onChange={(e) => set("advancePaidUntil", e.target.value)}
             />
             <p className="text-xs text-muted-foreground">
-              Las rentas con periodo ≤ esta fecha quedarán PAID al activar el contrato.
+              Todos los meses hasta esta fecha (incluido el mes seleccionado) se
+              marcarán como pagados al activar el contrato. Los meses posteriores
+              se cobran normalmente.
             </p>
           </div>
         ) : null}
@@ -653,8 +702,10 @@ function StepTerms({
         <Textarea
           rows={3}
           value={terms.notes}
+          maxLength={1000}
           onChange={(e) => set("notes", e.target.value)}
         />
+        <CharacterCount current={(terms.notes ?? "").length} max={1000} />
       </div>
     </div>
   );
@@ -673,10 +724,14 @@ function StepConfirm({
     <div className="space-y-3 rounded-md border bg-card p-4 text-sm">
       <Row label="Unidad">
         {unit ? (
-          <>
-            <span className="font-medium">{unit.property.name}</span> · {unit.code}
-            {unit.name ? ` (${unit.name})` : ""}
-          </>
+          isPlaza(unit.property.type) ? (
+            <>
+              <span className="font-medium">{unit.property.name}</span> · {unitCode(unit)}
+              {unit.name ? ` (${unit.name})` : ""}
+            </>
+          ) : (
+            <span className="font-medium">{unit.property.name}</span>
+          )
         ) : (
           "—"
         )}
@@ -688,10 +743,10 @@ function StepConfirm({
         {terms.endDate ? capitalizeFirst(DATE.format(new Date(terms.endDate))) : "—"}
       </Row>
       <Row label="Renta mensual">
-        {terms.monthlyAmount ? MXN.format(Number(terms.monthlyAmount)) : "—"}
+        {terms.monthlyAmount ? formatMXN(terms.monthlyAmount, 2) : "—"}
       </Row>
       <Row label="Fianza">
-        {terms.guaranteeAmount ? MXN.format(Number(terms.guaranteeAmount)) : "—"}
+        {terms.guaranteeAmount ? formatMXN(terms.guaranteeAmount, 2) : "—"}
       </Row>
       <Row label="Día de cobro">{terms.paymentDay}</Row>
       {terms.lateFeePercentage ? (

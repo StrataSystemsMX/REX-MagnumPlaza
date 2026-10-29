@@ -26,11 +26,11 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   actionCreatePayroll,
   actionUpdatePayroll,
-} from "@/lib/services/payroll";
+} from "@/server/services/payroll";
 import { PayrollType } from "@/generated/prisma/enums";
-import type { PayrollListItem } from "@/lib/services/payroll-queries";
-import type { LegalEntityOption } from "@/lib/services/properties-queries";
-import { payrollTypeLabel } from "@/lib/i18n/enums";
+import type { PayrollListItem } from "@/server/services/payroll-queries";
+import type { LegalEntityOption } from "@/server/services/properties-queries";
+import { payrollTypeLabel } from "@/shared/i18n/enums";
 
 const NOW_YEAR = new Date().getUTCFullYear();
 
@@ -49,7 +49,7 @@ const MONTHS = [
   { value: "12", label: "Diciembre" },
 ] as const;
 
-const TYPE_VALUES: ReadonlyArray<PayrollType> = [
+const ALL_TYPE_VALUES: ReadonlyArray<PayrollType> = [
   "DIRECT_PAYROLL",
   "ADMIN_SERVICE_INVOICE",
   "STRATEGY_NOMINA",
@@ -65,6 +65,8 @@ interface Props {
   defaultMonth: number;
   prefillEntityId: string | null;
   onClose: () => void;
+  /** Restringe los tipos seleccionables (ej. /nominas excluye STRATEGY_NOMINA). */
+  allowedTypes?: ReadonlyArray<PayrollType>;
 }
 
 export function PayrollFormDialog({
@@ -75,7 +77,9 @@ export function PayrollFormDialog({
   defaultMonth,
   prefillEntityId,
   onClose,
+  allowedTypes,
 }: Props) {
+  const TYPE_VALUES = allowedTypes && allowedTypes.length > 0 ? allowedTypes : ALL_TYPE_VALUES;
   const router = useRouter();
   const [pending, startTransition] = useTransition();
 
@@ -91,7 +95,7 @@ export function PayrollFormDialog({
 
   const typeItems = useMemo<Record<string, string>>(
     () => Object.fromEntries(TYPE_VALUES.map((t) => [t, payrollTypeLabel(t)])),
-    [],
+    [TYPE_VALUES],
   );
 
   const monthItems = useMemo<Record<string, string>>(
@@ -102,7 +106,7 @@ export function PayrollFormDialog({
   const [legalEntityId, setLegalEntityId] = useState<string>("");
   const [year, setYear] = useState<string>(String(defaultYear));
   const [month, setMonth] = useState<string>(String(defaultMonth));
-  const [type, setType] = useState<PayrollType>("DIRECT_PAYROLL");
+  const [type, setType] = useState<PayrollType>(TYPE_VALUES[0] ?? "DIRECT_PAYROLL");
   const [amount, setAmount] = useState<string>("");
   const [amountWithoutTax, setAmountWithoutTax] = useState<string>("");
   const [taxAmount, setTaxAmount] = useState<string>("");

@@ -27,13 +27,13 @@ import { PaymentMethod } from "@/generated/prisma/enums";
 import {
   actionCreateExpense,
   actionUpdateExpense,
-} from "@/lib/services/expenses";
+} from "@/server/services/expenses";
 import type {
   ExpenseCategoryOption,
   ExpenseListItem,
   ExpensePropertyOption,
-} from "@/lib/services/expenses-queries";
-import type { LegalEntityOption } from "@/lib/services/properties-queries";
+} from "@/server/services/expenses-queries";
+import type { LegalEntityOption } from "@/server/services/properties-queries";
 
 const PROPERTY_NONE = "__NONE__";
 const PAYMENT_METHOD_NONE = "__NONE__";

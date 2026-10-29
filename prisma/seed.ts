@@ -18,6 +18,7 @@ import {
   RoleCode,
   UnitStatus,
 } from "../src/generated/prisma/enums";
+import { PERMISSIONS, ROLE_PERMISSION_CODES } from "./permissions-data";
 
 const connectionString = process.env["DATABASE_URL"];
 if (!connectionString) {
@@ -60,6 +61,9 @@ interface UnitDef {
   lessee?: {
     legalName: string;
     contactName?: string;
+    rfc?: string;
+    email?: string;
+    phone?: string;
     notes?: string;
   };
   contractNotes?: string;
@@ -137,31 +141,71 @@ async function main(): Promise<void> {
   if (existing) {
     // Preservar fotos antes de borrar — se reinsertan después con los nuevos IDs
     const propPhotos = await prisma.document.findMany({
-      where: { tenantId: existing.id, type: DocumentType.PROPERTY_PHOTO, propertyId: { not: null } },
-      select: { url: true, filename: true, mimeType: true, sizeBytes: true, type: true, property: { select: { name: true } } },
+      where: {
+        tenantId: existing.id,
+        type: DocumentType.PROPERTY_PHOTO,
+        propertyId: { not: null },
+      },
+      select: {
+        url: true,
+        filename: true,
+        mimeType: true,
+        sizeBytes: true,
+        type: true,
+        property: { select: { name: true } },
+      },
     });
     for (const doc of propPhotos) {
       if (!doc.property) continue;
       const key = doc.property.name;
       if (!savedPropertyPhotos.has(key)) savedPropertyPhotos.set(key, []);
-      savedPropertyPhotos.get(key)!.push({ url: doc.url, filename: doc.filename, mimeType: doc.mimeType, sizeBytes: doc.sizeBytes, type: doc.type });
+      savedPropertyPhotos
+        .get(key)!
+        .push({
+          url: doc.url,
+          filename: doc.filename,
+          mimeType: doc.mimeType,
+          sizeBytes: doc.sizeBytes,
+          type: doc.type,
+        });
     }
 
-    const unitPhotoTypes = [DocumentType.UNIT_PHOTO, DocumentType.UNIT_PHOTO_INITIAL, DocumentType.UNIT_PHOTO_FINAL] as const;
+    const unitPhotoTypes = [
+      DocumentType.UNIT_PHOTO,
+      DocumentType.UNIT_PHOTO_INITIAL,
+      DocumentType.UNIT_PHOTO_FINAL,
+    ] as const;
     const unitPhotos = await prisma.document.findMany({
       where: { tenantId: existing.id, type: { in: [...unitPhotoTypes] }, unitId: { not: null } },
-      select: { url: true, filename: true, mimeType: true, sizeBytes: true, type: true, unit: { select: { code: true, property: { select: { name: true } } } } },
+      select: {
+        url: true,
+        filename: true,
+        mimeType: true,
+        sizeBytes: true,
+        type: true,
+        unit: { select: { code: true, property: { select: { name: true } } } },
+      },
     });
     for (const doc of unitPhotos) {
       if (!doc.unit) continue;
       const key = `${doc.unit.code}|${doc.unit.property.name}`;
       if (!savedUnitPhotos.has(key)) savedUnitPhotos.set(key, []);
-      savedUnitPhotos.get(key)!.push({ url: doc.url, filename: doc.filename, mimeType: doc.mimeType, sizeBytes: doc.sizeBytes, type: doc.type });
+      savedUnitPhotos
+        .get(key)!
+        .push({
+          url: doc.url,
+          filename: doc.filename,
+          mimeType: doc.mimeType,
+          sizeBytes: doc.sizeBytes,
+          type: doc.type,
+        });
     }
 
     const totalSaved = savedPropertyPhotos.size + savedUnitPhotos.size;
     if (totalSaved > 0)
-      console.log(`Preservando fotos de ${savedPropertyPhotos.size} inmuebles y ${savedUnitPhotos.size} unidades...`);
+      console.log(
+        `Preservando fotos de ${savedPropertyPhotos.size} inmuebles y ${savedUnitPhotos.size} unidades...`,
+      );
 
     console.log(`Borrando tenant existente "${TENANT_SLUG}" (${existing.id})...`);
     await prisma.tenant.delete({ where: { id: existing.id } });
@@ -185,6 +229,11 @@ async function main(): Promise<void> {
       description: "Solo lectura financiera, exporta para despacho contable.",
     },
     {
+      code: RoleCode.OWNER,
+      name: "Dueño",
+      description: "Solo consulta (read-only) de vistas operativas.",
+    },
+    {
       code: RoleCode.PROMOTER,
       name: "Promotor",
       description: "Externo, ve solo inmuebles asignados.",
@@ -201,6 +250,40 @@ async function main(): Promise<void> {
       update: { name: r.name, description: r.description },
       create: r,
     });
+  }
+
+  // -- 2b. Permisos globales + asignación por rol ---------------------------
+  // Sin esto, solo MASTER pasa hasPermission (MASTER hace bypass por definición)
+  // y cualquier ADMIN/ACCOUNTANT/OWNER falla toda acción protegida. El catálogo
+  // vive en prisma/permissions-data.ts (compartido con sync-permissions.ts,
+  // que lo aplica a una base existente sin re-correr este seed).
+  for (const p of PERMISSIONS) {
+    await prisma.permission.upsert({
+      where: { code: p.code },
+      update: { name: p.name },
+      create: p,
+    });
+  }
+
+  // MASTER hace bypass en hasPermission, así que no necesita filas.
+  for (const [roleCode, permCodes] of Object.entries(ROLE_PERMISSION_CODES)) {
+    const role = await prisma.role.findUnique({
+      where: { code: roleCode as RoleCode },
+    });
+    if (!role) continue;
+    for (const permCode of permCodes) {
+      const perm = await prisma.permission.findUnique({
+        where: { code: permCode },
+      });
+      if (!perm) continue;
+      await prisma.rolePermission.upsert({
+        where: {
+          roleId_permissionId: { roleId: role.id, permissionId: perm.id },
+        },
+        update: {},
+        create: { roleId: role.id, permissionId: perm.id },
+      });
+    }
   }
 
   // -- 3. Tenant ------------------------------------------------------------
@@ -275,39 +358,114 @@ async function main(): Promise<void> {
     isRecurring: boolean;
   }> = [
     // Nóminas
-    { code: "NOMINA_DIRECCION", name: "Nómina Dirección", type: ExpenseType.PAYROLL, isRecurring: true },
-    { code: "NOMINA_GENERAL", name: "Nómina General", type: ExpenseType.PAYROLL, isRecurring: true },
+    {
+      code: "NOMINA_DIRECCION",
+      name: "Nómina Dirección",
+      type: ExpenseType.PAYROLL,
+      isRecurring: true,
+    },
+    {
+      code: "NOMINA_GENERAL",
+      name: "Nómina General",
+      type: ExpenseType.PAYROLL,
+      isRecurring: true,
+    },
     { code: "HONORARIOS", name: "Honorarios", type: ExpenseType.PAYROLL, isRecurring: true },
     // Impuestos
     { code: "PREDIAL", name: "Predial", type: ExpenseType.TAX, isRecurring: true },
     { code: "SAT", name: "SAT", type: ExpenseType.TAX, isRecurring: true },
     { code: "IMSS_INFONAVIT", name: "IMSS / Infonavit", type: ExpenseType.TAX, isRecurring: true },
-    { code: "ISRTP", name: "ISR sobre Producto del Trabajo", type: ExpenseType.TAX, isRecurring: true },
+    {
+      code: "ISRTP",
+      name: "ISR sobre Producto del Trabajo",
+      type: ExpenseType.TAX,
+      isRecurring: true,
+    },
     { code: "PLACAS", name: "Placas vehiculares", type: ExpenseType.TAX, isRecurring: true },
     // Servicios
-    { code: "CFE", name: "Comisión Federal de Electricidad", type: ExpenseType.UTILITY, isRecurring: true },
+    {
+      code: "CFE",
+      name: "Comisión Federal de Electricidad",
+      type: ExpenseType.UTILITY,
+      isRecurring: true,
+    },
     { code: "AGUA", name: "Agua", type: ExpenseType.UTILITY, isRecurring: true },
     { code: "TELMEX", name: "Telmex", type: ExpenseType.UTILITY, isRecurring: true },
     { code: "TELCEL", name: "Telcel", type: ExpenseType.UTILITY, isRecurring: true },
-    { code: "SANISO_BASURA", name: "Saniso / Recolección de basura", type: ExpenseType.UTILITY, isRecurring: true },
+    {
+      code: "SANISO_BASURA",
+      name: "Saniso / Recolección de basura",
+      type: ExpenseType.UTILITY,
+      isRecurring: true,
+    },
     { code: "ALARMA", name: "Alarma / monitoreo", type: ExpenseType.UTILITY, isRecurring: true },
     // Mantenimiento
-    { code: "MANTENIMIENTO_PLAZAS", name: "Mantenimiento de plazas", type: ExpenseType.MAINTENANCE, isRecurring: false },
+    {
+      code: "MANTENIMIENTO_PLAZAS",
+      name: "Mantenimiento de plazas",
+      type: ExpenseType.MAINTENANCE,
+      isRecurring: false,
+    },
     { code: "LIMPIEZA", name: "Limpieza", type: ExpenseType.MAINTENANCE, isRecurring: true },
     // Vehículos
-    { code: "FINANCIAMIENTO_TOYOTA", name: "Financiamiento Toyota", type: ExpenseType.VEHICLE, isRecurring: true },
-    { code: "FINANCIAMIENTO_EXPEDITION", name: "Financiamiento Expedition", type: ExpenseType.VEHICLE, isRecurring: true },
-    { code: "FINANCIAMIENTO_BMW", name: "Financiamiento BMW", type: ExpenseType.VEHICLE, isRecurring: true },
+    {
+      code: "FINANCIAMIENTO_TOYOTA",
+      name: "Financiamiento Toyota",
+      type: ExpenseType.VEHICLE,
+      isRecurring: true,
+    },
+    {
+      code: "FINANCIAMIENTO_EXPEDITION",
+      name: "Financiamiento Expedition",
+      type: ExpenseType.VEHICLE,
+      isRecurring: true,
+    },
+    {
+      code: "FINANCIAMIENTO_BMW",
+      name: "Financiamiento BMW",
+      type: ExpenseType.VEHICLE,
+      isRecurring: true,
+    },
     { code: "GASOLINA", name: "Gasolina", type: ExpenseType.VEHICLE, isRecurring: true },
-    { code: "SERVICIOS_AUTOS", name: "Servicios de autos", type: ExpenseType.VEHICLE, isRecurring: false },
+    {
+      code: "SERVICIOS_AUTOS",
+      name: "Servicios de autos",
+      type: ExpenseType.VEHICLE,
+      isRecurring: false,
+    },
     // Otros
-    { code: "SEGUROS_INMUEBLES", name: "Seguros de inmuebles", type: ExpenseType.INSURANCE, isRecurring: true },
-    { code: "SEGURO_AUTOMOTRIZ", name: "Seguro automotriz", type: ExpenseType.INSURANCE, isRecurring: true },
-    { code: "COMISIONES_BANCARIAS", name: "Comisiones bancarias", type: ExpenseType.BANK_FEE, isRecurring: true },
+    {
+      code: "SEGUROS_INMUEBLES",
+      name: "Seguros de inmuebles",
+      type: ExpenseType.INSURANCE,
+      isRecurring: true,
+    },
+    {
+      code: "SEGURO_AUTOMOTRIZ",
+      name: "Seguro automotriz",
+      type: ExpenseType.INSURANCE,
+      isRecurring: true,
+    },
+    {
+      code: "COMISIONES_BANCARIAS",
+      name: "Comisiones bancarias",
+      type: ExpenseType.BANK_FEE,
+      isRecurring: true,
+    },
     { code: "PAPELERIA", name: "Papelería", type: ExpenseType.OFFICE, isRecurring: false },
-    { code: "CONSUMO_OFICINA", name: "Consumo de oficina (bebidas, botanas, limpieza)", type: ExpenseType.OFFICE, isRecurring: true },
+    {
+      code: "CONSUMO_OFICINA",
+      name: "Consumo de oficina (bebidas, botanas, limpieza)",
+      type: ExpenseType.OFFICE,
+      isRecurring: true,
+    },
     { code: "CAJA_CHICA", name: "Caja chica", type: ExpenseType.OFFICE, isRecurring: true },
-    { code: "LICENCIAS_PERMISOS", name: "Licencias, permisos y comisiones", type: ExpenseType.OTHER, isRecurring: false },
+    {
+      code: "LICENCIAS_PERMISOS",
+      name: "Licencias, permisos y comisiones",
+      type: ExpenseType.OTHER,
+      isRecurring: false,
+    },
     { code: "OTROS", name: "Otros", type: ExpenseType.OTHER, isRecurring: false },
   ];
   for (const c of categoriesData) {
@@ -325,28 +483,109 @@ async function main(): Promise<void> {
       owner: "CRT",
       manager: "CRT",
       units: [
-        { code: "L1", name: "Goyoma", monthlyAmount: 16524.52, lessee: { legalName: "Goyoma", contactName: "Juan Pablo Martinez" }, payments: PAID_Q1 },
-        { code: "L2", vacant: true, unitNotes: "Local desocupado, en proceso de búsqueda de inquilino." },
-        { code: "L3", name: "Comex", monthlyAmount: 10050.14, lessee: { legalName: "Servicios de Informática y Variables" }, payments: PAID_Q1 },
-        { code: "L4", name: "Tintorería", monthlyAmount: 9617.78, lessee: { legalName: "Tintorería", contactName: "Maria Hortencia Galaz Ruiz" }, payments: PAID_Q1 },
-        { code: "L5", name: "Automoney", monthlyAmount: 10771.8, lessee: { legalName: "Automoney", contactName: "Luis Edmundo Reina Sanchez" }, payments: PAID_Q1 },
-        { code: "L6", name: "Nikte", monthlyAmount: 9320.65, lessee: { legalName: "Nikte" }, payments: PAID_Q1 },
-        { code: "L7", name: "Master Cash", monthlyAmount: 8976.64, lessee: { legalName: "Master Cash" }, payments: PAID_Q1 },
+        {
+          code: "L1",
+          name: "Goyoma",
+          monthlyAmount: 17176.94,
+          lessee: {
+            legalName: "Goyoma S.A. de C.V.",
+            contactName: "Juan Pablo Martinez",
+            rfc: "GOY0401213V7",
+            email: "arrendamientogoyoma@hotmail.com",
+          },
+          payments: PAID_Q1,
+        },
+        {
+          code: "L2",
+          vacant: true,
+          unitNotes: "Local desocupado, en proceso de búsqueda de inquilino.",
+        },
+        {
+          code: "L3",
+          name: "Comex",
+          monthlyAmount: 10050.14,
+          lessee: {
+            legalName: "Servicios de Informática y Variables Empresas Integradora S.A. de C.V.",
+            rfc: "SIV960830D65",
+            email: "facturashermosillo@camposreyes.com",
+            phone: "2504367",
+          },
+          payments: PAID_Q1,
+        },
+        {
+          code: "L4",
+          name: "Tintorería",
+          monthlyAmount: 9617.78,
+          lessee: {
+            legalName: "Maria Hortencia Galaz Ruiz",
+            rfc: "RUDH431217GS9",
+            email: "facturastintoreria@gmail.com",
+            phone: "2120268",
+          },
+          payments: PAID_Q1,
+        },
+        {
+          code: "L5",
+          name: "Automoney",
+          monthlyAmount: 10771.79,
+          lessee: {
+            legalName: "Centro Cambiario Smart Exchange S.A. de C.V.",
+            contactName: "Guadalupe Noriega",
+            rfc: "CCS1907031B3",
+            email: "recursos.humanos@automoney.com.mx",
+            phone: "6621244697",
+          },
+          payments: PAID_Q1,
+        },
+        {
+          code: "L6",
+          name: "Nikte",
+          monthlyAmount: 9320.65,
+          lessee: {
+            legalName: "Jorge Alberto Islas Alonso",
+            rfc: "IAAJ781101TI0",
+            email: "jorgeislas85@hotmail.com",
+            phone: "5528978128",
+          },
+          payments: PAID_Q1,
+        },
+        {
+          code: "L7",
+          name: "Master Cash",
+          monthlyAmount: 8976.64,
+          lessee: {
+            legalName: "Master Cash",
+            contactName: "Juan Flores",
+            rfc: "MAS140312AU0",
+            email: "mastercashfacturas@hotmail.com",
+            phone: "6861198937",
+          },
+          payments: PAID_Q1,
+        },
         {
           code: "L8",
           name: "Bluecell",
-          monthlyAmount: 13500.0,
-          lessee: { legalName: "Bluecell" },
+          monthlyAmount: 13600.0,
+          lessee: {
+            legalName: "Jose Gustavo Bojorquez Garcia",
+            email: "jpcanez90@gmail.com",
+          },
           paidInAdvance: true,
           advancePaidUntil: utcDate(YEAR, 6, 31), // 2026-07-31
           paidThroughMonth: 6, // Ene..Jul PAID
-          contractNotes: "Cliente pagó adelantado en enero ($81,600 cubre Ene–Jul).",
+          contractNotes: "Cliente pagó 6 meses adelantados; renueva contrato en agosto 2026.",
         },
         {
           code: "L9",
           name: "Sushi",
-          monthlyAmount: 10530.85,
-          lessee: { legalName: "Sushi" },
+          monthlyAmount: 11188.25,
+          lessee: {
+            legalName: "Rodrigo Huerta",
+            contactName: "José Ramón Huerta",
+            rfc: "HUCJ690702FD4",
+            email: "Ro19980703@gmail.com",
+            phone: "6621637244",
+          },
           payments: {
             0: { kind: "paid" },
             1: { kind: "partial", amount: 6445 },
@@ -357,7 +596,12 @@ async function main(): Promise<void> {
           code: "E",
           name: "ID Gráficos (espectacular)",
           monthlyAmount: 2320.0,
-          lessee: { legalName: "ID Gráficos" },
+          lessee: {
+            legalName: "ID Gráficos Creativos",
+            contactName: "Diana Impsel",
+            email: "buzonid@gmail.com",
+            phone: "6621508269",
+          },
           payments: {
             0: { kind: "paid" },
             1: { kind: "paid" },
@@ -376,15 +620,37 @@ async function main(): Promise<void> {
       owner: "CRT",
       manager: "CRT",
       units: [
-        { code: "LP", name: "Benavides", monthlyAmount: 37156.17, lessee: { legalName: "Farmacias Benavides S.A.B de C.V." }, payments: PAID_Q1 },
-        { code: "L1", name: "Panadería", monthlyAmount: 10015.42, lessee: { legalName: "Panadería", contactName: "Vintila Mora Avalos" }, payments: PAID_Q1 },
+        {
+          code: "LP",
+          name: "Benavides",
+          monthlyAmount: 38649.85,
+          lessee: {
+            legalName: "Farmacias Benavides S.A.B de C.V.",
+            rfc: "FBE9110215Z3",
+            email: "esoto@benavides.com.mx",
+          },
+          payments: PAID_Q1,
+        },
+        {
+          code: "L1",
+          name: "Panadería",
+          monthlyAmount: 10644.02,
+          lessee: {
+            legalName: "Ana Laura Cordova Mora",
+            email: "panycoyotas@gmail.com",
+            phone: "6621142744",
+          },
+          payments: PAID_Q1,
+        },
         {
           code: "L2",
           name: "Telcel",
-          monthlyAmount: 8095.29,
+          monthlyAmount: 8600.82,
           lessee: {
-            legalName: "Telcel",
-            contactName: "Oscar Hugo Lopez Alvarado",
+            legalName: "Oscar Hugo Lopez Alvarado",
+            rfc: "LOAO7507146I2",
+            email: "oscarhugolopez1975@gmail.com",
+            phone: "6621825035",
             notes: "Cliente con historial de pagos atrasados.",
           },
           payments: {
@@ -393,27 +659,72 @@ async function main(): Promise<void> {
             2: { kind: "paid" },
           },
         },
-        { code: "L3", name: "Interior", monthlyAmount: 19755.96, lessee: { legalName: "Interior", contactName: "Denisse Emilia Peñaflor Castellanos" }, payments: PAID_Q1 },
+        {
+          code: "L3",
+          name: "Interior",
+          // Interio ocupa L3 + L4; se factura combinado (ver hoja RENTA MENSUAL).
+          monthlyAmount: 20802.71,
+          lessee: {
+            legalName: "Domingo Emilio Gomez Moreno",
+            rfc: "PECD8104056DA",
+            email: "facturas@anguloperfecto.mx",
+            phone: "6628480249",
+          },
+          payments: PAID_Q1,
+        },
         {
           code: "L4",
           name: "Interior 2",
           vacant: true,
-          unitNotes: "Próximo posible inquilino: Aaron Miranda Salido (en negociación).",
+          unitNotes: "Ocupado por Interio junto con L3 (facturación combinada en L3).",
         },
       ],
     },
 
-    // 3. Plaza Quiroga 1
+    // 3. Plaza Quiroga 1 (owner QHS, manager CRT — mismo esquema que Quiroga 2)
     {
       name: "Plaza Magnum Quiroga 1",
       type: PropertyType.PLAZA_COMERCIAL,
       address: "Perimetral Nte y Blvd Quiroga, Hermosillo",
-      owner: "CRT",
+      owner: "QHS",
       manager: "CRT",
       units: [
-        { code: "LP", name: "7-Eleven", monthlyAmount: 41088.27, lessee: { legalName: "7-Eleven Mexico S.A de C.V." }, payments: PAID_Q1 },
-        { code: "L.A", name: "Quesos Calza", monthlyAmount: 11048.32, lessee: { legalName: "Quesos Calza" }, payments: PAID_Q1 },
-        { code: "L.B", name: "GI Similares", monthlyAmount: 11536.0, lessee: { legalName: "GI Similares", contactName: "Carlos Alberto Bernal Marquez" }, payments: PAID_Q1 },
+        {
+          code: "LP",
+          name: "7-Eleven",
+          monthlyAmount: 45197.09,
+          lessee: {
+            legalName: "7-Eleven México S.A. de C.V.",
+            contactName: "Francelia Saldaña",
+            rfc: "SEM980701STA",
+            email: "francelia.saldana@7-eleven.com.mx",
+            phone: "8181580711",
+          },
+          payments: PAID_Q1,
+        },
+        {
+          code: "L.A",
+          name: "Quesos Calza",
+          monthlyAmount: 11512.34,
+          lessee: {
+            legalName: "Quesos Calza",
+            rfc: "QCA1508104W4",
+            email: "facturascalza@hotmail.com",
+          },
+          payments: PAID_Q1,
+        },
+        {
+          code: "L.B",
+          name: "GI Similares",
+          monthlyAmount: 11536.0,
+          lessee: {
+            legalName: "Carlos Alberto Bernal Marquez",
+            rfc: "BEMC8405194H8",
+            email: "carlosbernal.1905@gmail.com",
+            phone: "6621693030",
+          },
+          payments: PAID_Q1,
+        },
       ],
     },
 
@@ -426,13 +737,39 @@ async function main(): Promise<void> {
       owner: "QHS",
       manager: "CRT",
       units: [
-        { code: "L1", name: "Sucree", monthlyAmount: 13484.39, lessee: { legalName: "Sucree" }, payments: PAID_Q1 },
-        { code: "L2", name: "Dentista", monthlyAmount: 12210.72, lessee: { legalName: "Dentista" }, payments: PAID_Q1 },
+        {
+          code: "L1",
+          name: "Sucree",
+          monthlyAmount: 13484.39,
+          lessee: {
+            legalName: "Suqiee Repostería Fina S.A. de C.V.",
+            contactName: "Vinicio Velázquez",
+            rfc: "SRF080527U49",
+            email: "viniciovelazquez@suqiee.com.mx",
+            phone: "6623020930",
+          },
+          payments: PAID_Q1,
+        },
+        {
+          code: "L2",
+          name: "Dentista",
+          monthlyAmount: 12210.72,
+          lessee: {
+            legalName: "Dayana Duron Rivas",
+            rfc: "DURD8507255MA",
+            email: "dayaduron@hotmail.com",
+            phone: "5527376942",
+          },
+          payments: PAID_Q1,
+        },
         {
           code: "L3",
-          name: "Cristianos",
+          name: "Semilla Hermosillo",
           monthlyAmount: 12586.0,
-          lessee: { legalName: "Cristianos" },
+          lessee: {
+            legalName: "Semilla Hermosillo",
+            contactName: "José Payán",
+          },
           contractNotes: "Local desocupado Ene–Feb 2026; contrato firmado en marzo.",
           contractStartDate: utcDate(YEAR, 2, 1), // 2026-03-01
           contractEndDate: utcDate(YEAR, 5, 30), // 2026-06-30
@@ -440,22 +777,69 @@ async function main(): Promise<void> {
           rentEndMonth: 5, // hasta junio
           payments: { 2: { kind: "paid" } },
         },
-        { code: "L4", name: "Maki Sushi", monthlyAmount: 13020.83, lessee: { legalName: "Maki Sushi" }, payments: PAID_Q1 },
-        { code: "L5", name: "Frituras Kikin", monthlyAmount: 13600.0, lessee: { legalName: "Frituras Kikin" }, payments: PAID_Q1 },
-        { code: "L6", name: "Puro Pa' Delante", monthlyAmount: 13500.0, lessee: { legalName: "Puro Pa' Delante" }, payments: PAID_Q1 },
+        {
+          code: "L4",
+          name: "Maki Sushi",
+          monthlyAmount: 13020.83,
+          lessee: {
+            legalName: "Jesus Velazquez Garcia",
+            email: "Giarbu08@gmail.com",
+            phone: "6621157091",
+          },
+          payments: PAID_Q1,
+        },
+        {
+          code: "L5",
+          name: "Frituras Kikin",
+          monthlyAmount: 14449.46,
+          lessee: {
+            legalName: "Flor Maria Serna Montoya",
+            email: "Castrosernaf@gmail.com",
+          },
+          payments: PAID_Q1,
+        },
+        {
+          code: "L6",
+          name: "Puro Pa' Delante",
+          monthlyAmount: 13500.0,
+          lessee: { legalName: "Carlos Garibay" },
+          payments: PAID_Q1,
+        },
         {
           code: "L7",
           name: "Hitness",
           monthlyAmount: 13496.16,
-          lessee: { legalName: "Hitness", notes: "Cliente con historial de pagos atrasados." },
+          lessee: {
+            legalName: "Maria del Carmen Choix",
+            email: "maricarmen_19choix@hotmail.com",
+            notes: "Cliente con historial de pagos atrasados.",
+          },
           payments: {
             0: { kind: "paid" },
             1: { kind: "unpaid" },
             2: { kind: "paid" },
           },
         },
-        { code: "L8", name: "Armando Elotes", monthlyAmount: 13746.0, lessee: { legalName: "Armando Elotes" }, payments: PAID_Q1 },
-        { code: "E", name: "Medios Rubí (espectacular)", monthlyAmount: 2320.0, lessee: { legalName: "Medios Rubí" }, payments: PAID_Q1 },
+        {
+          code: "L8",
+          name: "Armando Elotes",
+          monthlyAmount: 14306.28,
+          lessee: {
+            legalName: "Luis Armando Chavez",
+            contactName: "Armando Morales",
+          },
+          payments: PAID_Q1,
+        },
+        {
+          code: "E",
+          name: "Medios Rubí (espectacular)",
+          monthlyAmount: 2320.0,
+          lessee: {
+            legalName: "Medios Ruvi",
+            email: "buzonmruvi@gmail.com",
+          },
+          payments: PAID_Q1,
+        },
       ],
     },
 
@@ -468,7 +852,19 @@ async function main(): Promise<void> {
       owner: "TSR",
       manager: "TSR",
       units: [
-        { code: "LP", name: "Banco Inbursa", monthlyAmount: 86028.56, lessee: { legalName: "Banco Inbursa" }, payments: PAID_Q1 },
+        {
+          code: "LP",
+          name: "Banco Inbursa",
+          monthlyAmount: 86028.56,
+          lessee: {
+            legalName: "Banco Inbursa S.A. Institución de Banca Múltiple",
+            contactName: "Patricia Wong",
+            rfc: "BII931004P61",
+            email: "pwongo@inbursa.com",
+            phone: "2890360",
+          },
+          payments: PAID_Q1,
+        },
       ],
     },
 
@@ -485,7 +881,13 @@ async function main(): Promise<void> {
           code: "OF",
           name: "La Chila",
           monthlyAmount: 30740.0,
-          lessee: { legalName: "La Chila" },
+          lessee: {
+            legalName: "Representaciones Bazuca",
+            contactName: "Rogelio Villaescusa",
+            rfc: "RBA130326AC0",
+            email: "rovilbe@outlook.com",
+            phone: "6622761757",
+          },
           payments: {
             0: { kind: "paid" },
             1: { kind: "partial", amount: 23000 },
@@ -504,7 +906,17 @@ async function main(): Promise<void> {
       owner: "TSR",
       manager: "TSR",
       units: [
-        { code: "LP", name: "Inquilino actual", monthlyAmount: 19350.12, lessee: { legalName: "Inquilino Capilla del Carmen" }, payments: PAID_Q1 },
+        {
+          code: "LP",
+          name: "Proyecta",
+          monthlyAmount: 19350.12,
+          lessee: {
+            legalName: "Proyecta",
+            contactName: "Roque Ibarra",
+            phone: "6628477858",
+          },
+          payments: PAID_Q1,
+        },
       ],
     },
 
@@ -520,7 +932,11 @@ async function main(): Promise<void> {
           code: "OF",
           name: "Oficina Piso 2",
           monthlyAmount: 12500.0,
-          lessee: { legalName: "Inquilino Oficina Elias" },
+          lessee: {
+            legalName: "Público General (Abogados)",
+            contactName: "Roque Ibarra",
+            phone: "6628477858",
+          },
           contractNotes: "Local desocupado Ene–Feb 2026; rentado desde marzo.",
           contractStartDate: utcDate(YEAR, 2, 1), // 2026-03-01
           rentStartMonth: 2,
@@ -538,7 +954,17 @@ async function main(): Promise<void> {
       owner: "TSR",
       manager: "TSR",
       units: [
-        { code: "OF", name: "Ferretería", monthlyAmount: 18560.0, lessee: { legalName: "Ferretería Nayarit" }, payments: PAID_Q1 },
+        {
+          code: "OF",
+          name: "Ferretería",
+          monthlyAmount: 18560.0,
+          lessee: {
+            legalName: "Jorge Eduardo Franco",
+            contactName: "Roque Ibarra",
+            phone: "6628477858",
+          },
+          payments: PAID_Q1,
+        },
       ],
     },
 
@@ -595,7 +1021,7 @@ async function main(): Promise<void> {
         managerEntityId: entities[p.manager].id,
         name: p.name,
         type: p.type,
-        status: p.status ?? PropertyStatus.ACTIVO,
+        status: p.status ?? PropertyStatus.EN_RENTA,
         address: p.address,
         cadastralKey: p.cadastralKey,
         notes: p.notes,
@@ -604,7 +1030,15 @@ async function main(): Promise<void> {
 
     for (const photo of savedPropertyPhotos.get(p.name) ?? []) {
       await prisma.document.create({
-        data: { tenantId: tenant.id, type: photo.type, filename: photo.filename, url: photo.url, mimeType: photo.mimeType, sizeBytes: photo.sizeBytes, propertyId: property.id },
+        data: {
+          tenantId: tenant.id,
+          type: photo.type,
+          filename: photo.filename,
+          url: photo.url,
+          mimeType: photo.mimeType,
+          sizeBytes: photo.sizeBytes,
+          propertyId: property.id,
+        },
       });
     }
 
@@ -624,7 +1058,15 @@ async function main(): Promise<void> {
 
       for (const photo of savedUnitPhotos.get(`${u.code}|${p.name}`) ?? []) {
         await prisma.document.create({
-          data: { tenantId: tenant.id, type: photo.type, filename: photo.filename, url: photo.url, mimeType: photo.mimeType, sizeBytes: photo.sizeBytes, unitId: unit.id },
+          data: {
+            tenantId: tenant.id,
+            type: photo.type,
+            filename: photo.filename,
+            url: photo.url,
+            mimeType: photo.mimeType,
+            sizeBytes: photo.sizeBytes,
+            unitId: unit.id,
+          },
         });
       }
 
@@ -637,6 +1079,9 @@ async function main(): Promise<void> {
           tenantId: tenant.id,
           legalName: u.lessee.legalName,
           contactName: u.lessee.contactName,
+          rfc: u.lessee.rfc,
+          email: u.lessee.email,
+          phone: u.lessee.phone,
           notes: u.lessee.notes,
         },
       });
@@ -686,8 +1131,7 @@ async function main(): Promise<void> {
       for (let m = startMonth; m <= endMonth; m++) {
         const period = utcDate(YEAR, m, 1);
         const dueDate = utcDate(YEAR, m, 1);
-        const isAdvancePaid =
-          u.paidThroughMonth !== undefined && m <= u.paidThroughMonth;
+        const isAdvancePaid = u.paidThroughMonth !== undefined && m <= u.paidThroughMonth;
         const isPast = dueDate < TODAY;
         const explicit = u.payments?.[m];
 
@@ -712,9 +1156,7 @@ async function main(): Promise<void> {
           rentStatus = RentStatus.PENDING;
           amountPaid = decimal(0);
         } else {
-          const days = Math.floor(
-            (TODAY.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24),
-          );
+          const days = Math.floor((TODAY.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24));
           if (days >= 90) rentStatus = RentStatus.OVERDUE_3M;
           else if (days >= 60) rentStatus = RentStatus.OVERDUE_2M;
           else if (days >= 30) rentStatus = RentStatus.OVERDUE_1M;
@@ -766,13 +1208,19 @@ async function main(): Promise<void> {
   };
 
   const predialesDef: PredialDef[] = [
-    { cadastralKey: "05436042", totalAmount: 10517.00, paidMonth: 5 }, // Plaza Olivares — JUNIO
-    { cadastralKey: "15924002", totalAmount: 17085.00, paidMonth: 4 }, // Plaza Progreso — MAYO
-    { cadastralKey: "03111002", totalAmount: 13969.00, paidMonth: 3 }, // Inbursa/Kino — pagado, sin mes en Excel; asumimos abril.
-    { cadastralKey: "01119010", totalAmount: 8977.00, paidMonth: 3 }, // La Chila/Garmendia — ABRIL
-    { cadastralKey: "51007086", totalAmount: 24881.00, paidMonth: 3 }, // Plaza Quiroga — pagado, sin mes; asumimos abril.
-    { cadastralKey: "01179002", totalAmount: 805.00, paidMonth: 3, payer: "TSR" }, // Capilla del Carmen (CLICK) — paga TSR
-    { cadastralKey: "01173002", totalAmount: 5277.00, paidMonth: 3, payer: "CRT", notes: "Dueña real: Cecilia." }, // Serdán — paga CRT
+    { cadastralKey: "05436042", totalAmount: 10517.0, paidMonth: 5 }, // Plaza Olivares — JUNIO
+    { cadastralKey: "15924002", totalAmount: 17085.0, paidMonth: 4 }, // Plaza Progreso — MAYO
+    { cadastralKey: "03111002", totalAmount: 13969.0, paidMonth: 3 }, // Inbursa/Kino — pagado, sin mes en Excel; asumimos abril.
+    { cadastralKey: "01119010", totalAmount: 8977.0, paidMonth: 3 }, // La Chila/Garmendia — ABRIL
+    { cadastralKey: "51007086", totalAmount: 24881.0, paidMonth: 3 }, // Plaza Quiroga — pagado, sin mes; asumimos abril.
+    { cadastralKey: "01179002", totalAmount: 805.0, paidMonth: 3, payer: "TSR" }, // Capilla del Carmen (CLICK) — paga TSR
+    {
+      cadastralKey: "01173002",
+      totalAmount: 5277.0,
+      paidMonth: 3,
+      payer: "CRT",
+      notes: "Dueña real: Cecilia.",
+    }, // Serdán — paga CRT
     { cadastralKey: "30204003", totalAmount: null, paidMonth: null, paidByThirdPartyName: "JC" }, // Maria Escriba — propiedad CRT, predial lo paga JC como tercero
   ];
 
@@ -809,8 +1257,18 @@ async function main(): Promise<void> {
   // Se genera un Expense por mes con monto > 0. Meses pasados (Ene-Abr) se
   // marcan como pagados; mayo en adelante quedan pendientes (presupuesto).
   type Months12 = readonly [
-    number, number, number, number, number, number,
-    number, number, number, number, number, number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
   ];
   type EgresoDef = {
     entity: EntityCode;
@@ -824,94 +1282,275 @@ async function main(): Promise<void> {
 
   const egresosDef: EgresoDef[] = [
     // ---------------- CRT ----------------
-    { entity: "CRT", category: "NOMINA_DIRECCION", description: "Nómina dirección",
-      amounts: [35000, 35000, 35000, 35000, 35000, 35000, 35000, 35000, 35000, 35000, 35000, 52500] },
-    { entity: "CRT", category: "NOMINA_GENERAL", description: "Nómina general",
-      amounts: [61106.90, 36478.51, 47122.50, 39528, 46878, 39528, 39528, 35000, 39528, 35000, 46878, 59292] },
-    { entity: "CRT", category: "PREDIAL", description: "Predial impuestos",
-      amounts: [0, 0, 0, 9745, 0, 0, 0, 0, 0, 0, 0, 0] },
-    { entity: "CRT", category: "PLACAS", description: "Placas, licencias y otros",
-      amounts: [3498, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] },
-    { entity: "CRT", category: "SAT", description: "SAT impuestos",
-      amounts: [23305, 28907, 18879, 24000, 24000, 24000, 24000, 24000, 24000, 24000, 24000, 24000] },
-    { entity: "CRT", category: "IMSS_INFONAVIT", description: "IMSS / Infonavit",
-      amounts: [30622.81, 7073.99, 31846, 6500, 30500, 6500, 30500, 6500, 30500, 6500, 30500, 6500] },
-    { entity: "CRT", category: "ISRTP", description: "ISR sobre Producto del Trabajo (3%)",
-      amounts: [1670, 800, 1012, 1200, 1200, 1200, 1200, 1200, 1200, 1200, 1200, 1200] },
-    { entity: "CRT", category: "HONORARIOS", description: "Honorarios",
-      amounts: [5552.16, 5270.34, 5252.94, 5316, 5316, 5316, 5316, 5316, 5316, 5316, 5316, 5316] },
-    { entity: "CRT", category: "COMISIONES_BANCARIAS", description: "Comisiones bancarias",
-      amounts: [388, 388, 395.56, 405, 405, 405, 405, 405, 405, 405, 405, 405] },
-    { entity: "CRT", category: "MANTENIMIENTO_PLAZAS", description: "Mantenimiento plazas / limpieza / Casa JC",
-      amounts: [47558.02, 25931.31, 7756.30, 10000, 10000, 10000, 10000, 10000, 10000, 10000, 10000, 10000] },
-    { entity: "CRT", category: "PAPELERIA", description: "Consumo oficina / papelería",
-      amounts: [630, 1495, 2090, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000] },
-    { entity: "CRT", category: "SERVICIOS_AUTOS", description: "Servicios, lavado y GPS Saveiro",
-      amounts: [786, 8670.36, 0, 1500, 1500, 1500, 1500, 1500, 1500, 1500, 1500, 1500] },
-    { entity: "CRT", category: "FINANCIAMIENTO_TOYOTA", description: "Financiamiento Toyota (CRT)",
-      amounts: same(6644.10) },
-    { entity: "CRT", category: "FINANCIAMIENTO_EXPEDITION", description: "Financiamiento Expedition (CRT)",
-      amounts: same(25711.92) },
-    { entity: "CRT", category: "SEGUROS_INMUEBLES", description: "Seguros inmuebles / Saveiro",
-      amounts: [7134.48, 0, 10345.29, 3939, 0, 0, 5345, 0, 6063, 4425, 0, 0] },
-    { entity: "CRT", category: "ALARMA", description: "Alarma — Serdán / Bodega",
-      amounts: same(960) },
-    { entity: "CRT", category: "SANISO_BASURA", description: "Saniso — recolección basura",
-      amounts: [5930.36, 6133.69, 6133.69, 5930.36, 5930.36, 5930.36, 5930.36, 5930.36, 5930.36, 5930.36, 5930.36, 5930.36] },
-    { entity: "CRT", category: "CFE", description: "CFE — Serdán / Progreso / Bodega / Quiroga",
-      amounts: [5448, 0, 4375, 8500, 8500, 8500, 8500, 8500, 8500, 8500, 8500, 8500] },
-    { entity: "CRT", category: "AGUA", description: "Agua — Serdán / Bodega",
-      amounts: [630, 3721, 5781, 5000, 5000, 5000, 5000, 5000, 5000, 5000, 5000, 5000] },
-    { entity: "CRT", category: "TELMEX", description: "Telmex — bar / oficinas",
-      amounts: [2496, 4104, 2097, 2197, 2197, 2197, 2197, 2197, 2197, 2197, 2197, 2197] },
-    { entity: "CRT", category: "TELCEL", description: "Telcel 2 líneas",
-      amounts: [399, 399, 712, 399, 399, 399, 399, 399, 399, 399, 399, 399] },
-    { entity: "CRT", category: "GASOLINA", description: "Gasolina Casa JC",
-      amounts: [7900, 9889.46, 13500, 6000, 6000, 6000, 6000, 6000, 6000, 6000, 6000, 6000] },
-    { entity: "CRT", category: "OTROS", description: "Otros y comisiones",
-      amounts: [12661, 12886.64, 14200, 5000, 5000, 5000, 5000, 5000, 5000, 5000, 5000, 5000] },
+    {
+      entity: "CRT",
+      category: "NOMINA_DIRECCION",
+      description: "Nómina dirección",
+      amounts: [35000, 35000, 35000, 35000, 35000, 35000, 35000, 35000, 35000, 35000, 35000, 52500],
+    },
+    {
+      entity: "CRT",
+      category: "NOMINA_GENERAL",
+      description: "Nómina general",
+      amounts: [
+        61106.9, 36478.51, 47122.5, 39528, 46878, 39528, 39528, 35000, 39528, 35000, 46878, 59292,
+      ],
+    },
+    {
+      entity: "CRT",
+      category: "PREDIAL",
+      description: "Predial impuestos",
+      amounts: [0, 0, 0, 9745, 0, 0, 0, 0, 0, 0, 0, 0],
+    },
+    {
+      entity: "CRT",
+      category: "PLACAS",
+      description: "Placas, licencias y otros",
+      amounts: [3498, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    },
+    {
+      entity: "CRT",
+      category: "SAT",
+      description: "SAT impuestos",
+      amounts: [23305, 28907, 18879, 24000, 24000, 24000, 24000, 24000, 24000, 24000, 24000, 24000],
+    },
+    {
+      entity: "CRT",
+      category: "IMSS_INFONAVIT",
+      description: "IMSS / Infonavit",
+      amounts: [30622.81, 7073.99, 31846, 6500, 30500, 6500, 30500, 6500, 30500, 6500, 30500, 6500],
+    },
+    {
+      entity: "CRT",
+      category: "ISRTP",
+      description: "ISR sobre Producto del Trabajo (3%)",
+      amounts: [1670, 800, 1012, 1200, 1200, 1200, 1200, 1200, 1200, 1200, 1200, 1200],
+    },
+    {
+      entity: "CRT",
+      category: "HONORARIOS",
+      description: "Honorarios",
+      amounts: [5552.16, 5270.34, 5252.94, 5316, 5316, 5316, 5316, 5316, 5316, 5316, 5316, 5316],
+    },
+    {
+      entity: "CRT",
+      category: "COMISIONES_BANCARIAS",
+      description: "Comisiones bancarias",
+      amounts: [388, 388, 395.56, 405, 405, 405, 405, 405, 405, 405, 405, 405],
+    },
+    {
+      entity: "CRT",
+      category: "MANTENIMIENTO_PLAZAS",
+      description: "Mantenimiento plazas / limpieza / Casa JC",
+      amounts: [
+        47558.02, 25931.31, 7756.3, 10000, 10000, 10000, 10000, 10000, 10000, 10000, 10000, 10000,
+      ],
+    },
+    {
+      entity: "CRT",
+      category: "PAPELERIA",
+      description: "Consumo oficina / papelería",
+      amounts: [630, 1495, 2090, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000],
+    },
+    {
+      entity: "CRT",
+      category: "SERVICIOS_AUTOS",
+      description: "Servicios, lavado y GPS Saveiro",
+      amounts: [786, 8670.36, 0, 1500, 1500, 1500, 1500, 1500, 1500, 1500, 1500, 1500],
+    },
+    {
+      entity: "CRT",
+      category: "FINANCIAMIENTO_TOYOTA",
+      description: "Financiamiento Toyota (CRT)",
+      amounts: same(6644.1),
+    },
+    {
+      entity: "CRT",
+      category: "FINANCIAMIENTO_EXPEDITION",
+      description: "Financiamiento Expedition (CRT)",
+      amounts: same(25711.92),
+    },
+    {
+      entity: "CRT",
+      category: "SEGUROS_INMUEBLES",
+      description: "Seguros inmuebles / Saveiro",
+      amounts: [7134.48, 0, 10345.29, 3939, 0, 0, 5345, 0, 6063, 4425, 0, 0],
+    },
+    {
+      entity: "CRT",
+      category: "ALARMA",
+      description: "Alarma — Serdán / Bodega",
+      amounts: same(960),
+    },
+    {
+      entity: "CRT",
+      category: "SANISO_BASURA",
+      description: "Saniso — recolección basura",
+      amounts: [
+        5930.36, 6133.69, 6133.69, 5930.36, 5930.36, 5930.36, 5930.36, 5930.36, 5930.36, 5930.36,
+        5930.36, 5930.36,
+      ],
+    },
+    {
+      entity: "CRT",
+      category: "CFE",
+      description: "CFE — Serdán / Progreso / Bodega / Quiroga",
+      amounts: [5448, 0, 4375, 8500, 8500, 8500, 8500, 8500, 8500, 8500, 8500, 8500],
+    },
+    {
+      entity: "CRT",
+      category: "AGUA",
+      description: "Agua — Serdán / Bodega",
+      amounts: [630, 3721, 5781, 5000, 5000, 5000, 5000, 5000, 5000, 5000, 5000, 5000],
+    },
+    {
+      entity: "CRT",
+      category: "TELMEX",
+      description: "Telmex — bar / oficinas",
+      amounts: [2496, 4104, 2097, 2197, 2197, 2197, 2197, 2197, 2197, 2197, 2197, 2197],
+    },
+    {
+      entity: "CRT",
+      category: "TELCEL",
+      description: "Telcel 2 líneas",
+      amounts: [399, 399, 712, 399, 399, 399, 399, 399, 399, 399, 399, 399],
+    },
+    {
+      entity: "CRT",
+      category: "GASOLINA",
+      description: "Gasolina Casa JC",
+      amounts: [7900, 9889.46, 13500, 6000, 6000, 6000, 6000, 6000, 6000, 6000, 6000, 6000],
+    },
+    {
+      entity: "CRT",
+      category: "OTROS",
+      description: "Otros y comisiones",
+      amounts: [12661, 12886.64, 14200, 5000, 5000, 5000, 5000, 5000, 5000, 5000, 5000, 5000],
+    },
 
     // ---------------- TSR ----------------
-    { entity: "TSR", category: "NOMINA_DIRECCION", description: "Nómina dirección",
-      amounts: [25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 37500] },
-    { entity: "TSR", category: "NOMINA_GENERAL", description: "Nómina general",
-      amounts: [15000, 15000, 15000, 15000, 15000, 15000, 15000, 15000, 15000, 15000, 15000, 25000] },
-    { entity: "TSR", category: "PREDIAL", description: "Predial impuestos",
-      amounts: [0, 14785, 0, 8221, 0, 0, 0, 0, 0, 0, 0, 0] },
-    { entity: "TSR", category: "PLACAS", description: "Placas, licencias y otros",
-      amounts: [3498, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] },
-    { entity: "TSR", category: "SAT", description: "SAT impuestos",
-      amounts: [3142, 0, 14293, 5200, 5200, 5200, 5200, 5200, 5200, 5200, 5200, 5200] },
-    { entity: "TSR", category: "HONORARIOS", description: "Honorarios",
-      amounts: [3173.67, 3167.67, 3179.27, 3138.67, 3138.67, 3138.67, 3138.67, 3138.67, 3138.67, 3138.67, 3138.67, 3138.67] },
-    { entity: "TSR", category: "COMISIONES_BANCARIAS", description: "Comisiones bancarias",
-      amounts: [347.70, 333.50, 343.36, 370, 370, 370, 370, 370, 370, 370, 370, 370] },
-    { entity: "TSR", category: "MANTENIMIENTO_PLAZAS", description: "Mantenimiento y otros",
-      amounts: [0, 1911.54, 10588, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000] },
-    { entity: "TSR", category: "PAPELERIA", description: "Papelería oficina (impresiones)",
-      amounts: [0, 0, 0, 1615, 0, 0, 0, 0, 1196, 0, 0, 1197] },
-    { entity: "TSR", category: "PAPELERIA", description: "Consumo oficina (bebidas, botanas, limpieza)",
-      amounts: [2778, 1909, 1468, 2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000] },
-    { entity: "TSR", category: "OTROS", description: "Lic, alcohol, permisos y comisiones",
-      amounts: [0, 0, 0, 62125, 0, 0, 0, 0, 0, 0, 0, 0] },
-    { entity: "TSR", category: "SEGUROS_INMUEBLES", description: "Seguro automotriz",
-      amounts: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 8553.72] },
-    { entity: "TSR", category: "SERVICIOS_AUTOS", description: "Servicios y otros (autos)",
-      amounts: [0, 0, 4073, 500, 500, 500, 500, 500, 500, 500, 500, 500] },
-    { entity: "TSR", category: "FINANCIAMIENTO_BMW", description: "Financiamiento BMW (TSR)",
-      amounts: [23752.01, 23752.01, 23156.98, 23752.01, 23752.01, 23752.01, 23752.01, 23752.01, 23752.01, 23752.01, 23752.01, 23752.01] },
-    { entity: "TSR", category: "GASOLINA", description: "Gasolina",
-      amounts: [4914.84, 5000, 5300, 4000, 4000, 4000, 4000, 4000, 4000, 4000, 4000, 4000] },
-    { entity: "TSR", category: "OTROS", description: "Caja chica",
-      amounts: [2000, 1600, 1600, 1500, 1500, 1500, 1500, 1500, 1500, 1500, 1500, 1500] },
-    { entity: "TSR", category: "OTROS", description: "Otros y comisiones",
-      amounts: [55900, 20900, 22014, 5000, 5000, 5000, 5000, 5000, 5000, 5000, 5000, 5000] },
+    {
+      entity: "TSR",
+      category: "NOMINA_DIRECCION",
+      description: "Nómina dirección",
+      amounts: [25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 37500],
+    },
+    {
+      entity: "TSR",
+      category: "NOMINA_GENERAL",
+      description: "Nómina general",
+      amounts: [15000, 15000, 15000, 15000, 15000, 15000, 15000, 15000, 15000, 15000, 15000, 25000],
+    },
+    {
+      entity: "TSR",
+      category: "PREDIAL",
+      description: "Predial impuestos",
+      amounts: [0, 14785, 0, 8221, 0, 0, 0, 0, 0, 0, 0, 0],
+    },
+    {
+      entity: "TSR",
+      category: "PLACAS",
+      description: "Placas, licencias y otros",
+      amounts: [3498, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    },
+    {
+      entity: "TSR",
+      category: "SAT",
+      description: "SAT impuestos",
+      amounts: [3142, 0, 14293, 5200, 5200, 5200, 5200, 5200, 5200, 5200, 5200, 5200],
+    },
+    {
+      entity: "TSR",
+      category: "HONORARIOS",
+      description: "Honorarios",
+      amounts: [
+        3173.67, 3167.67, 3179.27, 3138.67, 3138.67, 3138.67, 3138.67, 3138.67, 3138.67, 3138.67,
+        3138.67, 3138.67,
+      ],
+    },
+    {
+      entity: "TSR",
+      category: "COMISIONES_BANCARIAS",
+      description: "Comisiones bancarias",
+      amounts: [347.7, 333.5, 343.36, 370, 370, 370, 370, 370, 370, 370, 370, 370],
+    },
+    {
+      entity: "TSR",
+      category: "MANTENIMIENTO_PLAZAS",
+      description: "Mantenimiento y otros",
+      amounts: [0, 1911.54, 10588, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000],
+    },
+    {
+      entity: "TSR",
+      category: "PAPELERIA",
+      description: "Papelería oficina (impresiones)",
+      amounts: [0, 0, 0, 1615, 0, 0, 0, 0, 1196, 0, 0, 1197],
+    },
+    {
+      entity: "TSR",
+      category: "PAPELERIA",
+      description: "Consumo oficina (bebidas, botanas, limpieza)",
+      amounts: [2778, 1909, 1468, 2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000],
+    },
+    {
+      entity: "TSR",
+      category: "OTROS",
+      description: "Lic, alcohol, permisos y comisiones",
+      amounts: [0, 0, 0, 62125, 0, 0, 0, 0, 0, 0, 0, 0],
+    },
+    {
+      entity: "TSR",
+      category: "SEGUROS_INMUEBLES",
+      description: "Seguro automotriz",
+      amounts: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 8553.72],
+    },
+    {
+      entity: "TSR",
+      category: "SERVICIOS_AUTOS",
+      description: "Servicios y otros (autos)",
+      amounts: [0, 0, 4073, 500, 500, 500, 500, 500, 500, 500, 500, 500],
+    },
+    {
+      entity: "TSR",
+      category: "FINANCIAMIENTO_BMW",
+      description: "Financiamiento BMW (TSR)",
+      amounts: [
+        23752.01, 23752.01, 23156.98, 23752.01, 23752.01, 23752.01, 23752.01, 23752.01, 23752.01,
+        23752.01, 23752.01, 23752.01,
+      ],
+    },
+    {
+      entity: "TSR",
+      category: "GASOLINA",
+      description: "Gasolina",
+      amounts: [4914.84, 5000, 5300, 4000, 4000, 4000, 4000, 4000, 4000, 4000, 4000, 4000],
+    },
+    {
+      entity: "TSR",
+      category: "OTROS",
+      description: "Caja chica",
+      amounts: [2000, 1600, 1600, 1500, 1500, 1500, 1500, 1500, 1500, 1500, 1500, 1500],
+    },
+    {
+      entity: "TSR",
+      category: "OTROS",
+      description: "Otros y comisiones",
+      amounts: [55900, 20900, 22014, 5000, 5000, 5000, 5000, 5000, 5000, 5000, 5000, 5000],
+    },
 
     // ---------------- QHS ----------------
-    { entity: "QHS", category: "HONORARIOS", description: "Contabilidad (honorarios)",
-      amounts: same(1300) },
-    { entity: "QHS", category: "COMISIONES_BANCARIAS", description: "Comisiones bancarias",
-      amounts: same(655.40) },
+    {
+      entity: "QHS",
+      category: "HONORARIOS",
+      description: "Contabilidad (honorarios)",
+      amounts: same(1300),
+    },
+    {
+      entity: "QHS",
+      category: "COMISIONES_BANCARIAS",
+      description: "Comisiones bancarias",
+      amounts: same(655.4),
+    },
   ];
 
   // Cargar el id de cada categoría una sola vez.
@@ -923,14 +1562,15 @@ async function main(): Promise<void> {
   for (const c of allCats) expenseCategoriesByCode.set(c.code, c.id);
 
   // Mes actual en YEAR — meses anteriores se consideran ya pagados.
-  const currentMonth =
-    TODAY.getUTCFullYear() > YEAR ? 12 : TODAY.getUTCMonth();
+  const currentMonth = TODAY.getUTCFullYear() > YEAR ? 12 : TODAY.getUTCMonth();
 
   let expensesCreated = 0;
   for (const def of egresosDef) {
     const categoryId = expenseCategoriesByCode.get(def.category);
     if (!categoryId) {
-      console.warn(`⚠️  Egreso: categoría ${def.category} no existe, se omite "${def.description}".`);
+      console.warn(
+        `⚠️  Egreso: categoría ${def.category} no existe, se omite "${def.description}".`,
+      );
       continue;
     }
     const legalEntityId = entities[def.entity].id;
@@ -1049,11 +1689,8 @@ async function main(): Promise<void> {
           type: def.type,
           amount: decimal(def.amount),
           amountWithoutTax:
-            def.amountWithoutTax !== undefined
-              ? decimal(def.amountWithoutTax)
-              : null,
-          taxAmount:
-            def.taxAmount !== undefined ? decimal(def.taxAmount) : null,
+            def.amountWithoutTax !== undefined ? decimal(def.amountWithoutTax) : null,
+          taxAmount: def.taxAmount !== undefined ? decimal(def.taxAmount) : null,
           description: def.description,
         },
       });
@@ -1095,7 +1732,7 @@ async function main(): Promise<void> {
       originalAmount: 3_500_000,
       currentBalance: 2_100_000,
       monthlyPayment: 32_430.11,
-      interestRate: 0.1000,
+      interestRate: 0.1,
       startDate: utcDate(2018, 0, 1),
       endDate: utcDate(2033, 0, 1),
       paymentDay: 1,
@@ -1110,14 +1747,14 @@ async function main(): Promise<void> {
       originalAmount: 3_500_000,
       currentBalance: 2_100_000,
       monthlyPayment: 32_430.11,
-      interestRate: 0.1000,
+      interestRate: 0.1,
       startDate: utcDate(2018, 0, 1),
       endDate: utcDate(2033, 0, 1),
       paymentDay: 1,
       status: LoanStatus.ACTIVE,
       paidMonths: [0, 1, 2, 3],
       // Cuota alternativa en marzo y julio (datos del Excel)
-      monthAmounts: { 2: 31_182.80, 6: 31_182.80 },
+      monthAmounts: { 2: 31_182.8, 6: 31_182.8 },
     },
     // --- Préstamo JC ---
     // "PRESTAMO JC (BANCOS Y PERSONAL)": $11,181.44/mes, Oct 2026 = último pago
@@ -1127,9 +1764,9 @@ async function main(): Promise<void> {
       lender: "Juan Carlos L / Bancos",
       type: LoanType.PERSONAL,
       originalAmount: 500_000,
-      currentBalance: 167_721,   // 15 cuotas restantes × $11,181
+      currentBalance: 167_721, // 15 cuotas restantes × $11,181
       monthlyPayment: 11_181.44,
-      interestRate: 0.0800,
+      interestRate: 0.08,
       startDate: utcDate(2025, 0, 1),
       endDate: utcDate(2026, 9, 1), // octubre 2026
       paymentDay: 1,
@@ -1201,7 +1838,7 @@ async function main(): Promise<void> {
       name: "Etapa Final Plaza Quiroga 2",
       description:
         "Construcción de la etapa final de Plaza Magnum Quiroga 2. Pagos semanales de obra.",
-      budgetAmount: decimal(1_621_586),  // construcción $1,375,824 + estacionamiento $245,762
+      budgetAmount: decimal(1_621_586), // construcción $1,375,824 + estacionamiento $245,762
       executedAmount: decimal(1_375_824), // Est.1-9 pagados (todas las estimaciones de construcción)
       startDate: utcDate(2025, 9, 1),
       endDate: utcDate(YEAR, 6, 30),
@@ -1218,18 +1855,73 @@ async function main(): Promise<void> {
   type InvPayDef = { description: string; date: Date; amount: number; isPaid: boolean };
   const invPaymentsDef: InvPayDef[] = [
     // Etapa 2 — semanas 16-24
-    { description: "Est.1 Etapa 2 — estructura",       date: utcDate(2025, 9, 10),  amount: 150_000,  isPaid: true  }, // Sem 16: 16-21 Oct
-    { description: "Est.2 Etapa 2 — estructura",       date: utcDate(2025, 9, 24),  amount: 155_762,  isPaid: true  }, // Sem 17: 23-28 Oct
-    { description: "Est.3 Etapa 2 — muros",            date: utcDate(2025, 9, 30),  amount: 152_881,  isPaid: true  }, // Sem 18: 30 Oct-4 Nov
-    { description: "Est.4 Etapa 2 — muros",            date: utcDate(2025, 10, 6),  amount: 150_000,  isPaid: true  }, // Sem 19: 6-11 Nov
-    { description: "Est.5 Etapa 2 — instalaciones",    date: utcDate(2025, 10, 13), amount: 149_000,  isPaid: true  }, // Sem 20: 13-18 Nov
-    { description: "Est.6 Etapa 2 — instalaciones",    date: utcDate(2025, 10, 20), amount: 152_881,  isPaid: true  }, // Sem 21: 20-25 Nov
-    { description: "Est.7 Etapa 2 — acabados",         date: utcDate(2025, 10, 27), amount: 152_900,  isPaid: true  }, // Sem 22: 27 Nov-2 Dic
-    { description: "Est.8 Etapa 2 — acabados",         date: utcDate(2025, 11, 4),  amount: 152_900,  isPaid: true  }, // Sem 23: 4-9 Dic
-    { description: "Est.9 Etapa 2 — ajustes finales",  date: utcDate(2025, 11, 11), amount: 159_500,  isPaid: true  }, // Sem 24: 11-16 Dic
+    {
+      description: "Est.1 Etapa 2 — estructura",
+      date: utcDate(2025, 9, 10),
+      amount: 150_000,
+      isPaid: true,
+    }, // Sem 16: 16-21 Oct
+    {
+      description: "Est.2 Etapa 2 — estructura",
+      date: utcDate(2025, 9, 24),
+      amount: 155_762,
+      isPaid: true,
+    }, // Sem 17: 23-28 Oct
+    {
+      description: "Est.3 Etapa 2 — muros",
+      date: utcDate(2025, 9, 30),
+      amount: 152_881,
+      isPaid: true,
+    }, // Sem 18: 30 Oct-4 Nov
+    {
+      description: "Est.4 Etapa 2 — muros",
+      date: utcDate(2025, 10, 6),
+      amount: 150_000,
+      isPaid: true,
+    }, // Sem 19: 6-11 Nov
+    {
+      description: "Est.5 Etapa 2 — instalaciones",
+      date: utcDate(2025, 10, 13),
+      amount: 149_000,
+      isPaid: true,
+    }, // Sem 20: 13-18 Nov
+    {
+      description: "Est.6 Etapa 2 — instalaciones",
+      date: utcDate(2025, 10, 20),
+      amount: 152_881,
+      isPaid: true,
+    }, // Sem 21: 20-25 Nov
+    {
+      description: "Est.7 Etapa 2 — acabados",
+      date: utcDate(2025, 10, 27),
+      amount: 152_900,
+      isPaid: true,
+    }, // Sem 22: 27 Nov-2 Dic
+    {
+      description: "Est.8 Etapa 2 — acabados",
+      date: utcDate(2025, 11, 4),
+      amount: 152_900,
+      isPaid: true,
+    }, // Sem 23: 4-9 Dic
+    {
+      description: "Est.9 Etapa 2 — ajustes finales",
+      date: utcDate(2025, 11, 11),
+      amount: 159_500,
+      isPaid: true,
+    }, // Sem 24: 11-16 Dic
     // Estacionamiento
-    { description: "Estacionamiento — pago 1",         date: utcDate(YEAR, 3, 11),  amount: 122_881,  isPaid: false },
-    { description: "Estacionamiento — pago 2",         date: utcDate(YEAR, 5, 6),   amount: 122_881,  isPaid: false },
+    {
+      description: "Estacionamiento — pago 1",
+      date: utcDate(YEAR, 3, 11),
+      amount: 122_881,
+      isPaid: false,
+    },
+    {
+      description: "Estacionamiento — pago 2",
+      date: utcDate(YEAR, 5, 6),
+      amount: 122_881,
+      isPaid: false,
+    },
   ];
 
   for (const pay of invPaymentsDef) {
@@ -1252,8 +1944,18 @@ async function main(): Promise<void> {
   // estrategia fiscal y servicio de deuda para cada mes del año.
 
   type M12 = readonly [
-    number, number, number, number, number, number,
-    number, number, number, number, number, number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
   ];
   const s12 = (n: number): M12 => [n, n, n, n, n, n, n, n, n, n, n, n];
   const jan6 = (n: number): M12 => [n, n, n, n, n, n, 0, 0, 0, 0, 0, 0];
@@ -1271,10 +1973,18 @@ async function main(): Promise<void> {
           budgetId,
           conceptType: l.type,
           conceptLabel: l.label,
-          jan: decimal(l.m[0]),  feb: decimal(l.m[1]),  mar: decimal(l.m[2]),
-          apr: decimal(l.m[3]),  may: decimal(l.m[4]),  jun: decimal(l.m[5]),
-          jul: decimal(l.m[6]),  aug: decimal(l.m[7]),  sep: decimal(l.m[8]),
-          oct: decimal(l.m[9]),  nov: decimal(l.m[10]), dec: decimal(l.m[11]),
+          jan: decimal(l.m[0]),
+          feb: decimal(l.m[1]),
+          mar: decimal(l.m[2]),
+          apr: decimal(l.m[3]),
+          may: decimal(l.m[4]),
+          jun: decimal(l.m[5]),
+          jul: decimal(l.m[6]),
+          aug: decimal(l.m[7]),
+          sep: decimal(l.m[8]),
+          oct: decimal(l.m[9]),
+          nov: decimal(l.m[10]),
+          dec: decimal(l.m[11]),
         },
       });
     }
@@ -1296,83 +2006,135 @@ async function main(): Promise<void> {
   });
   await seedBudgetLines(crtBudget.id, [
     // INGRESOS
-    { type: IR, label: "Plaza Progreso",
-      m: s12(89292.38) },
-    { type: IR, label: "Plaza Olivares",
-      m: s12(75022.84) },
-    { type: IR, label: "Plaza Quiroga 1",
-      m: s12(63672.59) },
-    { type: IR, label: "Plaza Quiroga 2",
-      m: [93058.10, 93058.10, 105644.10, 105644.10, 105644.10, 105644.10,
-          93058.10, 93058.10, 93058.10, 93058.10, 93058.10, 93058.10] },
-    { type: IB, label: "Espectacular Progreso",
-      m: s12(2320) },
-    { type: IB, label: "Espectacular Quiroga 2",
-      m: s12(2320) },
+    { type: IR, label: "Plaza Progreso", m: s12(89292.38) },
+    { type: IR, label: "Plaza Olivares", m: s12(75022.84) },
+    { type: IR, label: "Plaza Quiroga 1", m: s12(63672.59) },
+    {
+      type: IR,
+      label: "Plaza Quiroga 2",
+      m: [
+        93058.1, 93058.1, 105644.1, 105644.1, 105644.1, 105644.1, 93058.1, 93058.1, 93058.1,
+        93058.1, 93058.1, 93058.1,
+      ],
+    },
+    { type: IB, label: "Espectacular Progreso", m: s12(2320) },
+    { type: IB, label: "Espectacular Quiroga 2", m: s12(2320) },
 
     // EGRESOS
-    { type: EX, label: "Nómina Dirección",
-      m: [35000, 35000, 35000, 35000, 35000, 35000, 35000, 35000, 35000, 35000, 35000, 52500] },
-    { type: EX, label: "Nómina General",
-      m: [61106.90, 36478.51, 47122.50, 39528, 46878, 39528, 39528, 35000, 39528, 35000, 46878, 59292] },
-    { type: EX, label: "Honorarios",
-      m: [5552.16, 5270.34, 5252.94, 5316, 5316, 5316, 5316, 5316, 5316, 5316, 5316, 5316] },
-    { type: EX, label: "SAT",
-      m: [23305, 28907, 18879, 24000, 24000, 24000, 24000, 24000, 24000, 24000, 24000, 24000] },
-    { type: EX, label: "IMSS / Infonavit",
-      m: [30622.81, 7073.99, 31846, 6500, 30500, 6500, 30500, 6500, 30500, 6500, 30500, 6500] },
-    { type: EX, label: "ISR s/ Producto del Trabajo",
-      m: [1670, 800, 1012, 1200, 1200, 1200, 1200, 1200, 1200, 1200, 1200, 1200] },
-    { type: EX, label: "Predial (CRT)",
-      m: [0, 0, 0, 9745, 0, 0, 0, 0, 0, 0, 0, 0] },
-    { type: EX, label: "Placas y licencias",
-      m: [3498, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] },
-    { type: EX, label: "Comisiones bancarias",
-      m: [388, 388, 395.56, 405, 405, 405, 405, 405, 405, 405, 405, 405] },
-    { type: EX, label: "Mantenimiento y limpieza",
-      m: [47558.02, 25931.31, 7756.30, 10000, 10000, 10000, 10000, 10000, 10000, 10000, 10000, 10000] },
-    { type: EX, label: "Papelería y consumo de oficina",
-      m: [630, 1495, 2090, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000] },
-    { type: EX, label: "Vehículos — servicios y lavado",
-      m: [786, 8670.36, 0, 1500, 1500, 1500, 1500, 1500, 1500, 1500, 1500, 1500] },
-    { type: EX, label: "Financiamiento Toyota",
-      m: s12(6644.10) },
-    { type: EX, label: "Financiamiento Expedition",
-      m: s12(25711.92) },
-    { type: EX, label: "Seguros",
-      m: [7134.48, 0, 10345.29, 3939, 0, 0, 5345, 0, 6063, 4425, 0, 0] },
-    { type: EX, label: "Alarma — Serdán / Bodega",
-      m: s12(960) },
-    { type: EX, label: "Saniso — recolección de basura",
-      m: [5930.36, 6133.69, 6133.69, 5930.36, 5930.36, 5930.36,
-          5930.36, 5930.36, 5930.36, 5930.36, 5930.36, 5930.36] },
-    { type: EX, label: "CFE",
-      m: [5448, 0, 4375, 8500, 8500, 8500, 8500, 8500, 8500, 8500, 8500, 8500] },
-    { type: EX, label: "Agua",
-      m: [630, 3721, 5781, 5000, 5000, 5000, 5000, 5000, 5000, 5000, 5000, 5000] },
-    { type: EX, label: "Telmex",
-      m: [2496, 4104, 2097, 2197, 2197, 2197, 2197, 2197, 2197, 2197, 2197, 2197] },
-    { type: EX, label: "Telcel",
-      m: [399, 399, 712, 399, 399, 399, 399, 399, 399, 399, 399, 399] },
-    { type: EX, label: "Gasolina",
-      m: [7900, 9889.46, 13500, 6000, 6000, 6000, 6000, 6000, 6000, 6000, 6000, 6000] },
-    { type: EX, label: "Otros y comisiones",
-      m: [12661, 12886.64, 14200, 5000, 5000, 5000, 5000, 5000, 5000, 5000, 5000, 5000] },
+    {
+      type: EX,
+      label: "Nómina Dirección",
+      m: [35000, 35000, 35000, 35000, 35000, 35000, 35000, 35000, 35000, 35000, 35000, 52500],
+    },
+    {
+      type: EX,
+      label: "Nómina General",
+      m: [
+        61106.9, 36478.51, 47122.5, 39528, 46878, 39528, 39528, 35000, 39528, 35000, 46878, 59292,
+      ],
+    },
+    {
+      type: EX,
+      label: "Honorarios",
+      m: [5552.16, 5270.34, 5252.94, 5316, 5316, 5316, 5316, 5316, 5316, 5316, 5316, 5316],
+    },
+    {
+      type: EX,
+      label: "SAT",
+      m: [23305, 28907, 18879, 24000, 24000, 24000, 24000, 24000, 24000, 24000, 24000, 24000],
+    },
+    {
+      type: EX,
+      label: "IMSS / Infonavit",
+      m: [30622.81, 7073.99, 31846, 6500, 30500, 6500, 30500, 6500, 30500, 6500, 30500, 6500],
+    },
+    {
+      type: EX,
+      label: "ISR s/ Producto del Trabajo",
+      m: [1670, 800, 1012, 1200, 1200, 1200, 1200, 1200, 1200, 1200, 1200, 1200],
+    },
+    { type: EX, label: "Predial (CRT)", m: [0, 0, 0, 9745, 0, 0, 0, 0, 0, 0, 0, 0] },
+    { type: EX, label: "Placas y licencias", m: [3498, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] },
+    {
+      type: EX,
+      label: "Comisiones bancarias",
+      m: [388, 388, 395.56, 405, 405, 405, 405, 405, 405, 405, 405, 405],
+    },
+    {
+      type: EX,
+      label: "Mantenimiento y limpieza",
+      m: [
+        47558.02, 25931.31, 7756.3, 10000, 10000, 10000, 10000, 10000, 10000, 10000, 10000, 10000,
+      ],
+    },
+    {
+      type: EX,
+      label: "Papelería y consumo de oficina",
+      m: [630, 1495, 2090, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000],
+    },
+    {
+      type: EX,
+      label: "Vehículos — servicios y lavado",
+      m: [786, 8670.36, 0, 1500, 1500, 1500, 1500, 1500, 1500, 1500, 1500, 1500],
+    },
+    { type: EX, label: "Financiamiento Toyota", m: s12(6644.1) },
+    { type: EX, label: "Financiamiento Expedition", m: s12(25711.92) },
+    {
+      type: EX,
+      label: "Seguros",
+      m: [7134.48, 0, 10345.29, 3939, 0, 0, 5345, 0, 6063, 4425, 0, 0],
+    },
+    { type: EX, label: "Alarma — Serdán / Bodega", m: s12(960) },
+    {
+      type: EX,
+      label: "Saniso — recolección de basura",
+      m: [
+        5930.36, 6133.69, 6133.69, 5930.36, 5930.36, 5930.36, 5930.36, 5930.36, 5930.36, 5930.36,
+        5930.36, 5930.36,
+      ],
+    },
+    {
+      type: EX,
+      label: "CFE",
+      m: [5448, 0, 4375, 8500, 8500, 8500, 8500, 8500, 8500, 8500, 8500, 8500],
+    },
+    {
+      type: EX,
+      label: "Agua",
+      m: [630, 3721, 5781, 5000, 5000, 5000, 5000, 5000, 5000, 5000, 5000, 5000],
+    },
+    {
+      type: EX,
+      label: "Telmex",
+      m: [2496, 4104, 2097, 2197, 2197, 2197, 2197, 2197, 2197, 2197, 2197, 2197],
+    },
+    { type: EX, label: "Telcel", m: [399, 399, 712, 399, 399, 399, 399, 399, 399, 399, 399, 399] },
+    {
+      type: EX,
+      label: "Gasolina",
+      m: [7900, 9889.46, 13500, 6000, 6000, 6000, 6000, 6000, 6000, 6000, 6000, 6000],
+    },
+    {
+      type: EX,
+      label: "Otros y comisiones",
+      m: [12661, 12886.64, 14200, 5000, 5000, 5000, 5000, 5000, 5000, 5000, 5000, 5000],
+    },
 
     // ESTRATEGIA FISCAL — nómina Audazon (ene–jun)
-    { type: TS, label: "Factura Serv. Adm. Audazon",
-      m: jan6(50627.04) },
-    { type: TS, label: "Nómina Dirección directa",
-      m: jan6(40000) },
-    { type: TS, label: "Impuestos y comisión estrategia",
-      m: jan6(3644) },
+    { type: TS, label: "Factura Serv. Adm. Audazon", m: jan6(50627.04) },
+    { type: TS, label: "Nómina Dirección directa", m: jan6(40000) },
+    { type: TS, label: "Impuestos y comisión estrategia", m: jan6(3644) },
 
     // SERVICIO DE DEUDA
-    { type: DS, label: "Hipoteca CRT",
-      m: s12(32430.11) },
-    { type: DS, label: "Préstamo JC (bancos y personal)",
-      m: [11181.44, 11181.44, 11181.44, 11181.44, 11181.44, 11181.44,
-          11181.44, 11181.44, 11181.44, 11181.44, 0, 0] },
+    { type: DS, label: "Hipoteca CRT", m: s12(32430.11) },
+    {
+      type: DS,
+      label: "Préstamo JC (bancos y personal)",
+      m: [
+        11181.44, 11181.44, 11181.44, 11181.44, 11181.44, 11181.44, 11181.44, 11181.44, 11181.44,
+        11181.44, 0, 0,
+      ],
+    },
   ]);
 
   // ── TSR ────────────────────────────────────────────────────────────────────
@@ -1383,64 +2145,98 @@ async function main(): Promise<void> {
   });
   await seedBudgetLines(tsrBudget.id, [
     // INGRESOS
-    { type: IR, label: "Inbursa Blvd Kino",
-      m: s12(86028.56) },
-    { type: IR, label: "La Chila Garmendia",
-      m: s12(30740) },
-    { type: IR, label: "Capilla del Carmen",
-      m: s12(19350.12) },
-    { type: IR, label: "Oficina Elias Piso 2",
-      m: [0, 0, 12500, 12500, 12500, 12500, 12500, 12500, 12500, 12500, 12500, 12500] },
-    { type: IR, label: "Nayarit 52 / Ferretería",
-      m: s12(18560) },
+    { type: IR, label: "Inbursa Blvd Kino", m: s12(86028.56) },
+    { type: IR, label: "La Chila Garmendia", m: s12(30740) },
+    { type: IR, label: "Capilla del Carmen", m: s12(19350.12) },
+    {
+      type: IR,
+      label: "Oficina Elias Piso 2",
+      m: [0, 0, 12500, 12500, 12500, 12500, 12500, 12500, 12500, 12500, 12500, 12500],
+    },
+    { type: IR, label: "Nayarit 52 / Ferretería", m: s12(18560) },
 
     // EGRESOS
-    { type: EX, label: "Nómina Dirección",
-      m: [25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 37500] },
-    { type: EX, label: "Nómina General",
-      m: [15000, 15000, 15000, 15000, 15000, 15000, 15000, 15000, 15000, 15000, 15000, 25000] },
-    { type: EX, label: "Honorarios",
-      m: [3173.67, 3167.67, 3179.27, 3138.67, 3138.67, 3138.67,
-          3138.67, 3138.67, 3138.67, 3138.67, 3138.67, 3138.67] },
-    { type: EX, label: "SAT",
-      m: [3142, 0, 14293, 5200, 5200, 5200, 5200, 5200, 5200, 5200, 5200, 5200] },
-    { type: EX, label: "Predial (TSR)",
-      m: [0, 14785, 0, 8221, 0, 0, 0, 0, 0, 0, 0, 0] },
-    { type: EX, label: "Placas y licencias",
-      m: [3498, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] },
-    { type: EX, label: "Comisiones bancarias",
-      m: [347.70, 333.50, 343.36, 370, 370, 370, 370, 370, 370, 370, 370, 370] },
-    { type: EX, label: "Mantenimiento y otros",
-      m: [0, 1911.54, 10588, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000] },
-    { type: EX, label: "Papelería y consumo de oficina",
-      m: [2778, 1909, 1468, 3615, 2000, 2000, 2000, 2000, 3196, 2000, 2000, 3197] },
-    { type: EX, label: "Seguro automotriz",
-      m: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 8553.72] },
-    { type: EX, label: "Vehículos — servicios",
-      m: [0, 0, 4073, 500, 500, 500, 500, 500, 500, 500, 500, 500] },
-    { type: EX, label: "Financiamiento BMW",
-      m: [23752.01, 23752.01, 23156.98, 23752.01, 23752.01, 23752.01,
-          23752.01, 23752.01, 23752.01, 23752.01, 23752.01, 23752.01] },
-    { type: EX, label: "Gasolina",
-      m: [4914.84, 5000, 5300, 4000, 4000, 4000, 4000, 4000, 4000, 4000, 4000, 4000] },
-    { type: EX, label: "Otros, caja chica y comisiones",
-      m: [57900, 22500, 23614, 68625, 6500, 6500, 6500, 6500, 6500, 6500, 6500, 6500] },
+    {
+      type: EX,
+      label: "Nómina Dirección",
+      m: [25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 25000, 37500],
+    },
+    {
+      type: EX,
+      label: "Nómina General",
+      m: [15000, 15000, 15000, 15000, 15000, 15000, 15000, 15000, 15000, 15000, 15000, 25000],
+    },
+    {
+      type: EX,
+      label: "Honorarios",
+      m: [
+        3173.67, 3167.67, 3179.27, 3138.67, 3138.67, 3138.67, 3138.67, 3138.67, 3138.67, 3138.67,
+        3138.67, 3138.67,
+      ],
+    },
+    {
+      type: EX,
+      label: "SAT",
+      m: [3142, 0, 14293, 5200, 5200, 5200, 5200, 5200, 5200, 5200, 5200, 5200],
+    },
+    { type: EX, label: "Predial (TSR)", m: [0, 14785, 0, 8221, 0, 0, 0, 0, 0, 0, 0, 0] },
+    { type: EX, label: "Placas y licencias", m: [3498, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] },
+    {
+      type: EX,
+      label: "Comisiones bancarias",
+      m: [347.7, 333.5, 343.36, 370, 370, 370, 370, 370, 370, 370, 370, 370],
+    },
+    {
+      type: EX,
+      label: "Mantenimiento y otros",
+      m: [0, 1911.54, 10588, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000],
+    },
+    {
+      type: EX,
+      label: "Papelería y consumo de oficina",
+      m: [2778, 1909, 1468, 3615, 2000, 2000, 2000, 2000, 3196, 2000, 2000, 3197],
+    },
+    { type: EX, label: "Seguro automotriz", m: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 8553.72] },
+    {
+      type: EX,
+      label: "Vehículos — servicios",
+      m: [0, 0, 4073, 500, 500, 500, 500, 500, 500, 500, 500, 500],
+    },
+    {
+      type: EX,
+      label: "Financiamiento BMW",
+      m: [
+        23752.01, 23752.01, 23156.98, 23752.01, 23752.01, 23752.01, 23752.01, 23752.01, 23752.01,
+        23752.01, 23752.01, 23752.01,
+      ],
+    },
+    {
+      type: EX,
+      label: "Gasolina",
+      m: [4914.84, 5000, 5300, 4000, 4000, 4000, 4000, 4000, 4000, 4000, 4000, 4000],
+    },
+    {
+      type: EX,
+      label: "Otros, caja chica y comisiones",
+      m: [57900, 22500, 23614, 68625, 6500, 6500, 6500, 6500, 6500, 6500, 6500, 6500],
+    },
 
     // ESTRATEGIA FISCAL — nómina OSC (ene–jun)
-    { type: TS, label: "Factura Serv. Adm. OSC",
-      m: jan6(44298.66) },
-    { type: TS, label: "Nómina Dirección directa",
-      m: jan6(20000) },
-    { type: TS, label: "Nómina Gerencia directa",
-      m: jan6(15000) },
-    { type: TS, label: "Impuestos y comisión estrategia",
-      m: jan6(3188.50) },
+    { type: TS, label: "Factura Serv. Adm. OSC", m: jan6(44298.66) },
+    { type: TS, label: "Nómina Dirección directa", m: jan6(20000) },
+    { type: TS, label: "Nómina Gerencia directa", m: jan6(15000) },
+    { type: TS, label: "Impuestos y comisión estrategia", m: jan6(3188.5) },
 
     // SERVICIO DE DEUDA
     // Mar y Jul tienen cuota alternativa 31 182.80 (datos del Excel).
-    { type: DS, label: "Hipoteca TSR",
-      m: [32430.11, 32430.11, 31182.80, 32430.11, 32430.11, 32430.11,
-          31182.80, 32430.11, 32430.11, 32430.11, 32430.11, 32430.11] },
+    {
+      type: DS,
+      label: "Hipoteca TSR",
+      m: [
+        32430.11, 32430.11, 31182.8, 32430.11, 32430.11, 32430.11, 31182.8, 32430.11, 32430.11,
+        32430.11, 32430.11, 32430.11,
+      ],
+    },
   ]);
 
   // ── QHS ────────────────────────────────────────────────────────────────────
@@ -1450,13 +2246,13 @@ async function main(): Promise<void> {
     data: { tenantId: tenant.id, legalEntityId: qhs.id, year: YEAR },
   });
   await seedBudgetLines(qhsBudget.id, [
-    { type: EX, label: "Honorarios contabilidad",
-      m: s12(1300) },
-    { type: EX, label: "Comisiones bancarias",
-      m: s12(655.40) },
+    { type: EX, label: "Honorarios contabilidad", m: s12(1300) },
+    { type: EX, label: "Comisiones bancarias", m: s12(655.4) },
   ]);
 
-  console.log(`Presupuesto ${YEAR} creado: CRT (${crtBudget.id}), TSR (${tsrBudget.id}), QHS (${qhsBudget.id})`);
+  console.log(
+    `Presupuesto ${YEAR} creado: CRT (${crtBudget.id}), TSR (${tsrBudget.id}), QHS (${qhsBudget.id})`,
+  );
 
   // -- 7. Usuario admin de prueba ------------------------------------------
   const masterRole = await prisma.role.findUnique({
@@ -1538,12 +2334,7 @@ async function main(): Promise<void> {
       where: {
         tenantId: tenant.id,
         status: {
-          in: [
-            RentStatus.DUE,
-            RentStatus.OVERDUE_1M,
-            RentStatus.OVERDUE_2M,
-            RentStatus.OVERDUE_3M,
-          ],
+          in: [RentStatus.DUE, RentStatus.OVERDUE_1M, RentStatus.OVERDUE_2M, RentStatus.OVERDUE_3M],
         },
       },
     }),
@@ -1568,10 +2359,14 @@ async function main(): Promise<void> {
   console.log(`Tenants:                ${tenantsCount}`);
   console.log(`Razones sociales:       ${legalEntitiesCount}  (CRT, TSR, QHS, JCL, CLICK)`);
   console.log(`Inmuebles (Property):   ${propertiesCount}`);
-  console.log(`Unidades:               ${unitsTotal}  (${unitsRented} rentadas, ${unitsAvailable} disponibles)`);
+  console.log(
+    `Unidades:               ${unitsTotal}  (${unitsRented} rentadas, ${unitsAvailable} disponibles)`,
+  );
   console.log(`Inquilinos (Lessee):    ${lesseesCount}`);
   console.log(`Contratos activos:      ${contractsCount}`);
-  console.log(`Cargos (Rent):          ${rentsCount}  (${rentsPaid} pagados, ${rentsPartial} parciales, ${rentsOverdue} vencidos sin pago, ${rentsPending} a futuro)`);
+  console.log(
+    `Cargos (Rent):          ${rentsCount}  (${rentsPaid} pagados, ${rentsPartial} parciales, ${rentsOverdue} vencidos sin pago, ${rentsPending} a futuro)`,
+  );
   console.log(`Pagos registrados:      ${paymentsCount}`);
   console.log(`Depósitos en garantía:  ${guaranteesCount}`);
   console.log(`Categorías de gasto:    ${expenseCategoriesCount}`);

@@ -16,6 +16,9 @@ const propertyMock = {
   findFirstOrThrow: vi.fn(),
   updateMany: vi.fn(),
 };
+// Los inmuebles individuales crean su unidad junto con la property dentro de
+// una transacción (ver actionCreateProperty).
+const unitMock = { create: vi.fn() };
 const auditLogMock = { create: vi.fn() };
 const userRoleMock = { findFirst: vi.fn() };
 
@@ -23,18 +26,18 @@ vi.mock("next/cache", () => ({
   revalidatePath: (...args: unknown[]) => mockRevalidatePath(...args),
 }));
 
-vi.mock("@/lib/auth/get-session", () => ({
+vi.mock("@/server/auth/get-session", () => ({
   requireAuth: () => mockRequireAuth(),
 }));
 
-vi.mock("@/lib/auth/active-legal-entity", () => ({
+vi.mock("@/server/auth/active-legal-entity", () => ({
   getActiveLegalEntityId: vi.fn().mockResolvedValue(null),
   legalEntityPropertyFilter: vi.fn().mockReturnValue({}),
 }));
 
-vi.mock("@/lib/auth/permissions", async () => {
-  const actual = await vi.importActual<typeof import("@/lib/auth/permissions")>(
-    "@/lib/auth/permissions",
+vi.mock("@/server/auth/permissions", async () => {
+  const actual = await vi.importActual<typeof import("@/server/auth/permissions")>(
+    "@/server/auth/permissions",
   );
   return {
     ...actual,
@@ -43,11 +46,14 @@ vi.mock("@/lib/auth/permissions", async () => {
   };
 });
 
-vi.mock("@/lib/prisma/client", () => ({
+vi.mock("@/server/prisma/client", () => ({
   prisma: {
     property: propertyMock,
+    unit: unitMock,
     auditLog: auditLogMock,
     userRole: userRoleMock,
+    $transaction: async (fn: (tx: { property: typeof propertyMock; unit: typeof unitMock }) => Promise<unknown>) =>
+      fn({ property: propertyMock, unit: unitMock }),
   },
   prismaUnsafe: {},
 }));
@@ -58,7 +64,7 @@ vi.mock("@/lib/prisma/client", () => ({
 
 describe("createPropertySchema", () => {
   it("rechaza datos inválidos: nombre vacío y tipo inválido", async () => {
-    const { createPropertySchema } = await import("@/lib/validators/property");
+    const { createPropertySchema } = await import("@/shared/validators/property");
 
     const result = createPropertySchema.safeParse({
       name: "",
@@ -79,7 +85,7 @@ describe("createPropertySchema", () => {
   });
 
   it("acepta una entrada mínima válida", async () => {
-    const { createPropertySchema } = await import("@/lib/validators/property");
+    const { createPropertySchema } = await import("@/shared/validators/property");
     const result = createPropertySchema.safeParse({
       name: "Plaza Demo",
       type: "PLAZA_COMERCIAL",
@@ -91,7 +97,7 @@ describe("createPropertySchema", () => {
   });
 
   it("rechaza latitudes fuera de rango", async () => {
-    const { createPropertySchema } = await import("@/lib/validators/property");
+    const { createPropertySchema } = await import("@/shared/validators/property");
     const result = createPropertySchema.safeParse({
       name: "Plaza Demo",
       type: "PLAZA_COMERCIAL",
@@ -117,11 +123,11 @@ describe("actionCreateProperty", () => {
 
   it("falla con PermissionError si el usuario no tiene property.create", async () => {
     mockRequirePermission.mockImplementation(async (_userId, code: string) => {
-      const { PermissionError } = await import("@/lib/auth/permissions");
+      const { PermissionError } = await import("@/server/auth/permissions");
       throw new PermissionError(code);
     });
 
-    const { actionCreateProperty } = await import("@/lib/services/properties");
+    const { actionCreateProperty } = await import("@/server/services/properties");
 
     await expect(
       actionCreateProperty({
@@ -142,9 +148,13 @@ describe("actionCreateProperty", () => {
 
   it("crea la property con tenantId del contexto y escribe AuditLog", async () => {
     mockRequirePermission.mockResolvedValue(undefined);
-    propertyMock.create.mockResolvedValue({ id: "prop-1", name: "Plaza Demo" });
+    propertyMock.create.mockResolvedValue({
+      id: "prop-1",
+      name: "Plaza Demo",
+      type: "PLAZA_COMERCIAL",
+    });
 
-    const { actionCreateProperty } = await import("@/lib/services/properties");
+    const { actionCreateProperty } = await import("@/server/services/properties");
 
     const result = await actionCreateProperty({
       name: "Plaza Demo",
@@ -154,7 +164,9 @@ describe("actionCreateProperty", () => {
       managerEntityId: "le-1",
     });
 
-    expect(result).toEqual({ id: "prop-1", name: "Plaza Demo" });
+    expect(result).toMatchObject({ id: "prop-1", name: "Plaza Demo" });
+    // Una plaza no crea unidad automática (los locales se capturan después).
+    expect(unitMock.create).not.toHaveBeenCalled();
     expect(propertyMock.create).toHaveBeenCalledOnce();
     const createArg = propertyMock.create.mock.calls[0]?.[0] as {
       data: { tenantId: string; name: string };
@@ -175,7 +187,6 @@ describe("actionCreateProperty", () => {
 
     expect(mockRevalidatePath).toHaveBeenCalledWith("/plazas");
     expect(mockRevalidatePath).toHaveBeenCalledWith("/inmuebles");
-    expect(mockRevalidatePath).toHaveBeenCalledWith("/units");
   });
 });
 
@@ -192,7 +203,7 @@ describe("getProperties", () => {
   });
 
   it("filtra siempre por tenantId del contexto y por defecto solo activos", async () => {
-    const { getProperties } = await import("@/lib/services/properties-queries");
+    const { getProperties } = await import("@/server/services/properties-queries");
     await getProperties();
 
     expect(propertyMock.findMany).toHaveBeenCalledOnce();
@@ -204,7 +215,7 @@ describe("getProperties", () => {
   });
 
   it("aplica filtro por tipo cuando se pide", async () => {
-    const { getProperties } = await import("@/lib/services/properties-queries");
+    const { getProperties } = await import("@/server/services/properties-queries");
     await getProperties({ type: "OFICINA" });
 
     const arg = propertyMock.findMany.mock.calls[0]?.[0] as {
@@ -215,7 +226,7 @@ describe("getProperties", () => {
   });
 
   it("status=all omite el filtro isActive (incluye inactivos)", async () => {
-    const { getProperties } = await import("@/lib/services/properties-queries");
+    const { getProperties } = await import("@/server/services/properties-queries");
     await getProperties({ status: "all" });
 
     const arg = propertyMock.findMany.mock.calls[0]?.[0] as {

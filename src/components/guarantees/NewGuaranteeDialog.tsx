@@ -29,11 +29,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { actionCreateGuarantee } from "@/lib/services/guarantees";
-import { createGuaranteeSchema, type CreateGuaranteeInput } from "@/lib/validators/guarantee";
-import type { ContractForGuarantee } from "@/lib/services/guarantees-queries";
-
-const MXN = new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" });
+import { actionCreateGuarantee } from "@/server/services/guarantees";
+import { createGuaranteeSchema, type CreateGuaranteeInput } from "@/shared/validators/guarantee";
+import type { ContractForGuarantee } from "@/server/services/guarantees-queries";
+import { unitWithProperty } from "@/shared/i18n/unit-label";
+import { formatMXN } from "@/shared/format-currency";
 
 interface Props {
   contracts: ContractForGuarantee[];
@@ -41,6 +41,9 @@ interface Props {
 
 export function NewGuaranteeDialog({ contracts }: Props) {
   const [open, setOpen] = useState(false);
+  const contractItems = Object.fromEntries(
+    contracts.map((c) => [c.id, `${c.lessee.legalName} — ${unitWithProperty(c.unit, " ")}`]),
+  );
 
   const form = useForm<CreateGuaranteeInput>({
     resolver: zodResolver(createGuaranteeSchema) as unknown as Resolver<CreateGuaranteeInput>,
@@ -64,7 +67,7 @@ export function NewGuaranteeDialog({ contracts }: Props) {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger render={<Button />}>
-        Registrar fianza
+      + Registrar fianza
       </DialogTrigger>
       <DialogContent className="max-w-md">
         <DialogHeader>
@@ -78,7 +81,7 @@ export function NewGuaranteeDialog({ contracts }: Props) {
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Contrato</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value}>
+                  <Select onValueChange={field.onChange} value={field.value} items={contractItems}>
                     <FormControl>
                       <SelectTrigger>
                         <SelectValue placeholder="Selecciona un contrato" />
@@ -87,14 +90,14 @@ export function NewGuaranteeDialog({ contracts }: Props) {
                     <SelectContent>
                       {contracts.map((c) => (
                         <SelectItem key={c.id} value={c.id}>
-                          {c.lessee.legalName} — {c.unit.property.name} {c.unit.code}
+                          {c.lessee.legalName} — {unitWithProperty(c.unit, " ")}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                   {selectedContract && (
                     <p className="text-xs text-muted-foreground">
-                      Fianza sugerida: {MXN.format(selectedContract.guaranteeAmount)}
+                      Fianza sugerida: {formatMXN(selectedContract.guaranteeAmount, 2)}
                     </p>
                   )}
                   <FormMessage />

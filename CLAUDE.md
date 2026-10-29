@@ -107,16 +107,31 @@ rex/
 │   │   └── layout.tsx
 │   ├── components/
 │   │   ├── ui/                  # shadcn (NO MODIFICAR sin razón)
-│   │   ├── forms/               # formularios reutilizables
-│   │   ├── tables/              # tablas con TanStack Table
-│   │   └── shared/              # otros componentes compartidos
-│   ├── lib/
+│   │   ├── shared/              # componentes compartidos entre features
+│   │   ├── forms/               # (histórico) pocos forms genéricos viven aquí
+│   │   └── <feature>/           # convención real: co-ubicación por feature
+│   │                            # (collections/, properties/, egresos/, ...)
+│   │                            # con sus tablas, forms y dialogs adentro
+│   ├── server/                  # SOLO backend — nunca se ejecuta en el cliente
 │   │   ├── prisma/              # cliente y middleware
 │   │   ├── auth/                # helpers de Clerk
-│   │   ├── validators/          # schemas Zod
-│   │   ├── services/            # lógica de negocio (rent generation, etc.)
+│   │   ├── services/            # lógica de negocio + Server Actions ("use server")
+│   │   ├── pdf/                 # generación de PDFs (React-PDF)
+│   │   ├── whatsapp/            # WhatsApp Cloud API
+│   │   ├── storage/             # Cloudflare R2
+│   │   ├── perf/                # timing de queries
+│   │   ├── rate-limit.ts
+│   │   └── secure-compare.ts
+│   ├── shared/                  # usado por cliente Y servidor
+│   │   ├── validators/          # schemas Zod (zodResolver en forms + validación en Server Actions)
+│   │   ├── i18n/                # labels de enums (dropdowns, bitácora)
+│   │   ├── audit/                # formateo de AuditLog (describe.ts, categories.ts) — el WRITER vive en server/services/audit.ts
+│   │   ├── constants/
+│   │   ├── format-currency.ts
+│   │   ├── format-date.ts
 │   │   └── utils.ts
 │   ├── hooks/                   # custom React hooks
+│   ├── generated/                # Prisma Client generado (no editar)
 │   └── types/                   # tipos compartidos
 ├── tests/
 │   ├── unit/
@@ -124,6 +139,8 @@ rex/
 ├── public/
 └── CLAUDE.md
 ```
+
+> **Backend vs. frontend**: viven en el mismo proyecto Next.js (un solo `next dev`, un solo deploy en Vercel — ver sección 3). La separación es de carpetas (`src/server/` vs. `src/components/` + `src/app/`), no de despliegues. `src/app/` no se puede mover: es la convención de rutas de Next.js App Router, así que ahí conviven Server Components (backend) con el layout/routing (frontend). Antes de importar algo desde un Client Component, si viene de `src/server/`, verifica que sea una Server Action (`"use server"`) — Next.js la compila a una llamada RPC automáticamente; nunca importes Prisma u otro código server-only directo en un archivo `"use client"`.
 
 ### Naming
 - **Archivos de componente**: `PascalCase.tsx` (ej. `PropertyTable.tsx`)
@@ -135,8 +152,10 @@ rex/
 
 ### Componentes
 - **Server Components por defecto.** Solo agregar `"use client"` cuando sea estrictamente necesario (interactividad, hooks, browser APIs).
-- **Forms**: usar `react-hook-form` + `zodResolver`. Los schemas Zod viven en `src/lib/validators/`.
-- **Tablas**: TanStack Table v8 con shadcn `Table` como base.
+- **Forms**: usar `react-hook-form` + `zodResolver`. Los schemas Zod viven en `src/shared/validators/`.
+- **Tablas**: shadcn `Table` como base. TanStack Table v8 solo cuando la tabla necesita sorting/filtering/paginación compleja (ej. `collections/PaymentsTable.tsx`); las tablas simples se escriben directas sobre shadcn.
+- **Formato de moneda/fecha**: SIEMPRE `formatMXN`/`formatMXNCompact` de `@/shared/format-currency` y `formatDate`/`formatPeriod*` de `@/shared/format-date`. Prohibido crear `new Intl.NumberFormat` o usar `toLocaleDateString` inline (las fechas de dominio son date-only UTC; los helpers ya fijan `timeZone: "UTC"`).
+- **Saldos**: usar `computeBalance` de `@/server/services/rent-status` (resta `amountWaived`), nunca aritmética inline.
 - **Toasts/notificaciones**: `sonner` (ya viene con shadcn).
 
 ### Server Actions

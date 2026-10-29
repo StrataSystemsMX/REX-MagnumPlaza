@@ -3,9 +3,11 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { NotificationSettingsForm } from "@/components/configuracion/NotificationSettingsForm";
-import { requireAuth } from "@/lib/auth/get-session";
-import { isMaster } from "@/lib/auth/permissions";
-import { actionGetTenantNotificationSettings } from "@/lib/services/notifications-actions";
+import { ReminderTemplatesEditor } from "@/components/configuracion/ReminderTemplatesEditor";
+import { requireAuth } from "@/server/auth/get-session";
+import { isMaster } from "@/server/auth/permissions";
+import { actionGetTenantNotificationSettings } from "@/server/services/notifications-actions";
+import { getReminderTemplates } from "@/server/services/document-templates";
 
 export default async function ConfiguracionNotificacionesPage() {
   const { dbUser } = await requireAuth();
@@ -14,7 +16,10 @@ export default async function ConfiguracionNotificacionesPage() {
     notFound();
   }
 
-  const settings = await actionGetTenantNotificationSettings();
+  const [settings, reminderTemplates] = await Promise.all([
+    actionGetTenantNotificationSettings(),
+    getReminderTemplates(),
+  ]);
 
   return (
     <div className="space-y-6">
@@ -39,6 +44,8 @@ export default async function ConfiguracionNotificacionesPage() {
       </div>
 
       <NotificationSettingsForm initial={settings} />
+
+      <ReminderTemplatesEditor entries={reminderTemplates} />
     </div>
   );
 }

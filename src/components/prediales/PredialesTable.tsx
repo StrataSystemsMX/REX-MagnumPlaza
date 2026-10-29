@@ -14,6 +14,7 @@ import {
   Pencil,
   Plus,
   RotateCcw,
+  Search,
   Trash2,
   Users,
 } from "lucide-react";
@@ -45,20 +46,23 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
 import { PredialFormDialog } from "@/components/prediales/PredialFormDialog";
 import { PredialReceiptsDialog } from "@/components/prediales/PredialReceiptsDialog";
 import { PredialRegisterPaymentDialog } from "@/components/prediales/PredialRegisterPaymentDialog";
 import {
   actionDeleteCadastralPayment,
   actionUnmarkCadastralPayment,
-} from "@/lib/services/cadastral";
+} from "@/server/services/cadastral";
 import type {
   CadastralListItem,
   CadastralPropertyOption,
   CadastralStatus,
-} from "@/lib/services/cadastral-queries";
-import type { LegalEntityOption } from "@/lib/services/properties-queries";
-import { capitalizeFirst, cn } from "@/lib/utils";
+} from "@/server/services/cadastral-queries";
+import type { LegalEntityOption } from "@/server/services/properties-queries";
+import { formatMXN } from "@/shared/format-currency";
+import { formatDate } from "@/shared/format-date";
+import { cn } from "@/shared/utils";
 
 type StatusFilter = "ALL" | CadastralStatus;
 
@@ -69,25 +73,6 @@ const STATUS_FILTER_ITEMS: Record<StatusFilter, string> = {
   PAID: "Pagado",
   PAID_BY_THIRD_PARTY: "Paga tercero",
 };
-
-const MXN = new Intl.NumberFormat("es-MX", {
-  style: "currency",
-  currency: "MXN",
-  maximumFractionDigits: 2,
-});
-
-const MXN_INT = new Intl.NumberFormat("es-MX", {
-  style: "currency",
-  currency: "MXN",
-  maximumFractionDigits: 0,
-});
-
-const DATE = new Intl.DateTimeFormat("es-MX", {
-  year: "numeric",
-  month: "short",
-  day: "2-digit",
-  timeZone: "UTC",
-});
 
 const ENTITY_THEME: Record<
   string,
@@ -204,6 +189,7 @@ export function PredialesTable({
 
   const [ownerFilter, setOwnerFilter] = useState<string>("ALL");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("ALL");
+  const [search, setSearch] = useState("");
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
 
   // Dialog states
@@ -226,9 +212,14 @@ export function PredialesTable({
       if (ownerFilter !== "ALL" && p.ownerEntity.id !== ownerFilter)
         return false;
       if (statusFilter !== "ALL" && p.status !== statusFilter) return false;
+      if (search.trim()) {
+        const q = search.trim().toLowerCase();
+        const hay = `${p.propertyName} ${p.cadastralKey ?? ""}`.toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
       return true;
     });
-  }, [payments, ownerFilter, statusFilter]);
+  }, [payments, ownerFilter, statusFilter, search]);
 
   const groups = useMemo<OwnerGroup[]>(() => {
     const map = new Map<string, OwnerGroup>();
@@ -328,62 +319,65 @@ export function PredialesTable({
   return (
     <>
       {/* Filters + create */}
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div className="flex flex-wrap items-end gap-3">
-          <FilterField label="Año">
-            <Select
-              value={String(selectedYear)}
-              onValueChange={(v) => v && setYearParam(v)}
-              items={yearItems}
-            >
-              <SelectTrigger className="w-28">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {yearsAvailable.map((y) => (
-                  <SelectItem key={y} value={String(y)}>
-                    {y}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </FilterField>
-          <FilterField label="Dueña">
-            <Select
-              value={ownerFilter}
-              onValueChange={(v) => v && setOwnerFilter(v)}
-              items={ownerItems}
-            >
-              <SelectTrigger className="w-40">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {Object.entries(ownerItems).map(([value, label]) => (
-                  <SelectItem key={value} value={value}>
-                    {label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </FilterField>
-          <FilterField label="Estado">
-            <Select
-              value={statusFilter}
-              onValueChange={(v) => v && setStatusFilter(v as StatusFilter)}
-              items={STATUS_FILTER_ITEMS}
-            >
-              <SelectTrigger className="w-44">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {Object.entries(STATUS_FILTER_ITEMS).map(([value, label]) => (
-                  <SelectItem key={value} value={value}>
-                    {label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </FilterField>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="relative w-full sm:w-56">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Buscar inmueble o clave catastral..."
+              className="pl-8"
+            />
+          </div>
+          <Select
+            value={String(selectedYear)}
+            onValueChange={(v) => v && setYearParam(v)}
+            items={yearItems}
+          >
+            <SelectTrigger className="w-28">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {yearsAvailable.map((y) => (
+                <SelectItem key={y} value={String(y)}>
+                  {y}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select
+            value={ownerFilter}
+            onValueChange={(v) => v && setOwnerFilter(v)}
+            items={ownerItems}
+          >
+            <SelectTrigger className="w-40">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {Object.entries(ownerItems).map(([value, label]) => (
+                <SelectItem key={value} value={value}>
+                  {label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select
+            value={statusFilter}
+            onValueChange={(v) => v && setStatusFilter(v as StatusFilter)}
+            items={STATUS_FILTER_ITEMS}
+          >
+            <SelectTrigger className="w-44">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {Object.entries(STATUS_FILTER_ITEMS).map(([value, label]) => (
+                <SelectItem key={value} value={value}>
+                  {label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
         {canCreate ? (
           <Button
@@ -393,7 +387,7 @@ export function PredialesTable({
             }}
           >
             <Plus className="size-4" />
-            Nuevo predial
+            Registrar predial
           </Button>
         ) : null}
       </div>
@@ -403,13 +397,13 @@ export function PredialesTable({
         <KpiCard
           icon={<Landmark className="size-4" />}
           label="Total registrado"
-          value={MXN_INT.format(totals.total)}
+          value={formatMXN(totals.total)}
           sub={`${totalCount} predial${totalCount === 1 ? "" : "es"} · ${selectedYear}`}
         />
         <KpiCard
           icon={<CheckCircle2 className="size-4" />}
           label="Pagado"
-          value={MXN_INT.format(totals.paid)}
+          value={formatMXN(totals.paid)}
           sub={`${paidCount} de ${totalCount} · ${globalProgress.toFixed(0)}%`}
           valueClass="text-emerald-700 dark:text-emerald-300"
           progress={globalProgress}
@@ -417,14 +411,14 @@ export function PredialesTable({
         <KpiCard
           icon={<Hourglass className="size-4" />}
           label="Pendiente"
-          value={MXN_INT.format(totals.pending)}
+          value={formatMXN(totals.pending)}
           sub="Por liquidar este año"
           valueClass="text-amber-700 dark:text-amber-300"
         />
         <KpiCard
           icon={<Users className="size-4" />}
           label="Paga tercero"
-          value={MXN_INT.format(totals.thirdParty)}
+          value={formatMXN(totals.thirdParty)}
           sub="Cubierto por terceros"
           valueClass="text-rose-700 dark:text-rose-300"
         />
@@ -550,7 +544,7 @@ export function PredialesTable({
 // owner sections. As long as every section renders rows of identical container
 // width, the columns will land at the same X position on the page.
 const PREDIAL_GRID_COLS =
-  "minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.15fr) minmax(0, 0.85fr) 40px";
+  "minmax(140px, 2fr) minmax(90px, 1fr) minmax(70px, 1fr) minmax(80px, 1fr) minmax(100px, 1.15fr) minmax(80px, 0.85fr) 40px";
 
 interface RowHandlers {
   canUpdate: boolean;
@@ -623,7 +617,7 @@ function OwnerSection({
             Total
           </div>
           <div className="font-mono text-sm font-semibold tabular-nums">
-            {MXN_INT.format(group.total)}
+            {formatMXN(group.total)}
           </div>
         </div>
         <div className="shrink-0 rounded p-1 text-muted-foreground">
@@ -636,10 +630,11 @@ function OwnerSection({
       </button>
 
       {expanded ? (
+        <div className="overflow-x-auto">
         <div
           role="table"
           aria-label={`Prediales ${group.code}`}
-          className="border-t"
+          className="min-w-[600px] border-t"
         >
           <div
             role="row"
@@ -672,6 +667,7 @@ function OwnerSection({
           {group.items.map((p) => (
             <PredialRow key={p.id} payment={p} {...handlers} />
           ))}
+        </div>
         </div>
       ) : null}
     </div>
@@ -708,17 +704,15 @@ function PredialRow({
         role="cell"
         className="px-3 py-2.5 text-right font-mono tabular-nums"
       >
-        {payment.totalAmount !== null ? MXN.format(payment.totalAmount) : "—"}
+        {payment.totalAmount !== null ? formatMXN(payment.totalAmount, 2) : "—"}
       </div>
       <div
         role="cell"
         className="px-3 py-2.5 text-center text-xs text-muted-foreground"
       >
-        {payment.paymentDate
-          ? capitalizeFirst(DATE.format(payment.paymentDate))
-          : "—"}
+        {payment.paymentDate ? formatDate(payment.paymentDate) : "—"}
       </div>
-      <div role="cell" className="flex justify-center px-3 py-2.5">
+      <div role="cell" className="overflow-hidden flex justify-center px-3 py-2.5">
         {statusBadge(payment.status)}
       </div>
       <div role="cell" className="flex justify-end pr-1">
@@ -759,21 +753,6 @@ function PredialRow({
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
-    </div>
-  );
-}
-
-function FilterField({
-  label,
-  children,
-}: {
-  label: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="flex flex-col gap-1">
-      <span className="text-xs uppercase text-muted-foreground">{label}</span>
-      {children}
     </div>
   );
 }

@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import {
   getUnitByPromoterToken,
   trackVacancyVisit,
-} from "@/lib/services/promoters-public";
+} from "@/server/services/promoters-public";
 import { PublicFooter } from "@/components/promoters/public/PublicFooter";
 import { VacancyContactCTA } from "@/components/promoters/public/VacancyContactCTA";
 import { VacancyDetails } from "@/components/promoters/public/VacancyDetails";
@@ -19,6 +19,7 @@ export const revalidate = 0;
 
 interface PageProps {
   params: Promise<{ token: string }>;
+  searchParams: Promise<{ src?: string }>;
 }
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
@@ -44,8 +45,11 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   };
 }
 
-export default async function PublicVacancyPage({ params }: PageProps) {
+export default async function PublicVacancyPage({ params, searchParams }: PageProps) {
   const { token } = await params;
+  const { src } = await searchParams;
+  // ?src=fisica marca los QR impresos en lonas; el resto es liga digital.
+  const leadSource = src === "fisica" ? "PHYSICAL" : "DIGITAL";
   const result = await getUnitByPromoterToken(token);
 
   if (result.kind === "not_found") notFound();
@@ -84,6 +88,8 @@ export default async function PublicVacancyPage({ params }: PageProps) {
           <aside className="lg:order-2 lg:col-span-1">
             <div className="lg:sticky lg:top-6">
               <VacancyPriceCard
+                token={token}
+                source={leadSource}
                 estimatedRent={data.unit.estimatedRent}
                 area={data.unit.area ?? data.property.totalArea}
                 status={data.unit.status}
@@ -101,6 +107,8 @@ export default async function PublicVacancyPage({ params }: PageProps) {
       </article>
 
       <VacancyContactCTA
+        token={token}
+        source={leadSource}
         contactPhone={data.tenant.contactPhone}
         tenantName={data.tenant.name}
         promoterFullName={data.promoter.fullName}

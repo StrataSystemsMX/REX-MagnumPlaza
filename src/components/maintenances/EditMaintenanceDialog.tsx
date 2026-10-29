@@ -28,15 +28,18 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { actionUpdateMaintenance } from "@/lib/services/maintenances";
+import { MaintenanceAttachments } from "@/components/maintenances/MaintenanceAttachments";
+import { actionUpdateMaintenance } from "@/server/services/maintenances";
+import { CharacterCount } from "@/components/ui/character-count";
 import {
   updateMaintenanceSchema,
   type UpdateMaintenanceInput,
-} from "@/lib/validators/maintenance";
+} from "@/shared/validators/maintenance";
 import type {
   MaintenanceRow,
   PropertyForMaintenance,
-} from "@/lib/services/maintenances-queries";
+} from "@/server/services/maintenances-queries";
+import { isPlaza } from "@/shared/i18n/unit-label";
 
 const TYPE_LABELS = {
   PERIODIC: "Periódico",
@@ -148,8 +151,9 @@ export function EditMaintenanceDialog({
                 <FormItem>
                   <FormLabel>Descripción del trabajo</FormLabel>
                   <FormControl>
-                    <Input {...field} />
+                    <Input {...field} maxLength={80} />
                   </FormControl>
+                  <CharacterCount current={field.value?.length ?? 0} max={80} />
                   <FormMessage />
                 </FormItem>
               )}
@@ -266,7 +270,11 @@ export function EditMaintenanceDialog({
               />
             </div>
 
-            {selectedProperty && selectedProperty.units.length > 0 && (
+            {/* El "local específico" solo aplica a plazas con varios locales.
+                Un inmueble individual se mantiene a nivel propiedad completa. */}
+            {selectedProperty &&
+              isPlaza(selectedProperty.type) &&
+              selectedProperty.units.length > 0 && (
               <FormField
                 control={form.control}
                 name="unitId"
@@ -353,8 +361,9 @@ export function EditMaintenanceDialog({
                 <FormItem>
                   <FormLabel>Proveedor / Contratista (opcional)</FormLabel>
                   <FormControl>
-                    <Input placeholder="Nombre del proveedor" {...field} value={field.value ?? ""} />
+                    <Input placeholder="Nombre del proveedor" {...field} value={field.value ?? ""} maxLength={100} />
                   </FormControl>
+                  <CharacterCount current={(field.value ?? "").length} max={100} />
                   <FormMessage />
                 </FormItem>
               )}
@@ -372,8 +381,10 @@ export function EditMaintenanceDialog({
                       placeholder="Detalles, observaciones..."
                       {...field}
                       value={field.value ?? ""}
+                      maxLength={300}
                     />
                   </FormControl>
+                  <CharacterCount current={(field.value ?? "").length} max={300} />
                   <FormMessage />
                 </FormItem>
               )}
@@ -389,6 +400,13 @@ export function EditMaintenanceDialog({
             </div>
           </form>
         </Form>
+
+        {maintenance ? (
+          <MaintenanceAttachments
+            maintenanceId={maintenance.id}
+            documents={maintenance.documents}
+          />
+        ) : null}
       </DialogContent>
     </Dialog>
   );

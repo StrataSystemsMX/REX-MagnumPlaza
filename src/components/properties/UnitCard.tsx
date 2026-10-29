@@ -11,7 +11,7 @@ import {
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { toast } from "sonner";
 import {
   AlertDialog,
@@ -35,27 +35,20 @@ import {
 } from "@/components/ui/dialog";
 import { UnitForm } from "@/components/forms/UnitForm";
 import { UnitPhotoGallery } from "@/components/properties/UnitPhotoGallery";
-import { unitStatusLabel, unitStatusVariant } from "@/lib/i18n/enums";
-import { actionDeleteUnit } from "@/lib/services/units";
+import { unitStatusLabel, unitStatusVariant } from "@/shared/i18n/enums";
+import { actionDeleteUnit } from "@/server/services/units";
+import { actionCountSubjectDependents } from "@/server/services/audit-actions";
+import { DependentsWarning } from "@/components/historial/DangerConfirmDialog";
+import type { DependentCounts } from "@/server/services/audit-undo";
 import type { UnitStatus } from "@/generated/prisma/enums";
+import { formatMXN } from "@/shared/format-currency";
+import { formatDate } from "@/shared/format-date";
 
-const MXN = new Intl.NumberFormat("es-MX", {
-  style: "currency",
-  currency: "MXN",
-  maximumFractionDigits: 0,
-});
-
-const DATE = new Intl.DateTimeFormat("es-MX", {
-  day: "2-digit",
-  month: "short",
-  year: "numeric",
-});
-
-function formatDate(d: string | Date | null | undefined): string | null {
+function formatContractDate(d: string | Date | null | undefined): string | null {
   if (!d) return null;
   const date = d instanceof Date ? d : new Date(d);
   if (Number.isNaN(date.getTime())) return null;
-  return DATE.format(date);
+  return formatDate(date);
 }
 
 export interface UnitCardData {
@@ -67,13 +60,13 @@ export interface UnitCardData {
   coverPhotoUrl: string | null;
   area?: number | string | null;
   notes?: string | null;
-  photos?: ReadonlyArray<{ id: string; url: string; filename: string }>;
   parentUnitId?: string | null;
   childUnits?: ReadonlyArray<{
     id: string;
     code: string;
     area?: number | string | null;
   }>;
+  photos?: ReadonlyArray<{ id: string; url: string; filename: string }>;
   contracts: ReadonlyArray<{
     id: string;
     monthlyAmount: string | number;
@@ -96,7 +89,27 @@ function useUnitDialogControls(unit: UnitCardData) {
   const [editOpen, setEditOpen] = useState(false);
   const [photosOpen, setPhotosOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteDeps, setDeleteDeps] = useState<DependentCounts | null>(null);
   const [pending, startTransition] = useTransition();
+
+  // Cuenta dependientes al abrir el borrado, para el aviso destacado.
+  useEffect(() => {
+    if (!deleteOpen) {
+      setDeleteDeps(null);
+      return;
+    }
+    let active = true;
+    actionCountSubjectDependents("Unit", unit.id)
+      .then((d) => {
+        if (active) setDeleteDeps(d);
+      })
+      .catch(() => {
+        if (active) setDeleteDeps(null);
+      });
+    return () => {
+      active = false;
+    };
+  }, [deleteOpen, unit.id]);
 
   function openDetail() {
     setDetailOpen(true);
@@ -145,6 +158,7 @@ function useUnitDialogControls(unit: UnitCardData) {
     deleteOpen,
     setDeleteOpen,
     handleDeleteOpenChange,
+    deleteDeps,
     pending,
     openDetail,
     confirmDelete,
@@ -266,6 +280,7 @@ function UnitDialogs({
               conservan.
             </AlertDialogDescription>
           </AlertDialogHeader>
+          {controls.deleteDeps && <DependentsWarning dependents={controls.deleteDeps} />}
           <AlertDialogFooter>
             <AlertDialogCancel disabled={controls.pending}>Cancelar</AlertDialogCancel>
             <AlertDialogAction
@@ -368,8 +383,7 @@ export function UnitCard({ unit, propertyId, siblings }: UnitCardProps) {
           </span>
           {childCount > 0 ? (
             <span className="absolute bottom-2.5 right-2.5 rounded-md bg-emerald-600/90 px-2 py-0.5 text-[10px] font-medium text-white shadow-sm backdrop-blur-sm">
-              + {childCount} local{childCount > 1 ? "es" : ""} agrupado
-              {childCount > 1 ? "s" : ""}
+              {childCount + 1} locales
             </span>
           ) : null}
         </div>
@@ -407,7 +421,7 @@ export function UnitCard({ unit, propertyId, siblings }: UnitCardProps) {
                     : "text-sm font-medium text-muted-foreground"
                 }`}
               >
-                {MXN.format(monthly)}
+                {formatMXN(monthly)}
               </span>
             ) : (
               <span className="text-sm text-muted-foreground">—</span>
@@ -422,7 +436,7 @@ export function UnitCard({ unit, propertyId, siblings }: UnitCardProps) {
 }
 
 export const UNIT_GRID_COLS =
-  "minmax(0, 0.7fr) minmax(0, 0.9fr) minmax(0, 2fr) minmax(0, 1fr)";
+  "minmax(60px, 0.7fr) minmax(90px, 0.9fr) minmax(120px, 2fr) minmax(80px, 1fr)";
 
 interface UnitRowProps {
   unit: UnitCardData;
@@ -474,11 +488,11 @@ export function UnitRow({ unit, propertyId, siblings }: UnitRowProps) {
           {displayCode}
           {childCount > 0 ? (
             <span className="ml-1.5 rounded-full bg-emerald-100 px-1.5 py-0.5 text-[9px] font-medium text-emerald-800">
-              +{childCount}
+              {childCount + 1} locales
             </span>
           ) : null}
         </div>
-        <div role="cell" className="px-3 py-2.5">
+        <div role="cell" className="overflow-hidden px-3 py-2.5">
           <Badge variant={unitStatusVariant(unit.status)}>
             {unitStatusLabel(unit.status)}
           </Badge>
@@ -505,10 +519,10 @@ export function UnitRow({ unit, propertyId, siblings }: UnitRowProps) {
         >
           {monthly !== null ? (
             contract ? (
-              <span className="font-semibold">{MXN.format(monthly)}</span>
+              <span className="font-semibold">{formatMXN(monthly)}</span>
             ) : (
               <span className="text-muted-foreground">
-                ~{MXN.format(monthly)}
+                ~{formatMXN(monthly)}
               </span>
             )
           ) : (
@@ -544,8 +558,8 @@ function UnitDetailDialog({
       : null;
 
   const area = unit.area !== null && unit.area !== undefined ? Number(unit.area) : null;
-  const startDate = formatDate(contract?.startDate);
-  const endDate = formatDate(contract?.endDate);
+  const startDate = formatContractDate(contract?.startDate);
+  const endDate = formatContractDate(contract?.endDate);
 
   function handlePhotos() {
     onOpenChange(false);
@@ -626,7 +640,7 @@ function UnitDetailDialog({
             {monthly !== null ? (
               <DetailField
                 label={contract ? "Renta mensual" : "Renta estimada"}
-                value={MXN.format(monthly)}
+                value={formatMXN(monthly)}
                 emphasis={!!contract}
               />
             ) : null}

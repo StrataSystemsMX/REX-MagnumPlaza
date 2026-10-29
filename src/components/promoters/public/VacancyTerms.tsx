@@ -1,24 +1,13 @@
 import { CalendarClock, Check, Coins, ShieldCheck, Wallet } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { includedServiceLabel } from "@/lib/i18n/enums";
-import type { PublicVacancyData } from "@/lib/services/promoters-public";
+import { includedServiceLabel } from "@/shared/i18n/enums";
+import type { PublicVacancyData } from "@/server/services/promoters-public";
+import { formatMXN } from "@/shared/format-currency";
+import { formatDate } from "@/shared/format-date";
 
 interface Props {
   unit: PublicVacancyData["unit"];
 }
-
-const MXN = new Intl.NumberFormat("es-MX", {
-  style: "currency",
-  currency: "MXN",
-  maximumFractionDigits: 0,
-});
-
-const DATE = new Intl.DateTimeFormat("es-MX", {
-  day: "2-digit",
-  month: "short",
-  year: "numeric",
-  timeZone: "UTC",
-});
 
 function monthsLabel(n: number): string {
   return n === 1 ? "1 mes" : `${n} meses`;
@@ -53,7 +42,7 @@ export function VacancyTerms({ unit }: Props) {
     stats.push({
       icon: Wallet,
       label: "Mantenimiento",
-      value: `${MXN.format(unit.maintenanceFee)} / mes`,
+      value: `${formatMXN(unit.maintenanceFee)} / mes`,
     });
   } else if (hasMaintenanceIncluded) {
     stats.push({
@@ -68,7 +57,7 @@ export function VacancyTerms({ unit }: Props) {
     stats.push({
       icon: CalendarClock,
       label: "Disponible",
-      value: DATE.format(unit.availableFrom),
+      value: formatDate(unit.availableFrom),
     });
   }
 

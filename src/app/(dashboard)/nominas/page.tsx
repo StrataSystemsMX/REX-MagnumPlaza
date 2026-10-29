@@ -1,12 +1,12 @@
 import { NominasView } from "@/components/nominas/NominasView";
-import { requireAuth } from "@/lib/auth/get-session";
-import { hasPermission } from "@/lib/auth/permissions";
+import { requireAuth } from "@/server/auth/get-session";
+import { hasPermission } from "@/server/auth/permissions";
 import {
   getPayrollAnnualTotalsByEntity,
   getPayrollYears,
   getPayrolls,
-} from "@/lib/services/payroll-queries";
-import { getLegalEntities } from "@/lib/services/properties-queries";
+} from "@/server/services/payroll-queries";
+import { getLegalEntities } from "@/server/services/properties-queries";
 
 interface SearchParams {
   year?: string;
@@ -63,9 +63,9 @@ export default async function NominasPage({
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Nóminas</h1>
         <p className="text-sm text-muted-foreground">
-          Registro mensual de pagos de nómina por razón social. Incluye nómina
-          directa, factura de servicios administrativos, nómina estratégica,
-          comisiones y bonos.
+          Registro mensual de nómina por razón social. Incluye nómina directa,
+          comisiones, bonos, nómina estratégica y facturas de servicios
+          administrativos.
         </p>
       </div>
 

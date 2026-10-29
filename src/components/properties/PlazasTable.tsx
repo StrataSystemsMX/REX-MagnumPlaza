@@ -11,12 +11,13 @@ import {
   Pencil,
   Plus,
   Receipt,
+  Search,
   Trash2,
 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Fragment, useEffect, useState, useTransition } from "react";
+import { Fragment, useEffect, useMemo, useState, useTransition } from "react";
 import { toast } from "sonner";
 import {
   AlertDialog,
@@ -29,6 +30,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   Dialog,
@@ -46,13 +48,17 @@ import {
   UnitCard,
   UnitRow,
 } from "@/components/properties/UnitCard";
+import { NewUnitDialog } from "@/components/properties/NewUnitDialog";
 import { usePropertiesViewMode } from "@/hooks/use-properties-view-mode";
-import type { PropertiesViewMode } from "@/lib/properties-view-mode";
-import { actionDeleteProperty } from "@/lib/services/properties";
+import type { PropertiesViewMode } from "@/shared/properties-view-mode";
+import { actionDeleteProperty } from "@/server/services/properties";
+import { actionCountSubjectDependents } from "@/server/services/audit-actions";
+import { DependentsWarning } from "@/components/historial/DangerConfirmDialog";
+import type { DependentCounts } from "@/server/services/audit-undo";
 import type {
   LegalEntityOption,
   PropertyListItem,
-} from "@/lib/services/properties-queries";
+} from "@/server/services/properties-queries";
 
 interface PlazasTableProps {
   plazas: ReadonlyArray<PropertyListItem>;
@@ -67,9 +73,40 @@ export function PlazasTable({ plazas, legalEntities, initialView }: PlazasTableP
   const [editTarget, setEditTarget] = useState<PropertyListItem | null>(null);
   const [photosTarget, setPhotosTarget] = useState<PropertyListItem | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<PropertyListItem | null>(null);
+  const [deleteDeps, setDeleteDeps] = useState<DependentCounts | null>(null);
   const [view, setView] = usePropertiesViewMode(initialView);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [pending, startTransition] = useTransition();
+  const [search, setSearch] = useState("");
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return plazas;
+    return plazas.filter((p) => {
+      const unitFields = p.units.map((u) => `${u.code} ${u.name ?? ""}`).join(" ");
+      const hay = `${p.name} ${p.address ?? ""} ${unitFields}`;
+      return hay.toLowerCase().includes(q);
+    });
+  }, [plazas, search]);
+
+  // Al abrir el diálogo de borrado, cuenta los dependientes para el aviso.
+  useEffect(() => {
+    if (!deleteTarget) {
+      setDeleteDeps(null);
+      return;
+    }
+    let active = true;
+    actionCountSubjectDependents("Property", deleteTarget.id)
+      .then((d) => {
+        if (active) setDeleteDeps(d);
+      })
+      .catch(() => {
+        if (active) setDeleteDeps(null);
+      });
+    return () => {
+      active = false;
+    };
+  }, [deleteTarget]);
 
   // Cuando los datos del servidor se refrescan (ej. tras reordenar fotos),
   // re-sincronizar los targets abiertos para que reciban la versión fresca.
@@ -114,6 +151,15 @@ export function PlazasTable({ plazas, legalEntities, initialView }: PlazasTableP
     <>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-2">
+          <div className="relative w-full sm:w-64">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Buscar plaza, dirección o local..."
+              className="pl-8"
+            />
+          </div>
           <div className="flex items-center rounded-lg border bg-background p-0.5">
             <Button
               variant={view === "cards" ? "secondary" : "ghost"}
@@ -139,11 +185,11 @@ export function PlazasTable({ plazas, legalEntities, initialView }: PlazasTableP
         <Dialog open={createOpen} onOpenChange={setCreateOpen}>
           <DialogTrigger render={<Button />}>
             <Plus className="size-4" />
-            Nueva Plaza
+            Registrar plaza
           </DialogTrigger>
           <DialogContent className="max-w-2xl">
             <DialogHeader>
-              <DialogTitle>Nueva plaza comercial</DialogTitle>
+              <DialogTitle>Registrar plaza comercial</DialogTitle>
               <DialogDescription>
                 Captura los datos de la plaza. Los locales se agregan después en el detalle.
               </DialogDescription>
@@ -165,21 +211,27 @@ export function PlazasTable({ plazas, legalEntities, initialView }: PlazasTableP
         <div className="rounded-md border bg-card p-12 text-center text-sm text-muted-foreground">
           No hay plazas activas.
         </div>
+      ) : filtered.length === 0 ? (
+        <div className="rounded-md border bg-card p-12 text-center text-sm text-muted-foreground">
+          No hay plazas que coincidan con &ldquo;{search}&rdquo;.
+        </div>
       ) : view === "cards" ? (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {plazas.map((p) => (
-            <PlazaCard
-              key={p.id}
-              plaza={p}
-              isExpanded={expanded.has(p.id)}
-              onToggle={() => toggleExpanded(p.id)}
-              onDetail={() => setDetailTarget(p)}
-            />
-          ))}
+          {[...filtered]
+            .sort((a, b) => Number(expanded.has(b.id)) - Number(expanded.has(a.id)))
+            .map((p) => (
+              <PlazaCard
+                key={p.id}
+                plaza={p}
+                isExpanded={expanded.has(p.id)}
+                onToggle={() => toggleExpanded(p.id)}
+                onDetail={() => setDetailTarget(p)}
+              />
+            ))}
         </div>
       ) : (
         <PlazasTableView
-          plazas={plazas}
+          plazas={filtered}
           expanded={expanded}
           onToggle={toggleExpanded}
           onDetail={(p) => setDetailTarget(p)}
@@ -236,6 +288,9 @@ export function PlazasTable({ plazas, legalEntities, initialView }: PlazasTableP
                   longitude: editTarget.longitude,
                   totalArea: editTarget.totalArea,
                   notes: editTarget.notes,
+                  insuranceProvider: editTarget.insuranceProvider,
+                  insurancePolicyNumber: editTarget.insurancePolicyNumber,
+                  insuranceExpiresAt: editTarget.insuranceExpiresAt,
                 }}
                 onSuccess={() => {
                   const target = editTarget;
@@ -300,6 +355,7 @@ export function PlazasTable({ plazas, legalEntities, initialView }: PlazasTableP
               históricos se conservan; podrás restaurarla después.
             </AlertDialogDescription>
           </AlertDialogHeader>
+          {deleteDeps && <DependentsWarning dependents={deleteDeps} />}
           <AlertDialogFooter>
             <AlertDialogCancel disabled={pending}>Cancelar</AlertDialogCancel>
             <AlertDialogAction
@@ -463,8 +519,11 @@ function PlazaCard({
 
       {isExpanded ? (
         <>
-          <div className="border-t bg-muted/30 px-4 py-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            Locales de {name}
+          <div className="flex items-center justify-between gap-2 border-t bg-muted/30 px-4 py-2">
+            <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              Locales de {name}
+            </span>
+            <NewUnitDialog propertyId={plaza.id} propertyName={name} size="xs" />
           </div>
           <div className="bg-muted/30 p-4">
             {activeUnits.length === 0 ? (
@@ -508,7 +567,7 @@ function PlazaCard({
 }
 
 const PLAZA_GRID_COLS =
-  "40px minmax(0, 2fr) minmax(0, 0.9fr) minmax(0, 0.9fr) minmax(0, 0.8fr) minmax(0, 0.7fr)";
+  "40px minmax(150px, 2fr) minmax(60px, 0.9fr) minmax(60px, 0.9fr) minmax(50px, 0.8fr) minmax(70px, 0.7fr)";
 
 function PlazasTableView({
   plazas,
@@ -523,7 +582,8 @@ function PlazasTableView({
 }) {
   return (
     <div className="overflow-hidden rounded-lg border bg-card shadow-sm">
-      <div role="table" aria-label="Plazas">
+      <div className="overflow-x-auto">
+      <div role="table" aria-label="Plazas" className="min-w-[430px]">
         <div
           role="row"
           className="grid items-center border-b bg-muted/30 text-xs font-medium uppercase text-muted-foreground"
@@ -626,8 +686,11 @@ function PlazasTableView({
               </div>
               {isExpanded ? (
                 <div className="border-b bg-muted/30 px-4 py-3 last:border-b-0">
-                  <div className="mb-2 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-                    Locales de {p.name}
+                  <div className="mb-2 flex items-center justify-between gap-2">
+                    <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                      Locales de {p.name}
+                    </span>
+                    <NewUnitDialog propertyId={p.id} propertyName={p.name} size="xs" />
                   </div>
                   {activeUnits.length === 0 ? (
                     <p className="text-sm text-muted-foreground">
@@ -635,7 +698,8 @@ function PlazasTableView({
                     </p>
                   ) : (
                     <div className="overflow-hidden rounded-md border bg-card">
-                      <div role="table" aria-label={`Locales de ${p.name}`}>
+                      <div className="overflow-x-auto">
+                      <div role="table" aria-label={`Locales de ${p.name}`} className="min-w-[350px]">
                         <div
                           role="row"
                           className="grid items-center border-b bg-muted/40 text-xs font-medium uppercase text-muted-foreground"
@@ -673,6 +737,7 @@ function PlazasTableView({
                             />
                           ))}
                       </div>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -680,6 +745,7 @@ function PlazasTableView({
             </Fragment>
           );
         })}
+      </div>
       </div>
     </div>
   );

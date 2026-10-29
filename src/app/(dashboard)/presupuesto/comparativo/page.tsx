@@ -10,17 +10,11 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { requireAuth } from "@/lib/auth/get-session";
-import { getActiveLegalEntityId } from "@/lib/auth/active-legal-entity";
-import { getBudgetForYear, MONTH_KEYS } from "@/lib/services/budgets-queries";
-import { prisma } from "@/lib/prisma/client";
-
-const MXN = new Intl.NumberFormat("es-MX", {
-  style: "currency",
-  currency: "MXN",
-  maximumFractionDigits: 0,
-});
-const PCT = new Intl.NumberFormat("es-MX", { style: "percent", maximumFractionDigits: 1 });
+import { requireAuth } from "@/server/auth/get-session";
+import { getActiveLegalEntityId } from "@/server/auth/active-legal-entity";
+import { getBudgetForYear, MONTH_KEYS } from "@/server/services/budgets-queries";
+import { prisma } from "@/server/prisma/client";
+import { formatMXN, formatPercent } from "@/shared/format-currency";
 
 interface SearchParams { year?: string }
 
@@ -66,7 +60,7 @@ export default async function PresupuestoComparativoPage({
   ]);
 
   // Acumular real por mes
-  const realByMonth = MONTH_KEYS.map((_, i) => ({
+  const realByMonth = MONTH_KEYS.map(() => ({
     ingresos: 0,
     egresos: 0,
     nomina: 0,
@@ -131,10 +125,10 @@ export default async function PresupuestoComparativoPage({
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <MetricCard
           label="Ingresos reales"
-          value={<span className="tabular-nums">{MXN.format(totalRealIngresos)}</span>}
+          value={<span className="tabular-nums">{formatMXN(totalRealIngresos)}</span>}
           subValue={
             totalBudgetIngresos > 0
-              ? `${variacionIngresos >= 0 ? "+" : ""}${MXN.format(variacionIngresos)} vs presupuesto`
+              ? `${variacionIngresos >= 0 ? "+" : ""}${formatMXN(variacionIngresos)} vs presupuesto`
               : "Sin presupuesto"
           }
           icon={TrendingUp}
@@ -142,10 +136,10 @@ export default async function PresupuestoComparativoPage({
         />
         <MetricCard
           label="Egresos reales"
-          value={<span className="tabular-nums">{MXN.format(totalRealEgresos)}</span>}
+          value={<span className="tabular-nums">{formatMXN(totalRealEgresos)}</span>}
           subValue={
             totalBudgetEgresos > 0
-              ? `${variacionEgresos >= 0 ? "+" : ""}${MXN.format(variacionEgresos)} vs presupuesto`
+              ? `${variacionEgresos >= 0 ? "+" : ""}${formatMXN(variacionEgresos)} vs presupuesto`
               : "Sin presupuesto"
           }
           icon={TrendingDown}
@@ -153,10 +147,10 @@ export default async function PresupuestoComparativoPage({
         />
         <MetricCard
           label="Utilidad real"
-          value={<span className="tabular-nums">{MXN.format(utilidadReal)}</span>}
+          value={<span className="tabular-nums">{formatMXN(utilidadReal)}</span>}
           subValue={
             utilidadBudget !== 0
-              ? `Meta: ${MXN.format(utilidadBudget)}`
+              ? `Meta: ${formatMXN(utilidadBudget)}`
               : "Sin presupuesto de utilidad"
           }
           icon={BarChart2}
@@ -166,7 +160,7 @@ export default async function PresupuestoComparativoPage({
           label="Cumplimiento ingresos"
           value={
             totalBudgetIngresos > 0
-              ? PCT.format(totalRealIngresos / totalBudgetIngresos)
+              ? formatPercent(totalRealIngresos / totalBudgetIngresos)
               : "—"
           }
           subValue="del presupuesto anual"
@@ -211,10 +205,10 @@ export default async function PresupuestoComparativoPage({
                     <TableRow key={k} className={isFuture ? "opacity-40" : ""}>
                       <TableCell className="font-medium">{MONTH_SHORT[i]}</TableCell>
                       <TableCell className="text-right tabular-nums text-muted-foreground">
-                        {bud > 0 ? MXN.format(bud) : "—"}
+                        {bud > 0 ? formatMXN(bud) : "—"}
                       </TableCell>
                       <TableCell className="text-right tabular-nums">
-                        {real > 0 ? MXN.format(real) : isFuture ? "—" : <span className="text-destructive">{MXN.format(0)}</span>}
+                        {real > 0 ? formatMXN(real) : isFuture ? "—" : <span className="text-destructive">{formatMXN(0)}</span>}
                       </TableCell>
                       <TableCell
                         className={`text-right tabular-nums text-sm font-medium ${
@@ -227,10 +221,10 @@ export default async function PresupuestoComparativoPage({
                       >
                         {isFuture || bud === 0
                           ? "—"
-                          : `${diff >= 0 ? "+" : ""}${MXN.format(diff)}`}
+                          : `${diff >= 0 ? "+" : ""}${formatMXN(diff)}`}
                       </TableCell>
                       <TableCell className="text-right tabular-nums text-sm text-muted-foreground">
-                        {pct !== null && !isFuture ? PCT.format(pct) : "—"}
+                        {pct !== null && !isFuture ? formatPercent(pct) : "—"}
                       </TableCell>
                     </TableRow>
                   );
@@ -238,20 +232,20 @@ export default async function PresupuestoComparativoPage({
                 <TableRow className="border-t-2 font-semibold">
                   <TableCell>Total</TableCell>
                   <TableCell className="text-right tabular-nums">
-                    {MXN.format(totalBudgetIngresos)}
+                    {formatMXN(totalBudgetIngresos)}
                   </TableCell>
                   <TableCell className="text-right tabular-nums text-emerald-700">
-                    {MXN.format(totalRealIngresos)}
+                    {formatMXN(totalRealIngresos)}
                   </TableCell>
                   <TableCell
                     className={`text-right tabular-nums ${variacionIngresos >= 0 ? "text-emerald-700" : "text-destructive"}`}
                   >
                     {variacionIngresos >= 0 ? "+" : ""}
-                    {MXN.format(variacionIngresos)}
+                    {formatMXN(variacionIngresos)}
                   </TableCell>
                   <TableCell className="text-right tabular-nums">
                     {totalBudgetIngresos > 0
-                      ? PCT.format(totalRealIngresos / totalBudgetIngresos)
+                      ? formatPercent(totalRealIngresos / totalBudgetIngresos)
                       : "—"}
                   </TableCell>
                 </TableRow>
@@ -289,10 +283,10 @@ export default async function PresupuestoComparativoPage({
                     <TableRow key={k} className={isFuture ? "opacity-40" : ""}>
                       <TableCell className="font-medium">{MONTH_SHORT[i]}</TableCell>
                       <TableCell className="text-right tabular-nums text-muted-foreground">
-                        {bud > 0 ? MXN.format(bud) : "—"}
+                        {bud > 0 ? formatMXN(bud) : "—"}
                       </TableCell>
                       <TableCell className="text-right tabular-nums">
-                        {real > 0 ? MXN.format(real) : "—"}
+                        {real > 0 ? formatMXN(real) : "—"}
                       </TableCell>
                       <TableCell
                         className={`text-right tabular-nums text-sm font-medium ${
@@ -305,10 +299,10 @@ export default async function PresupuestoComparativoPage({
                       >
                         {isFuture || bud === 0
                           ? "—"
-                          : `${diff >= 0 ? "+" : ""}${MXN.format(diff)}`}
+                          : `${diff >= 0 ? "+" : ""}${formatMXN(diff)}`}
                       </TableCell>
                       <TableCell className="text-right tabular-nums text-sm text-muted-foreground">
-                        {pct !== null && !isFuture ? PCT.format(pct) : "—"}
+                        {pct !== null && !isFuture ? formatPercent(pct) : "—"}
                       </TableCell>
                     </TableRow>
                   );
@@ -316,20 +310,20 @@ export default async function PresupuestoComparativoPage({
                 <TableRow className="border-t-2 font-semibold">
                   <TableCell>Total</TableCell>
                   <TableCell className="text-right tabular-nums">
-                    {MXN.format(totalBudgetEgresos)}
+                    {formatMXN(totalBudgetEgresos)}
                   </TableCell>
                   <TableCell className="text-right tabular-nums">
-                    {MXN.format(totalRealEgresos)}
+                    {formatMXN(totalRealEgresos)}
                   </TableCell>
                   <TableCell
                     className={`text-right tabular-nums ${variacionEgresos <= 0 ? "text-emerald-700" : "text-destructive"}`}
                   >
                     {variacionEgresos >= 0 ? "+" : ""}
-                    {MXN.format(variacionEgresos)}
+                    {formatMXN(variacionEgresos)}
                   </TableCell>
                   <TableCell className="text-right tabular-nums">
                     {totalBudgetEgresos > 0
-                      ? PCT.format(totalRealEgresos / totalBudgetEgresos)
+                      ? formatPercent(totalRealEgresos / totalBudgetEgresos)
                       : "—"}
                   </TableCell>
                 </TableRow>

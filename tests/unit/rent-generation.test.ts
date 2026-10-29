@@ -7,9 +7,11 @@ const contractMock = {
 const rentMock = {
   findMany: vi.fn(),
   createMany: vi.fn(),
+  deleteMany: vi.fn(),
+  updateMany: vi.fn(),
 };
 
-vi.mock("@/lib/prisma/client", () => ({
+vi.mock("@/server/prisma/client", () => ({
   prisma: {
     contract: contractMock,
     rent: rentMock,
@@ -39,13 +41,15 @@ beforeEach(() => {
   vi.clearAllMocks();
   rentMock.findMany.mockResolvedValue([]);
   rentMock.createMany.mockResolvedValue({ count: 0 });
+  rentMock.deleteMany.mockResolvedValue({ count: 0 });
+  rentMock.updateMany.mockResolvedValue({ count: 1 });
 });
 
 describe("generateRentsForContract", () => {
   it("genera 12 Rents para un contrato anual (Ene–Dic 2026)", async () => {
     contractMock.findFirstOrThrow.mockResolvedValue(buildContract());
     const { generateRentsForContract } = await import(
-      "@/lib/services/rent-generation"
+      "@/server/services/rent-generation"
     );
 
     const result = await generateRentsForContract(TENANT, CONTRACT_ID, {
@@ -73,7 +77,7 @@ describe("generateRentsForContract", () => {
       }),
     );
     const { generateRentsForContract } = await import(
-      "@/lib/services/rent-generation"
+      "@/server/services/rent-generation"
     );
 
     await generateRentsForContract(TENANT, CONTRACT_ID, {
@@ -99,7 +103,7 @@ describe("generateRentsForContract", () => {
       { period: new Date(Date.UTC(2026, 1, 1)) },
     ]);
     const { generateRentsForContract } = await import(
-      "@/lib/services/rent-generation"
+      "@/server/services/rent-generation"
     );
 
     const result = await generateRentsForContract(TENANT, CONTRACT_ID, {
@@ -118,7 +122,7 @@ describe("generateRentsForContract", () => {
   it("aplica el gradiente DUE/OVERDUE_*/PENDING según días vencidos", async () => {
     contractMock.findFirstOrThrow.mockResolvedValue(buildContract());
     const { generateRentsForContract } = await import(
-      "@/lib/services/rent-generation"
+      "@/server/services/rent-generation"
     );
 
     await generateRentsForContract(TENANT, CONTRACT_ID, {
@@ -140,5 +144,96 @@ describe("generateRentsForContract", () => {
     expect(arg.data[3]?.status).toBe("DUE");
     expect(arg.data[4]?.status).toBe("PENDING");
     expect(arg.data[11]?.status).toBe("PENDING");
+  });
+});
+
+describe("reconcileRentsForContract", () => {
+  it("al acortar el rango: borra las vacías fuera de rango, conserva las que tienen dinero, genera las faltantes y re-sincroniza las sin pago", async () => {
+    // Contrato editado a Mar–Jun 2026 (antes era anual).
+    const contract = buildContract({
+      startDate: new Date(Date.UTC(2026, 2, 1)),
+      endDate: new Date(Date.UTC(2026, 5, 30)),
+    });
+    contractMock.findFirstOrThrow.mockResolvedValue(contract);
+
+    // Rentas existentes antes de editar:
+    //   Ene 2026 → FUERA de rango, con pago ($5000)  → se conserva
+    //   Feb 2026 → FUERA de rango, vacía             → se elimina
+    //   Mar 2026 → dentro de rango, vacía            → re-sincroniza
+    //   Abr 2026 → dentro de rango, vacía            → re-sincroniza
+    const all = [
+      { id: "ene", period: new Date(Date.UTC(2026, 0, 1)), amountPaid: 5000, amountWaived: 0 },
+      { id: "feb", period: new Date(Date.UTC(2026, 1, 1)), amountPaid: 0, amountWaived: 0 },
+      { id: "mar", period: new Date(Date.UTC(2026, 2, 1)), amountPaid: 0, amountWaived: 0 },
+      { id: "abr", period: new Date(Date.UTC(2026, 3, 1)), amountPaid: 0, amountWaived: 0 },
+    ];
+
+    rentMock.findMany.mockImplementation((args: { where?: Record<string, unknown>; select?: Record<string, unknown> }) => {
+      // Paso 3: rentas sin pago dentro de rango (where filtra amountPaid: 0).
+      if (args.where && args.where["amountPaid"] === 0) {
+        return Promise.resolve([
+          { id: "mar", period: new Date(Date.UTC(2026, 2, 1)) },
+          { id: "abr", period: new Date(Date.UTC(2026, 3, 1)) },
+          { id: "may", period: new Date(Date.UTC(2026, 4, 1)) },
+          { id: "jun", period: new Date(Date.UTC(2026, 5, 1)) },
+        ]);
+      }
+      // Paso 1: todas las rentas (select incluye amountWaived).
+      if (args.select && "amountWaived" in args.select) {
+        return Promise.resolve(all);
+      }
+      // generateRentsForContract: periodos existentes tras el borrado (sin "feb").
+      return Promise.resolve([
+        { period: new Date(Date.UTC(2026, 0, 1)) },
+        { period: new Date(Date.UTC(2026, 2, 1)) },
+        { period: new Date(Date.UTC(2026, 3, 1)) },
+      ]);
+    });
+
+    const { reconcileRentsForContract } = await import("@/server/services/rent-generation");
+
+    const result = await reconcileRentsForContract(TENANT, CONTRACT_ID, {
+      now: new Date(Date.UTC(2026, 4, 15)),
+    });
+
+    // Solo "feb" (vacía, fuera de rango) se elimina; "ene" se conserva.
+    expect(rentMock.deleteMany).toHaveBeenCalledWith({
+      where: { id: { in: ["feb"] }, tenantId: TENANT },
+    });
+    expect(result.removed).toBe(1);
+    expect(result.keptWithPayments).toBe(1);
+    // generate crea May y Jun (faltantes del nuevo rango).
+    expect(result.created).toBe(2);
+    // Re-sincroniza las 4 rentas sin pago dentro de rango.
+    expect(result.resynced).toBe(4);
+    expect(rentMock.updateMany).toHaveBeenCalledTimes(4);
+  });
+
+  it("no borra rentas fuera de rango si tienen condonación (amountWaived)", async () => {
+    const contract = buildContract({
+      startDate: new Date(Date.UTC(2026, 2, 1)),
+      endDate: new Date(Date.UTC(2026, 5, 30)),
+    });
+    contractMock.findFirstOrThrow.mockResolvedValue(contract);
+
+    rentMock.findMany.mockImplementation((args: { where?: Record<string, unknown>; select?: Record<string, unknown> }) => {
+      if (args.where && args.where["amountPaid"] === 0) return Promise.resolve([]);
+      if (args.select && "amountWaived" in args.select) {
+        return Promise.resolve([
+          // Ene fuera de rango pero condonada → se conserva.
+          { id: "ene", period: new Date(Date.UTC(2026, 0, 1)), amountPaid: 0, amountWaived: 3000 },
+        ]);
+      }
+      return Promise.resolve([]);
+    });
+
+    const { reconcileRentsForContract } = await import("@/server/services/rent-generation");
+    const result = await reconcileRentsForContract(TENANT, CONTRACT_ID, {
+      now: new Date(Date.UTC(2026, 4, 15)),
+    });
+
+    expect(rentMock.deleteMany).not.toHaveBeenCalled();
+    expect(result.removed).toBe(0);
+    expect(result.keptWithPayments).toBe(1);
   });
 });

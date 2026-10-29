@@ -1,28 +1,45 @@
 import { PrestamosView } from "@/components/prestamos/PrestamosView";
-import {
-  getLoanYears,
-  getLoansYearlyMatrix,
-  getPrestamosKpis,
-} from "@/lib/services/prestamos-queries";
+import { requireAuth } from "@/server/auth/get-session";
+import { getUserRoleCodes } from "@/server/auth/permissions";
+import { prisma } from "@/server/prisma/client";
+import { getLoans } from "@/server/services/prestamos-queries";
+import { getLegalEntities } from "@/server/services/properties-queries";
 
 export const metadata = { title: "Préstamos" };
 
-interface Props {
+interface PageProps {
   searchParams: Promise<{ year?: string }>;
 }
 
-export default async function PrestamosPage({ searchParams }: Props) {
-  const { year: yearParam } = await searchParams;
+export default async function PrestamosPage({ searchParams }: PageProps) {
+  const { tenantId, dbUser } = await requireAuth();
+  const roles = await getUserRoleCodes(dbUser.id);
+  const canCreate =
+    roles.includes("MASTER") || roles.includes("ADMIN") || roles.includes("ACCOUNTANT");
+  const params = await searchParams;
+
+  const requestedYear = Number(params.year);
+  const year =
+    Number.isFinite(requestedYear) && requestedYear > 1900
+      ? requestedYear
+      : new Date().getUTCFullYear();
+
+  const oldestLoan = await prisma.loan.findFirst({
+    where: { tenantId },
+    orderBy: { startDate: "asc" },
+    select: { startDate: true },
+  });
+  const minYear = oldestLoan
+    ? Math.min(oldestLoan.startDate.getUTCFullYear(), year - 1)
+    : year - 1;
   const currentYear = new Date().getUTCFullYear();
+  const maxYear = Math.max(currentYear, year) + 1;
+  const availableYears: number[] = [];
+  for (let y = maxYear; y >= minYear; y--) availableYears.push(y);
 
-  const availableYears = await getLoanYears();
-  const year = yearParam
-    ? Math.max(2020, Math.min(2100, Number(yearParam)))
-    : (availableYears[0] ?? currentYear);
-
-  const [kpis, matrix] = await Promise.all([
-    getPrestamosKpis(year),
-    getLoansYearlyMatrix(year),
+  const [loans, legalEntities] = await Promise.all([
+    getLoans({ year }),
+    getLegalEntities(),
   ]);
 
   return (
@@ -30,12 +47,14 @@ export default async function PrestamosPage({ searchParams }: Props) {
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Préstamos</h1>
         <p className="text-sm text-muted-foreground">
-          Financiamientos de vehículos, hipotecas y créditos corporativos.
+          Financiamientos y créditos activos de la empresa.
         </p>
       </div>
       <PrestamosView
-        kpis={kpis}
-        matrix={matrix}
+        loans={loans}
+        legalEntities={legalEntities}
+        canCreate={canCreate}
+        year={year}
         availableYears={availableYears}
       />
     </div>

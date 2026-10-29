@@ -14,8 +14,12 @@ import {
   ChevronDown,
   ChevronRight,
   Download,
+  FileDown,
+  Pencil,
+  Search,
   Store,
   Trash2,
+  X,
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -42,37 +46,28 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  Table,
   TableBody,
   TableCell,
   TableHead,
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { paymentMethodLabel } from "@/lib/i18n/enums";
-import { actionDeletePayment } from "@/lib/services/payments";
-import type { PaymentListItem } from "@/lib/services/payments-queries";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { INMUEBLES_TAB_VALUE } from "@/components/shared/property-filter-constants";
+import { paymentMethodLabel } from "@/shared/i18n/enums";
+import { actionDeletePayment, actionEditPayment } from "@/server/services/payments";
+import type { PaymentListItem } from "@/server/services/payments-queries";
 import type { PaymentMethod } from "@/generated/prisma/enums";
-import { capitalizeFirst, cn } from "@/lib/utils";
-
-const MXN = new Intl.NumberFormat("es-MX", {
-  style: "currency",
-  currency: "MXN",
-  maximumFractionDigits: 2,
-});
-
-const DATE = new Intl.DateTimeFormat("es-MX", {
-  year: "numeric",
-  month: "short",
-  day: "2-digit",
-  timeZone: "UTC",
-});
-
-const PERIOD = new Intl.DateTimeFormat("es-MX", {
-  month: "short",
-  year: "numeric",
-  timeZone: "UTC",
-});
+import { cn } from "@/shared/utils";
+import { formatMXN } from "@/shared/format-currency";
+import { formatDate, formatPeriodShort } from "@/shared/format-date";
 
 const METHODS: ReadonlyArray<PaymentMethod> = [
   "TRANSFER",
@@ -92,17 +87,48 @@ interface PaymentsTableProps {
   payments: ReadonlyArray<PaymentListItem>;
   /** Si el usuario es MASTER, muestra el botón de borrar. */
   canDelete: boolean;
+  /** Si puede corregir pagos mal capturados (editar). */
+  canEdit: boolean;
+  /** Filtro de plaza/inmueble desde el PropertyFilterTabs a nivel de página. */
+  activePlazaId: string | null;
 }
 
-export function PaymentsTable({ payments, canDelete }: PaymentsTableProps) {
+interface EditForm {
+  amount: string;
+  paymentDate: string; // YYYY-MM-DD
+  method: PaymentMethod;
+  reference: string;
+  notes: string;
+}
+
+export function PaymentsTable({
+  payments,
+  canDelete,
+  canEdit,
+  activePlazaId,
+}: PaymentsTableProps) {
   const router = useRouter();
+  const todayStr = new Date().toISOString().slice(0, 10);
   const [search, setSearch] = useState("");
   const [methodFilter, setMethodFilter] = useState<PaymentMethod | "ALL">("ALL");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<PaymentListItem | null>(null);
+  const [editTarget, setEditTarget] = useState<PaymentListItem | null>(null);
+  const [editForm, setEditForm] = useState<EditForm | null>(null);
   const [pending, startTransition] = useTransition();
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+
+  function openEdit(p: PaymentListItem) {
+    setEditTarget(p);
+    setEditForm({
+      amount: String(p.amount),
+      paymentDate: p.paymentDate.toISOString().slice(0, 10),
+      method: p.method,
+      reference: p.reference ?? "",
+      notes: p.notes ?? "",
+    });
+  }
 
   function toggleGroup(unitId: string) {
     setCollapsed((prev) => {
@@ -121,6 +147,11 @@ export function PaymentsTable({ payments, canDelete }: PaymentsTableProps) {
       if (methodFilter !== "ALL" && p.method !== methodFilter) return false;
       if (fromDate && p.paymentDate < fromDate) return false;
       if (toDate && p.paymentDate > toDate) return false;
+      if (activePlazaId === INMUEBLES_TAB_VALUE) {
+        if (p.rent.contract.unit.property.type === "PLAZA_COMERCIAL") return false;
+      } else if (activePlazaId) {
+        if (p.rent.contract.unit.property.id !== activePlazaId) return false;
+      }
       if (q) {
         const haystack =
           p.rent.contract.lessee.legalName.toLowerCase() +
@@ -132,7 +163,7 @@ export function PaymentsTable({ payments, canDelete }: PaymentsTableProps) {
       }
       return true;
     });
-  }, [payments, search, methodFilter, from, to]);
+  }, [payments, search, methodFilter, from, to, activePlazaId]);
 
   const totalAmount = useMemo(
     () => filtered.reduce((acc, p) => acc + Number(p.amount), 0),
@@ -154,7 +185,11 @@ export function PaymentsTable({ payments, canDelete }: PaymentsTableProps) {
       p.paymentDate.toISOString().slice(0, 10),
       p.rent.contract.lessee.legalName,
       p.rent.contract.unit.property.name,
-      p.rent.contract.unit.code,
+      // En inmuebles individuales la columna "Inmueble" ya identifica todo; el
+      // código de local solo aplica a plazas.
+      p.rent.contract.unit.property.type === "PLAZA_COMERCIAL"
+        ? p.rent.contract.unit.code
+        : "",
       p.rent.period.toISOString().slice(0, 7),
       Number(p.amount).toFixed(2),
       p.method,
@@ -174,6 +209,17 @@ export function PaymentsTable({ payments, canDelete }: PaymentsTableProps) {
     a.download = `pagos-${new Date().toISOString().slice(0, 10)}.csv`;
     a.click();
     URL.revokeObjectURL(url);
+  }
+
+  function buildPdfUrl() {
+    const params = new URLSearchParams();
+    // Siempre envía las fechas; si no se eligió, usa hoy para que el PDF lo indique
+    params.set("from", from || todayStr);
+    params.set("to", to || todayStr);
+    if (methodFilter !== "ALL") params.set("method", methodFilter);
+    if (search.trim()) params.set("search", search.trim());
+    if (activePlazaId) params.set("plazaId", activePlazaId);
+    return `/api/documents/payments-history?${params.toString()}`;
   }
 
   const columns = useMemo<ColumnDef<PaymentListItem>[]>(
@@ -202,7 +248,7 @@ export function PaymentsTable({ payments, canDelete }: PaymentsTableProps) {
         header: "Fecha",
         cell: ({ row }) => (
           <div className="text-center text-xs tabular-nums text-muted-foreground">
-            {capitalizeFirst(DATE.format(row.original.paymentDate))}
+            {formatDate(row.original.paymentDate)}
           </div>
         ),
       },
@@ -211,7 +257,7 @@ export function PaymentsTable({ payments, canDelete }: PaymentsTableProps) {
         header: "Periodo",
         cell: ({ row }) => (
           <div className="text-center text-xs tabular-nums text-muted-foreground">
-            {capitalizeFirst(PERIOD.format(row.original.rent.period))}
+            {formatPeriodShort(row.original.rent.period)}
           </div>
         ),
       },
@@ -220,7 +266,7 @@ export function PaymentsTable({ payments, canDelete }: PaymentsTableProps) {
         header: "Monto",
         cell: ({ row }) => (
           <div className="text-right font-medium tabular-nums">
-            {MXN.format(Number(row.original.amount))}
+            {formatMXN(row.original.amount, 2)}
           </div>
         ),
       },
@@ -244,22 +290,35 @@ export function PaymentsTable({ payments, canDelete }: PaymentsTableProps) {
         id: "actions",
         header: () => <span className="sr-only">Acciones</span>,
         cell: ({ row }) => {
-          if (!canDelete) return null;
+          if (!canDelete && !canEdit) return null;
           return (
-            <div className="text-right">
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setDeleteTarget(row.original)}
-              >
-                <Trash2 className="size-4 text-destructive" />
-              </Button>
+            <div className="flex justify-end gap-1">
+              {canEdit ? (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => openEdit(row.original)}
+                  title="Editar pago"
+                >
+                  <Pencil className="size-4 text-muted-foreground" />
+                </Button>
+              ) : null}
+              {canDelete ? (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setDeleteTarget(row.original)}
+                  title="Eliminar pago"
+                >
+                  <Trash2 className="size-4 text-destructive" />
+                </Button>
+              ) : null}
             </div>
           );
         },
       },
     ],
-    [canDelete],
+    [canDelete, canEdit],
   );
 
   const table = useReactTable({
@@ -309,15 +368,46 @@ export function PaymentsTable({ payments, canDelete }: PaymentsTableProps) {
     });
   }
 
+  function confirmEdit() {
+    if (!editTarget || !editForm) return;
+    const id = editTarget.id;
+    const amount = Number(editForm.amount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      toast.error("Monto inválido.");
+      return;
+    }
+    startTransition(async () => {
+      try {
+        await actionEditPayment(id, {
+          amount,
+          paymentDate: new Date(editForm.paymentDate),
+          method: editForm.method,
+          reference: editForm.reference.trim() || undefined,
+          notes: editForm.notes.trim() || undefined,
+        });
+        toast.success("Pago actualizado. Se recalculó el estado de la renta.");
+        setEditTarget(null);
+        setEditForm(null);
+        router.refresh();
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "Error al editar.");
+      }
+    });
+  }
+
   return (
     <div className="space-y-3">
       <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
-        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
-          <Input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full sm:max-w-xs"
-          />
+        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-end">
+          <div className="relative w-full sm:w-64">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Buscar inquilino o inmueble..."
+              className="pl-8"
+            />
+          </div>
           <Select
             value={methodFilter}
             onValueChange={(v) => v && setMethodFilter(v as PaymentMethod | "ALL")}
@@ -345,9 +435,10 @@ export function PaymentsTable({ payments, canDelete }: PaymentsTableProps) {
               <Input
                 id="payments-from"
                 type="date"
-                value={from}
+                value={from || todayStr}
+                max={to || undefined}
                 onChange={(e) => setFrom(e.target.value)}
-                className="w-full sm:w-40"
+                className={cn("w-full sm:w-40", !from && "text-muted-foreground opacity-50")}
               />
             </div>
             <div className="flex flex-col gap-1">
@@ -360,11 +451,22 @@ export function PaymentsTable({ payments, canDelete }: PaymentsTableProps) {
               <Input
                 id="payments-to"
                 type="date"
-                value={to}
+                value={to || todayStr}
+                min={from || undefined}
                 onChange={(e) => setTo(e.target.value)}
-                className="w-full sm:w-40"
+                className={cn("w-full sm:w-40", !to && "text-muted-foreground opacity-50")}
               />
             </div>
+            {(from || to) && (
+              <button
+                type="button"
+                onClick={() => { setFrom(""); setTo(""); }}
+                className="self-end pb-1 text-muted-foreground hover:text-foreground"
+                title="Borrar fechas"
+              >
+                <X className="size-4" />
+              </button>
+            )}
           </div>
         </div>
         <div className="flex items-center justify-between gap-3 sm:justify-end">
@@ -373,43 +475,48 @@ export function PaymentsTable({ payments, canDelete }: PaymentsTableProps) {
               {filtered.length} pago{filtered.length === 1 ? "" : "s"}
             </p>
             <p className="text-lg font-semibold tabular-nums">
-              {MXN.format(totalAmount)}
+              {formatMXN(totalAmount, 2)}
             </p>
           </div>
           <Button variant="secondary" onClick={downloadCsv}>
             <Download className="size-4" />
             Exportar CSV
           </Button>
+          <Button
+            variant="secondary"
+            onClick={() => window.open(buildPdfUrl(), "_blank", "noopener,noreferrer")}
+          >
+            <FileDown className="size-4" />
+            Exportar PDF
+          </Button>
         </div>
       </div>
 
-      <div className="overflow-hidden rounded-lg border bg-card">
-        <Table className="min-w-[720px]">
+      <div className="overflow-x-auto rounded-lg border bg-card">
+        <table className="w-full min-w-[720px] caption-bottom text-sm">
           <TableHeader>
             {table.getHeaderGroups().map((hg) => (
               <TableRow key={hg.id} className="hover:bg-transparent">
                 {hg.headers.map((h) => {
-                  const align = h.column.id === "lessee"
-                    ? ""
-                    : h.column.id === "actions" || h.column.id === "amount"
-                      ? "text-right"
-                      : h.column.id === "reference"
-                        ? ""
-                        : "text-center";
+                  const align =
+                    h.column.id === "lessee"
+                      ? ""
+                      : h.column.id === "actions" || h.column.id === "amount"
+                        ? "text-right"
+                        : h.column.id === "reference"
+                          ? ""
+                          : "text-center";
                   return (
                     <TableHead
                       key={h.id}
                       className={cn(
-                        "text-xs font-medium uppercase tracking-wide text-muted-foreground",
+                        "bg-card shadow-[inset_0_-1px_0_0_var(--border)] text-xs font-medium uppercase tracking-wide text-muted-foreground",
                         align,
                       )}
                     >
                       {h.isPlaceholder
                         ? null
-                        : flexRender(
-                            h.column.columnDef.header,
-                            h.getContext(),
-                          )}
+                        : flexRender(h.column.columnDef.header, h.getContext())}
                     </TableHead>
                   );
                 })}
@@ -429,8 +536,7 @@ export function PaymentsTable({ payments, canDelete }: PaymentsTableProps) {
             ) : (
               groupedRows.map((group) => {
                 const isCollapsed = collapsed.has(group.unit.id);
-                const isPlaza =
-                  group.unit.property.type === "PLAZA_COMERCIAL";
+                const isPlaza = group.unit.property.type === "PLAZA_COMERCIAL";
                 const Icon = isPlaza ? Store : Building2;
                 const Chevron = isCollapsed ? ChevronRight : ChevronDown;
                 return (
@@ -439,20 +545,19 @@ export function PaymentsTable({ payments, canDelete }: PaymentsTableProps) {
                       className="cursor-pointer bg-muted/40 hover:bg-muted/60"
                       onClick={() => toggleGroup(group.unit.id)}
                     >
-                      <TableCell
-                        colSpan={columns.length}
-                        className="py-2"
-                      >
+                      <TableCell colSpan={columns.length} className="py-2">
                         <div className="flex items-center gap-2">
                           <Chevron className="size-4 text-muted-foreground" />
                           <Icon className="size-4 text-muted-foreground" />
                           <span className="font-medium">
                             {group.unit.property.name}
                           </span>
-                          <span className="text-xs text-muted-foreground">
-                            {group.unit.code}
-                            {group.unit.name ? ` — ${group.unit.name}` : ""}
-                          </span>
+                          {isPlaza ? (
+                            <span className="text-xs text-muted-foreground">
+                              {group.unit.code}
+                              {group.unit.name ? ` — ${group.unit.name}` : ""}
+                            </span>
+                          ) : null}
                           <Badge variant="outline" className="text-[10px]">
                             {isPlaza ? "Plaza" : "Inmueble"}
                           </Badge>
@@ -481,7 +586,7 @@ export function PaymentsTable({ payments, canDelete }: PaymentsTableProps) {
               })
             )}
           </TableBody>
-        </Table>
+        </table>
       </div>
 
       <AlertDialog
@@ -510,6 +615,109 @@ export function PaymentsTable({ payments, canDelete }: PaymentsTableProps) {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <Dialog
+        open={editTarget !== null}
+        onOpenChange={(o) => {
+          if (!o) {
+            setEditTarget(null);
+            setEditForm(null);
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Editar pago</DialogTitle>
+            <DialogDescription>
+              Corrige un pago mal capturado. Se recalcula el estado de la renta y
+              el cambio queda en el Historial de Cambios (con opción de deshacer).
+            </DialogDescription>
+          </DialogHeader>
+          {editForm ? (
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="space-y-1 text-sm">
+                <span className="text-xs text-muted-foreground">Monto (MXN)</span>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={editForm.amount}
+                  onChange={(e) =>
+                    setEditForm((f) => (f ? { ...f, amount: e.target.value } : f))
+                  }
+                />
+              </label>
+              <label className="space-y-1 text-sm">
+                <span className="text-xs text-muted-foreground">Fecha de pago</span>
+                <Input
+                  type="date"
+                  value={editForm.paymentDate}
+                  onChange={(e) =>
+                    setEditForm((f) => (f ? { ...f, paymentDate: e.target.value } : f))
+                  }
+                />
+              </label>
+              <label className="space-y-1 text-sm">
+                <span className="text-xs text-muted-foreground">Método</span>
+                <Select
+                  value={editForm.method}
+                  onValueChange={(v) =>
+                    v && setEditForm((f) => (f ? { ...f, method: v as PaymentMethod } : f))
+                  }
+                  items={Object.fromEntries(METHODS.map((m) => [m, paymentMethodLabel(m)]))}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {METHODS.map((m) => (
+                      <SelectItem key={m} value={m}>
+                        {paymentMethodLabel(m)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </label>
+              <label className="space-y-1 text-sm">
+                <span className="text-xs text-muted-foreground">Referencia</span>
+                <Input
+                  value={editForm.reference}
+                  onChange={(e) =>
+                    setEditForm((f) => (f ? { ...f, reference: e.target.value } : f))
+                  }
+                  placeholder="N° de transferencia, cheque…"
+                />
+              </label>
+              <label className="space-y-1 text-sm sm:col-span-2">
+                <span className="text-xs text-muted-foreground">Notas</span>
+                <textarea
+                  className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+                  rows={2}
+                  value={editForm.notes}
+                  onChange={(e) =>
+                    setEditForm((f) => (f ? { ...f, notes: e.target.value } : f))
+                  }
+                />
+              </label>
+            </div>
+          ) : null}
+          <DialogFooter>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setEditTarget(null);
+                setEditForm(null);
+              }}
+              disabled={pending}
+            >
+              Cancelar
+            </Button>
+            <Button onClick={confirmEdit} disabled={pending}>
+              {pending ? "Guardando..." : "Guardar cambios"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

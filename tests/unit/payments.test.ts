@@ -31,15 +31,16 @@ const txMock = {
 
 vi.mock("next/cache", () => ({
   revalidatePath: (...args: unknown[]) => mockRevalidatePath(...args),
+  revalidateTag: vi.fn(),
 }));
 
-vi.mock("@/lib/auth/get-session", () => ({
+vi.mock("@/server/auth/get-session", () => ({
   requireAuth: () => mockRequireAuth(),
 }));
 
-vi.mock("@/lib/auth/permissions", async () => {
-  const actual = await vi.importActual<typeof import("@/lib/auth/permissions")>(
-    "@/lib/auth/permissions",
+vi.mock("@/server/auth/permissions", async () => {
+  const actual = await vi.importActual<typeof import("@/server/auth/permissions")>(
+    "@/server/auth/permissions",
   );
   return {
     ...actual,
@@ -47,7 +48,7 @@ vi.mock("@/lib/auth/permissions", async () => {
   };
 });
 
-vi.mock("@/lib/prisma/client", () => ({
+vi.mock("@/server/prisma/client", () => ({
   prisma: {
     payment: paymentMock,
     rent: rentMock,
@@ -59,7 +60,7 @@ vi.mock("@/lib/prisma/client", () => ({
 }));
 
 const mockSendPaymentConfirmation = vi.fn();
-vi.mock("@/lib/services/notifications", () => ({
+vi.mock("@/server/services/notifications", () => ({
   sendPaymentConfirmation: (...args: unknown[]) => mockSendPaymentConfirmation(...args),
 }));
 
@@ -84,6 +85,20 @@ function rentRow(amountDue: number) {
     amountDue: new Prisma.Decimal(amountDue),
     dueDate: utc(2026, 3, 1),
     status: "DUE" as const,
+    lateFeeAccrued: new Prisma.Decimal(0),
+  };
+}
+
+// Resultado del findFirst inicial: el código lee el saldo (amountDue/Paid/Waived)
+// para calcular cuánto cubre el pago y si hay sobrante a cascadear.
+function rentLookup() {
+  return {
+    id: "rent-1",
+    contractId: "contract-1",
+    period: utc(2026, 3, 1),
+    amountDue: new Prisma.Decimal(10000),
+    amountPaid: new Prisma.Decimal(0),
+    amountWaived: new Prisma.Decimal(0),
   };
 }
 
@@ -93,12 +108,12 @@ function rentRow(amountDue: number) {
 
 describe("actionRegisterPayment", () => {
   it("monto exacto deja la renta en PAID con amountPaid = amountDue", async () => {
-    rentMock.findFirst.mockResolvedValue({ id: "rent-1" });
+    rentMock.findFirst.mockResolvedValue(rentLookup());
     paymentMock.create.mockResolvedValue({ id: "pay-1" });
     paymentMock.findMany.mockResolvedValue([{ amount: 10000 }]);
     rentMock.findFirstOrThrow.mockResolvedValue(rentRow(10000));
 
-    const { actionRegisterPayment } = await import("@/lib/services/payments");
+    const { actionRegisterPayment } = await import("@/server/services/payments");
     const result = await actionRegisterPayment({
       rentId: "rent-1",
       amount: 10000,
@@ -119,12 +134,12 @@ describe("actionRegisterPayment", () => {
   });
 
   it("monto parcial deja la renta en PARTIAL con amountPaid actualizado", async () => {
-    rentMock.findFirst.mockResolvedValue({ id: "rent-1" });
+    rentMock.findFirst.mockResolvedValue(rentLookup());
     paymentMock.create.mockResolvedValue({ id: "pay-1" });
     paymentMock.findMany.mockResolvedValue([{ amount: 4000 }]);
     rentMock.findFirstOrThrow.mockResolvedValue(rentRow(10000));
 
-    const { actionRegisterPayment } = await import("@/lib/services/payments");
+    const { actionRegisterPayment } = await import("@/server/services/payments");
     const result = await actionRegisterPayment({
       rentId: "rent-1",
       amount: 4000,
@@ -142,12 +157,12 @@ describe("actionRegisterPayment", () => {
 
   it("dos pagos parciales que suman el total terminan en PAID", async () => {
     // Primer pago: 6000 sobre amountDue=10000 → PARTIAL
-    rentMock.findFirst.mockResolvedValue({ id: "rent-1" });
+    rentMock.findFirst.mockResolvedValue(rentLookup());
     paymentMock.create.mockResolvedValue({ id: "pay-1" });
     paymentMock.findMany.mockResolvedValue([{ amount: 6000 }]);
     rentMock.findFirstOrThrow.mockResolvedValue(rentRow(10000));
 
-    const { actionRegisterPayment } = await import("@/lib/services/payments");
+    const { actionRegisterPayment } = await import("@/server/services/payments");
     const r1 = await actionRegisterPayment({
       rentId: "rent-1",
       amount: 6000,
@@ -176,7 +191,7 @@ describe("actionRegisterPayment", () => {
 
   it("falla si la renta no pertenece al tenant", async () => {
     rentMock.findFirst.mockResolvedValue(null);
-    const { actionRegisterPayment } = await import("@/lib/services/payments");
+    const { actionRegisterPayment } = await import("@/server/services/payments");
     await expect(
       actionRegisterPayment({
         rentId: "rent-x",
@@ -188,22 +203,95 @@ describe("actionRegisterPayment", () => {
     expect(paymentMock.create).not.toHaveBeenCalled();
   });
 
-  it("respeta WAIVED: no recalcula a otro estado aunque haya pago", async () => {
-    rentMock.findFirst.mockResolvedValue({ id: "rent-1" });
+  it("congela el interés devengado al saldar el principal con pago tardío (política CRT)", async () => {
+    rentMock.findFirst.mockResolvedValue(rentLookup());
+    paymentMock.create.mockResolvedValue({ id: "pay-1" });
+    paymentMock.findMany.mockResolvedValue([{ amount: 10000 }]);
+    // La renta traía 750 de interés acumulado por el cron.
+    rentMock.findFirstOrThrow.mockResolvedValue({
+      ...rentRow(10000),
+      lateFeeAccrued: new Prisma.Decimal(750),
+      contract: { lateFeePercentage: new Prisma.Decimal(5) },
+    });
+
+    const { actionRegisterPayment } = await import("@/server/services/payments");
+    const result = await actionRegisterPayment({
+      rentId: "rent-1",
+      amount: 10000,
+      paymentDate: utc(2026, 5, 20), // pago tardío
+      method: "TRANSFER",
+    });
+
+    expect(result.rentStatus).toBe("PAID");
+    const arg = rentMock.updateMany.mock.calls[0]?.[0] as {
+      data: { status: string; lateFeeAccrued: Prisma.Decimal };
+    };
+    // El interés NO se limpia: queda congelado como cargo exigible aparte
+    // (docs/decisiones-negocio-pendientes.md #1).
+    expect(arg.data.status).toBe("PAID");
+    expect(arg.data.lateFeeAccrued.toString()).toBe("750");
+  });
+
+  it("el sobrante cascadea a mensualidades del año siguiente (sin límite de año)", async () => {
+    rentMock.findFirst.mockResolvedValue(rentLookup()); // abr 2026, due 10000
+    // Sobrante de 20000 tras saldar el principal → cubre dic 2026 y ene 2027.
+    rentMock.findMany.mockResolvedValueOnce([
+      {
+        id: "rent-2",
+        period: utc(2026, 11, 1),
+        amountDue: new Prisma.Decimal(10000),
+        amountPaid: new Prisma.Decimal(0),
+        amountWaived: new Prisma.Decimal(0),
+      },
+      {
+        id: "rent-3",
+        period: utc(2027, 0, 1), // enero del año SIGUIENTE
+        amountDue: new Prisma.Decimal(10000),
+        amountPaid: new Prisma.Decimal(0),
+        amountWaived: new Prisma.Decimal(0),
+      },
+    ]);
+    paymentMock.create.mockResolvedValue({ id: "pay-n" });
+    paymentMock.findMany.mockResolvedValue([{ amount: 10000 }]);
+    rentMock.findFirstOrThrow.mockResolvedValue(rentRow(10000));
+
+    const { actionRegisterPayment } = await import("@/server/services/payments");
+    const result = await actionRegisterPayment({
+      rentId: "rent-1",
+      amount: 30000,
+      paymentDate: utc(2026, 3, 5),
+      method: "TRANSFER",
+    });
+
+    // La query de cascada NO limita por periodo/año (política CRT #2).
+    const whereArg = (
+      rentMock.findMany.mock.calls[0]?.[0] as { where: Record<string, unknown> }
+    ).where;
+    expect(whereArg["period"]).toBeUndefined();
+
+    expect(result.cascade).toHaveLength(2);
+    expect(result.cascade[1]?.rentId).toBe("rent-3");
+    expect(result.cascade[1]?.amount).toBe(10000);
+    expect(result.remainderApplied).toBe(0); // todo el sobrante quedó aplicado
+  });
+
+  it("recalcula una renta WAIVED si entra un pago real (WAIVED no bloquea cobros)", async () => {
+    rentMock.findFirst.mockResolvedValue(rentLookup());
     paymentMock.create.mockResolvedValue({ id: "pay-1" });
     paymentMock.findMany.mockResolvedValue([{ amount: 5000 }]);
     rentMock.findFirstOrThrow.mockResolvedValue({
       ...rentRow(10000),
       status: "WAIVED" as const,
     });
-    const { actionRegisterPayment } = await import("@/lib/services/payments");
+    const { actionRegisterPayment } = await import("@/server/services/payments");
     const r = await actionRegisterPayment({
       rentId: "rent-1",
       amount: 5000,
       paymentDate: utc(2026, 3, 5),
       method: "CASH",
     });
-    expect(r.rentStatus).toBe("WAIVED");
+    // El pago entrante hace que el flujo normal recalcule: WAIVED → PARTIAL.
+    expect(r.rentStatus).toBe("PARTIAL");
   });
 });
 
@@ -229,7 +317,7 @@ describe("actionRegisterBulkPayment", () => {
       .mockResolvedValueOnce([{ amount: 10000 }]);
     rentMock.findFirstOrThrow.mockResolvedValue(rentRow(10000));
 
-    const { actionRegisterBulkPayment } = await import("@/lib/services/payments");
+    const { actionRegisterBulkPayment } = await import("@/server/services/payments");
     const result = await actionRegisterBulkPayment({
       lesseeId: "lessee-1",
       amount: 30000,
@@ -255,7 +343,7 @@ describe("actionRegisterBulkPayment", () => {
   });
 
   it("falla si la suma del split no coincide con el monto", async () => {
-    const { actionRegisterBulkPayment } = await import("@/lib/services/payments");
+    const { actionRegisterBulkPayment } = await import("@/server/services/payments");
     await expect(
       actionRegisterBulkPayment({
         lesseeId: "lessee-1",
@@ -273,7 +361,7 @@ describe("actionRegisterBulkPayment", () => {
 
   it("falla si alguna renta no pertenece al inquilino", async () => {
     rentMock.findMany.mockResolvedValueOnce([{ id: "rent-1" }]); // sólo encuentra 1 de 2
-    const { actionRegisterBulkPayment } = await import("@/lib/services/payments");
+    const { actionRegisterBulkPayment } = await import("@/server/services/payments");
     await expect(
       actionRegisterBulkPayment({
         lesseeId: "lessee-1",
@@ -296,6 +384,7 @@ describe("actionRegisterBulkPayment", () => {
 
 describe("actionDeletePayment", () => {
   it("borra el pago y recalcula la renta", async () => {
+    userRoleMock.findFirst.mockResolvedValue({ userId: USER }); // es MASTER
     paymentMock.findFirst.mockResolvedValue({
       id: "pay-1",
       rentId: "rent-1",
@@ -306,7 +395,7 @@ describe("actionDeletePayment", () => {
     paymentMock.findMany.mockResolvedValue([]); // ya no hay pagos tras el delete
     rentMock.findFirstOrThrow.mockResolvedValue(rentRow(10000));
 
-    const { actionDeletePayment } = await import("@/lib/services/payments");
+    const { actionDeletePayment } = await import("@/server/services/payments");
     await actionDeletePayment("pay-1");
 
     expect(paymentMock.deleteMany).toHaveBeenCalledOnce();
@@ -319,15 +408,14 @@ describe("actionDeletePayment", () => {
     expect(arg.data.amountPaid.toString()).toBe("0");
   });
 
-  it("PermissionError si el user no es MASTER", async () => {
-    mockRequirePermission.mockImplementation(async (_u, code: string) => {
-      const { PermissionError } = await import("@/lib/auth/permissions");
-      throw new PermissionError(code);
-    });
-    const { actionDeletePayment } = await import("@/lib/services/payments");
+  it("PermissionError si el user no es MASTER (aunque tenga el permission sembrado)", async () => {
+    // El gate es por rol explícito: ni siquiera requirePermission aplica.
+    userRoleMock.findFirst.mockResolvedValue(null); // no es MASTER
+    const { actionDeletePayment } = await import("@/server/services/payments");
     await expect(actionDeletePayment("pay-1")).rejects.toMatchObject({
       name: "PermissionError",
       code: "payment.delete",
     });
+    expect(paymentMock.deleteMany).not.toHaveBeenCalled();
   });
 });

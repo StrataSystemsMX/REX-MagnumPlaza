@@ -4,7 +4,7 @@ import { useState } from "react";
 import {
   PROPERTIES_VIEW_COOKIE,
   type PropertiesViewMode,
-} from "@/lib/properties-view-mode";
+} from "@/shared/properties-view-mode";
 
 const ONE_YEAR = 60 * 60 * 24 * 365;
 

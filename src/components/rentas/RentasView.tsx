@@ -19,37 +19,20 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
-import { actionGetContractRentHistory } from "@/lib/services/rentas";
-import type { ContractHistoryEntry } from "@/lib/services/rentas-queries";
-import type { RentTableRow, RentasTableData } from "@/lib/services/rentas-queries";
-import { capitalizeFirst, cn } from "@/lib/utils";
+import { RentStatusBadge } from "@/components/shared/RentStatusBadge";
+import { actionGetContractRentHistory } from "@/server/services/rentas";
+import type { RentStatus } from "@/generated/prisma/enums";
+import type { ContractHistoryEntry } from "@/server/services/rentas-queries";
+import type { RentTableRow, RentasTableData } from "@/server/services/rentas-queries";
+import { cn } from "@/shared/utils";
+import { formatMXN } from "@/shared/format-currency";
+import {
+  formatDate,
+  formatPeriodLong,
+  formatPeriodShort,
+} from "@/shared/format-date";
 
 // ─── Formatters ───────────────────────────────────────────────────────────────
-
-const MXN = new Intl.NumberFormat("es-MX", {
-  style: "currency",
-  currency: "MXN",
-  maximumFractionDigits: 0,
-});
-
-const MONTH_LONG = new Intl.DateTimeFormat("es-MX", {
-  month: "long",
-  year: "numeric",
-  timeZone: "UTC",
-});
-
-const MONTH_SHORT = new Intl.DateTimeFormat("es-MX", {
-  month: "short",
-  year: "2-digit",
-  timeZone: "UTC",
-});
-
-const DATE_MED = new Intl.DateTimeFormat("es-MX", {
-  day: "numeric",
-  month: "short",
-  year: "numeric",
-  timeZone: "UTC",
-});
 
 function toYYYYMM(isoDate: string): string {
   const d = new Date(isoDate);
@@ -66,57 +49,22 @@ function nextMonth(isoDate: string): string {
   return toYYYYMM(new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1)).toISOString());
 }
 
-// ─── Status config ────────────────────────────────────────────────────────────
+// ─── Status badge ─────────────────────────────────────────────────────────────
+// Delega en RentStatusBadge (mismo color/label que Cobranza, Historial, etc.)
+// para los 8 status reales de Rent. "NOT_GENERATED" es un pseudo-estado propio
+// de este calendario (el mes aún no generó Rent) — no existe en RentStatus.
 
-const STATUS_CFG: Record<string, { label: string; cls: string }> = {
-  PAID: {
-    label: "Pagado",
-    cls: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400",
-  },
-  PARTIAL: {
-    label: "Parcial",
-    cls: "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400",
-  },
-  PENDING: {
-    label: "Pendiente",
-    cls: "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400",
-  },
-  DUE: {
-    label: "Vencida",
-    cls: "bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400",
-  },
-  OVERDUE_1M: {
-    label: "Vencida 1m",
-    cls: "bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400",
-  },
-  OVERDUE_2M: {
-    label: "Vencida 2m",
-    cls: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400",
-  },
-  OVERDUE_3M: {
-    label: "Vencida 3m",
-    cls: "bg-red-200 text-red-900 dark:bg-red-900/50 dark:text-red-300 font-semibold",
-  },
-  WAIVED: {
-    label: "Condonada",
-    cls: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400",
-  },
-  NOT_GENERATED: {
-    label: "Sin generar",
-    cls: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400",
-  },
-};
+const REAL_RENT_STATUSES = new Set<string>([
+  "PENDING", "DUE", "PARTIAL", "OVERDUE_1M", "OVERDUE_2M", "OVERDUE_3M", "PAID", "WAIVED",
+]);
 
 function StatusBadge({ status }: { status: string }) {
-  const cfg = STATUS_CFG[status] ?? { label: status, cls: STATUS_CFG.PENDING!.cls };
+  if (REAL_RENT_STATUSES.has(status)) {
+    return <RentStatusBadge status={status as RentStatus} />;
+  }
   return (
-    <span
-      className={cn(
-        "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium",
-        cfg.cls,
-      )}
-    >
-      {cfg.label}
+    <span className="inline-flex items-center rounded-full bg-yellow-100 px-2.5 py-0.5 text-xs font-medium text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400">
+      Sin generar
     </span>
   );
 }
@@ -175,7 +123,13 @@ function toneBarClass(tone: Tone): string {
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export function RentasView({ tableData }: { tableData: RentasTableData }) {
+export function RentasView({
+  tableData,
+  modeToggle,
+}: {
+  tableData: RentasTableData;
+  modeToggle?: React.ReactNode;
+}) {
   const router = useRouter();
   const [selectedPropertyId, setSelectedPropertyId] = useState<string | null>(null);
   const [histRow, setHistRow] = useState<RentTableRow | null>(null);
@@ -253,9 +207,6 @@ export function RentasView({ tableData }: { tableData: RentasTableData }) {
   );
 
   const selectedProperty = propertySummaries.find((p) => p.propertyId === selectedPropertyId);
-  const activeUnitCount = selectedProperty
-    ? selectedRows.filter((r) => r.status !== "NOT_GENERATED").length
-    : tableData.rows.filter((r) => r.status !== "NOT_GENERATED").length;
   const expected = selectedProperty?.expected ?? tableData.kpis.expected;
   const collected = selectedProperty?.collected ?? tableData.kpis.collected;
   const pendingAmount = selectedProperty
@@ -276,7 +227,7 @@ export function RentasView({ tableData }: { tableData: RentasTableData }) {
             <div className="flex flex-wrap items-center gap-2">
               <Badge variant="outline" className="bg-background gap-1.5">
                 <CalendarDays className="size-3.5" />
-                <span>{capitalizeFirst(MONTH_LONG.format(period))}</span>
+                <span>{formatPeriodLong(period)}</span>
               </Badge>
               {selectedProperty ? (
                 <Badge variant="outline" className="bg-background font-mono">
@@ -285,7 +236,8 @@ export function RentasView({ tableData }: { tableData: RentasTableData }) {
               ) : null}
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              {modeToggle}
               {selectedPropertyId ? (
                 <Button
                   variant="outline"
@@ -333,10 +285,10 @@ export function RentasView({ tableData }: { tableData: RentasTableData }) {
               Renta total
             </h2>
             <p className="mt-3 text-3xl font-semibold tracking-tight tabular-nums">
-              {MXN.format(expected)}
+              {formatMXN(expected)}
             </p>
             <p className="text-muted-foreground mt-2 text-sm">
-              Pendiente {MXN.format(pendingAmount)}
+              Pendiente {formatMXN(pendingAmount)}
             </p>
           </div>
 
@@ -344,8 +296,8 @@ export function RentasView({ tableData }: { tableData: RentasTableData }) {
             <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
               <p className="text-sm font-medium">Progreso de cobranza</p>
               <p className="text-muted-foreground text-sm tabular-nums">
-                <span className={toneTextClass(periodTone)}>{MXN.format(collected)}</span> /{" "}
-                {MXN.format(expected)}
+                <span className={toneTextClass(periodTone)}>{formatMXN(collected)}</span> /{" "}
+                {formatMXN(expected)}
               </p>
             </div>
             <div className="bg-muted h-4 overflow-hidden rounded-full">
@@ -355,10 +307,10 @@ export function RentasView({ tableData }: { tableData: RentasTableData }) {
               />
             </div>
             <div className="grid gap-3 sm:grid-cols-3">
-              <DigestMetric label="Cobrado" value={MXN.format(collected)} tone="positive" />
+              <DigestMetric label="Cobrado" value={formatMXN(collected)} tone="positive" />
               <DigestMetric
                 label="Pendiente"
-                value={MXN.format(pendingAmount)}
+                value={formatMXN(pendingAmount)}
                 tone={pendingAmount > 0 ? "warning" : "positive"}
               />
               <DigestMetric label="Avance" value={`${pctValue}%`} tone={periodTone} />
@@ -528,7 +480,7 @@ function PlazaCard({ summary: s, onClick }: { summary: PropertySummary; onClick:
             <div className="flex items-end justify-between gap-3">
               <div>
                 <p className="text-muted-foreground text-xs">Cobrado</p>
-                <p className="text-2xl font-semibold tabular-nums">{MXN.format(s.collected)}</p>
+                <p className="text-2xl font-semibold tabular-nums">{formatMXN(s.collected)}</p>
               </div>
               <div className="text-right">
                 <p className={cn("text-xl font-semibold tabular-nums", toneTextClass(tone))}>
@@ -547,7 +499,7 @@ function PlazaCard({ summary: s, onClick }: { summary: PropertySummary; onClick:
               />
             </div>
             <div className="mt-2 flex items-center justify-between gap-3 text-xs">
-              <span className="text-muted-foreground">{MXN.format(s.expected)} esperado</span>
+              <span className="text-muted-foreground">{formatMXN(s.expected)} esperado</span>
               <span
                 className={cn(
                   "font-medium tabular-nums",
@@ -556,7 +508,7 @@ function PlazaCard({ summary: s, onClick }: { summary: PropertySummary; onClick:
                     : "text-green-700 dark:text-green-400",
                 )}
               >
-                {pending > 0 ? `${MXN.format(pending)} pendiente` : "Al corriente"}
+                {pending > 0 ? `${formatMXN(pending)} pendiente` : "Al corriente"}
               </span>
             </div>
           </div>
@@ -584,7 +536,7 @@ function PlazaCard({ summary: s, onClick }: { summary: PropertySummary; onClick:
             </Badge>
             {s.accumulatedDebt > 0 ? (
               <span className="font-medium text-red-700 dark:text-red-400">
-                Adeudo {MXN.format(s.accumulatedDebt)}
+                Adeudo {formatMXN(s.accumulatedDebt)}
               </span>
             ) : (
               <span className="text-muted-foreground">Sin adeudo acumulado</span>
@@ -632,13 +584,13 @@ function PropertyTable({
         <div>
           <h3 className="text-base font-semibold">Locales</h3>
           <p className="text-muted-foreground text-xs">
-            {rows.length} locales, {MXN.format(collected)} cobrado de {MXN.format(expected)}.
+            {rows.length} locales, {formatMXN(collected)} cobrado de {formatMXN(expected)}.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <SoftPill tone="positive">Cobrado {MXN.format(collected)}</SoftPill>
+          <SoftPill tone="positive">Cobrado {formatMXN(collected)}</SoftPill>
           <SoftPill tone={pending > 0 ? "warning" : "positive"}>
-            Pendiente {MXN.format(pending)}
+            Pendiente {formatMXN(pending)}
           </SoftPill>
         </div>
       </div>
@@ -689,15 +641,15 @@ function UnitCard({ row, onHistory }: { row: RentTableRow; onHistory: () => void
         </div>
 
         <div className="grid grid-cols-3 gap-2 text-xs">
-          <AmountBlock label="Renta" value={MXN.format(row.monthlyAmount)} />
+          <AmountBlock label="Renta" value={formatMXN(row.monthlyAmount)} />
           <AmountBlock
             label="Pagado"
-            value={row.amountPaid > 0 ? MXN.format(row.amountPaid) : "$0"}
+            value={row.amountPaid > 0 ? formatMXN(row.amountPaid) : "$0"}
             tone="positive"
           />
           <AmountBlock
             label="Pendiente"
-            value={row.amountPending > 0 ? MXN.format(row.amountPending) : "$0"}
+            value={row.amountPending > 0 ? formatMXN(row.amountPending) : "$0"}
             tone={row.amountPending > 0 ? rowTone : "neutral"}
           />
         </div>
@@ -705,7 +657,7 @@ function UnitCard({ row, onHistory }: { row: RentTableRow; onHistory: () => void
         <div className="flex items-center justify-between gap-3 lg:justify-end">
           {row.accumulatedDebt > 0 ? (
             <span className="text-xs font-medium text-red-700 dark:text-red-400">
-              Adeudo acum. {MXN.format(row.accumulatedDebt)}
+              Adeudo acum. {formatMXN(row.accumulatedDebt)}
             </span>
           ) : (
             <span className="text-muted-foreground text-xs">Sin adeudo acum.</span>
@@ -754,16 +706,16 @@ function HistoryEntry({ entry }: { entry: ContractHistoryEntry }) {
     <div className="bg-card space-y-3 rounded-lg border p-4">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-2.5">
-          <span className="text-sm font-semibold">{capitalizeFirst(MONTH_SHORT.format(period))}</span>
+          <span className="text-sm font-semibold">{formatPeriodShort(period)}</span>
           <StatusBadge status={entry.status} />
         </div>
         <div className="text-right text-sm tabular-nums">
           <span
             className={cn(isPaid ? "text-green-700 dark:text-green-400" : "text-muted-foreground")}
           >
-            {MXN.format(entry.amountPaid)}
+            {formatMXN(entry.amountPaid)}
           </span>
-          <span className="text-muted-foreground"> / {MXN.format(entry.amountDue)}</span>
+          <span className="text-muted-foreground"> / {formatMXN(entry.amountDue)}</span>
         </div>
       </div>
 
@@ -775,7 +727,7 @@ function HistoryEntry({ entry }: { entry: ContractHistoryEntry }) {
               className="bg-muted/40 flex flex-col gap-1 rounded-md px-3 py-2 text-xs sm:flex-row sm:items-center sm:justify-between"
             >
               <div className="text-muted-foreground flex flex-wrap items-center gap-2">
-                <span>{capitalizeFirst(DATE_MED.format(new Date(p.paymentDate)))}</span>
+                <span>{formatDate(new Date(p.paymentDate))}</span>
                 <Separator orientation="vertical" className="h-3" />
                 <span>{METHOD_LABELS[p.method] ?? p.method}</span>
                 {p.reference && (
@@ -786,7 +738,7 @@ function HistoryEntry({ entry }: { entry: ContractHistoryEntry }) {
                 )}
               </div>
               <span className="font-medium text-green-700 tabular-nums dark:text-green-400">
-                {MXN.format(p.amount)}
+                {formatMXN(p.amount)}
               </span>
             </div>
           ))}

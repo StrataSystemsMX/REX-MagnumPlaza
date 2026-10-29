@@ -8,7 +8,7 @@ const notificationLogMock = {
   update: vi.fn(),
 };
 
-vi.mock("@/lib/prisma/client", () => ({
+vi.mock("@/server/prisma/client", () => ({
   prisma: {},
   prismaUnsafe: {
     notificationLog: notificationLogMock,

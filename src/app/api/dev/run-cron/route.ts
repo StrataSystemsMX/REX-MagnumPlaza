@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { runDailyMorosityCron } from "@/lib/services/cron-runner";
+import { runDailyMorosityCron } from "@/server/services/cron-runner";
 
 /**
  * Endpoint sólo-dev para disparar el cron de morosidad a mano sin necesidad

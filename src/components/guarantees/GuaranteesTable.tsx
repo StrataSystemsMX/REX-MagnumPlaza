@@ -20,10 +20,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { YearNavigator } from "@/components/shared/yearly-matrix/YearlyMatrixParts";
 import type { GuaranteeStatus } from "@/generated/prisma/enums";
-import type { GuaranteeRow } from "@/lib/services/guarantees-queries";
-import type { LegalEntityOption } from "@/lib/services/properties-queries";
-import { capitalizeFirst, cn } from "@/lib/utils";
+import type { GuaranteeRow } from "@/server/services/guarantees-queries";
+import type { LegalEntityOption } from "@/server/services/properties-queries";
+import { formatMXN } from "@/shared/format-currency";
+import { formatDate } from "@/shared/format-date";
+import { cn } from "@/shared/utils";
+import { isPlaza } from "@/shared/i18n/unit-label";
 
 type StatusFilter = "ALL" | GuaranteeStatus;
 
@@ -33,25 +37,6 @@ const STATUS_FILTER_ITEMS: Record<StatusFilter, string> = {
   PARTIALLY_RETURNED: "Devolución parcial",
   RETURNED: "Devuelto",
 };
-
-const MXN = new Intl.NumberFormat("es-MX", {
-  style: "currency",
-  currency: "MXN",
-  maximumFractionDigits: 2,
-});
-
-const MXN_INT = new Intl.NumberFormat("es-MX", {
-  style: "currency",
-  currency: "MXN",
-  maximumFractionDigits: 0,
-});
-
-const DATE = new Intl.DateTimeFormat("es-MX", {
-  year: "numeric",
-  month: "short",
-  day: "2-digit",
-  timeZone: "UTC",
-});
 
 const ENTITY_THEME: Record<
   string,
@@ -138,6 +123,8 @@ interface Props {
   legalEntities: ReadonlyArray<LegalEntityOption>;
   totals: Totals;
   canManage: boolean;
+  year: number;
+  availableYears: ReadonlyArray<number>;
 }
 
 interface OwnerGroup {
@@ -154,6 +141,8 @@ export function GuaranteesTable({
   legalEntities,
   totals,
   canManage,
+  year,
+  availableYears,
 }: Props) {
   const [ownerFilter, setOwnerFilter] = useState<string>("ALL");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("ALL");
@@ -220,6 +209,9 @@ export function GuaranteesTable({
     <>
       {/* Filters */}
       <div className="flex flex-wrap items-end gap-3">
+        <FilterField label="Año">
+          <YearNavigator year={year} availableYears={availableYears} />
+        </FilterField>
         <FilterField label="Dueña">
           <Select
             value={ownerFilter}
@@ -263,13 +255,13 @@ export function GuaranteesTable({
         <KpiCard
           icon={<Wallet className="size-4" />}
           label="Total registrado"
-          value={MXN_INT.format(totals.total)}
+          value={formatMXN(totals.total)}
           sub={`${totalCount} fianza${totalCount === 1 ? "" : "s"} históricas`}
         />
         <KpiCard
           icon={<ShieldAlert className="size-4" />}
           label="En custodia"
-          value={MXN_INT.format(totals.held)}
+          value={formatMXN(totals.held)}
           sub={`${totals.heldCount} de ${totalCount} · ${heldProgress.toFixed(0)}%`}
           valueClass="text-amber-700 dark:text-amber-300"
           progress={heldProgress}
@@ -277,7 +269,7 @@ export function GuaranteesTable({
         <KpiCard
           icon={<ShieldCheck className="size-4" />}
           label="Devueltos"
-          value={MXN_INT.format(totals.returned)}
+          value={formatMXN(totals.returned)}
           sub={
             totals.returnedCount > 0
               ? `${totals.returnedCount} depósito${totals.returnedCount === 1 ? "" : "s"}`
@@ -320,7 +312,7 @@ export function GuaranteesTable({
 // owner sections. As long as every section renders rows of identical container
 // width, the columns will land at the same X position on the page.
 const GUARANTEE_GRID_COLS =
-  "minmax(0, 1.4fr) minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.1fr) 200px";
+  "minmax(130px, 1.4fr) minmax(120px, 1.4fr) minmax(80px, 1fr) minmax(90px, 1fr) minmax(90px, 1fr) minmax(80px, 1.1fr) 200px";
 
 function OwnerSection({
   group,
@@ -374,7 +366,7 @@ function OwnerSection({
               />
             </div>
             <span className="text-xs text-muted-foreground tabular-nums">
-              {MXN_INT.format(group.held)} en custodia
+              {formatMXN(group.held)} en custodia
             </span>
           </div>
         </div>
@@ -383,7 +375,7 @@ function OwnerSection({
             Total
           </div>
           <div className="font-mono text-sm font-semibold tabular-nums">
-            {MXN_INT.format(group.total)}
+            {formatMXN(group.total)}
           </div>
         </div>
         <div className="shrink-0 rounded p-1 text-muted-foreground">
@@ -396,7 +388,8 @@ function OwnerSection({
       </button>
 
       {expanded ? (
-        <div role="table" aria-label={`Fianzas ${group.code}`} className="border-t">
+        <div className="overflow-x-auto">
+        <div role="table" aria-label={`Fianzas ${group.code}`} className="min-w-[790px] border-t">
           <div
             role="row"
             className="grid items-center border-b bg-muted/30 text-xs font-medium uppercase text-muted-foreground"
@@ -428,6 +421,7 @@ function OwnerSection({
           {group.items.map((g) => (
             <GuaranteeRow key={g.id} guarantee={g} canManage={canManage} />
           ))}
+        </div>
         </div>
       ) : null}
     </div>
@@ -466,19 +460,21 @@ function GuaranteeRow({
         <span className="text-muted-foreground">
           {guarantee.contract.unit.property.name}
         </span>
-        <span className="ml-1 font-medium">{guarantee.contract.unit.code}</span>
+        {isPlaza(guarantee.contract.unit.property.type) ? (
+          <span className="ml-1 font-medium">{guarantee.contract.unit.code}</span>
+        ) : null}
       </div>
       <div
         role="cell"
         className="px-3 py-2.5 text-right font-mono font-medium tabular-nums"
       >
-        {MXN.format(guarantee.amount)}
+        {formatMXN(guarantee.amount, 2)}
       </div>
       <div
         role="cell"
         className="px-3 py-2.5 text-center text-xs text-muted-foreground"
       >
-        {capitalizeFirst(DATE.format(guarantee.receivedDate))}
+        {formatDate(guarantee.receivedDate)}
       </div>
       <div
         role="cell"
@@ -486,17 +482,17 @@ function GuaranteeRow({
       >
         {guarantee.returnedAmount !== null ? (
           <span className="text-emerald-700 dark:text-emerald-300">
-            {MXN.format(guarantee.returnedAmount)}
+            {formatMXN(guarantee.returnedAmount, 2)}
           </span>
         ) : totalDeducted > 0 ? (
           <span className="text-destructive">
-            -{MXN.format(totalDeducted)}
+            -{formatMXN(totalDeducted, 2)}
           </span>
         ) : (
           <span className="text-muted-foreground">—</span>
         )}
       </div>
-      <div role="cell" className="flex justify-center px-3 py-2.5">
+      <div role="cell" className="overflow-hidden flex justify-center px-3 py-2.5">
         {statusBadge(guarantee.status)}
       </div>
       <div role="cell" className="flex items-center justify-end gap-1.5 pr-2">

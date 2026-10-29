@@ -1,18 +1,43 @@
 import { GuaranteesTable } from "@/components/guarantees/GuaranteesTable";
 import { NewGuaranteeDialog } from "@/components/guarantees/NewGuaranteeDialog";
-import { requireAuth } from "@/lib/auth/get-session";
-import { hasPermission } from "@/lib/auth/permissions";
+import { requireAuth } from "@/server/auth/get-session";
+import { hasPermission } from "@/server/auth/permissions";
+import { prisma } from "@/server/prisma/client";
 import {
   getContractsWithoutGuarantee,
   getGuarantees,
-} from "@/lib/services/guarantees-queries";
-import { getLegalEntities } from "@/lib/services/properties-queries";
+} from "@/server/services/guarantees-queries";
+import { getLegalEntities } from "@/server/services/properties-queries";
 
-export default async function FianzasPage() {
-  const { dbUser } = await requireAuth();
+interface PageProps {
+  searchParams: Promise<{ year?: string }>;
+}
+
+export default async function FianzasPage({ searchParams }: PageProps) {
+  const { tenantId, dbUser } = await requireAuth();
+  const params = await searchParams;
+
+  const requestedYear = Number(params.year);
+  const year =
+    Number.isFinite(requestedYear) && requestedYear > 1900
+      ? requestedYear
+      : new Date().getUTCFullYear();
+
+  const oldestGuarantee = await prisma.guarantee.findFirst({
+    where: { tenantId },
+    orderBy: { receivedDate: "asc" },
+    select: { receivedDate: true },
+  });
+  const minYear = oldestGuarantee
+    ? Math.min(oldestGuarantee.receivedDate.getUTCFullYear(), year - 1)
+    : year - 1;
+  const currentYear = new Date().getUTCFullYear();
+  const maxYear = Math.max(currentYear, year) + 1;
+  const availableYears: number[] = [];
+  for (let y = maxYear; y >= minYear; y--) availableYears.push(y);
 
   const [guarantees, contracts, legalEntities, canManage] = await Promise.all([
-    getGuarantees(),
+    getGuarantees({ year }),
     getContractsWithoutGuarantee(),
     getLegalEntities(),
     hasPermission(dbUser.id, "expense.create"),
@@ -58,6 +83,8 @@ export default async function FianzasPage() {
         legalEntities={legalEntities}
         totals={totals}
         canManage={canManage}
+        year={year}
+        availableYears={availableYears}
       />
     </div>
   );

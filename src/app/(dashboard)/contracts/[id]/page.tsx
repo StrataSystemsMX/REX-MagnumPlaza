@@ -4,32 +4,21 @@ import { notFound } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { ContractActions } from "@/components/contracts/ContractActions";
 import { ContractDetailTabs } from "@/components/contracts/ContractDetailTabs";
-import { requireAuth } from "@/lib/auth/get-session";
-import { hasPermission } from "@/lib/auth/permissions";
+import { requireAuth } from "@/server/auth/get-session";
+import { hasPermission } from "@/server/auth/permissions";
 import {
   contractStatusLabel,
   contractStatusVariant,
   contractTypeLabel,
-} from "@/lib/i18n/enums";
+} from "@/shared/i18n/enums";
+import { isPlaza, unitCode } from "@/shared/i18n/unit-label";
 import {
   getContractAuditLog,
   getContractById,
-} from "@/lib/services/contracts-queries";
-import { timed } from "@/lib/perf/timed";
-import { capitalizeFirst } from "@/lib/utils";
-
-const MXN = new Intl.NumberFormat("es-MX", {
-  style: "currency",
-  currency: "MXN",
-  maximumFractionDigits: 2,
-});
-
-const DATE = new Intl.DateTimeFormat("es-MX", {
-  year: "numeric",
-  month: "short",
-  day: "2-digit",
-  timeZone: "UTC",
-});
+} from "@/server/services/contracts-queries";
+import { timed } from "@/server/perf/timed";
+import { formatMXN } from "@/shared/format-currency";
+import { formatDate } from "@/shared/format-date";
 
 interface Params {
   id: string;
@@ -90,30 +79,28 @@ export default async function ContractDetailPage({
                 <span className="font-medium text-foreground">
                   {contract.unit.property.name}
                 </span>
-                <span className="text-muted-foreground">
-                  ·{" "}
-                  {[
-                    contract.unit.code,
-                    ...(contract.unit.childUnits ?? []).map((c) => c.code),
-                  ]
-                    .sort()
-                    .join("-")}
-                  {contract.unit.name ? ` — ${contract.unit.name}` : ""}
-                </span>
+                {/* El código de local solo se muestra en plazas; un inmueble
+                    individual ya queda identificado por su nombre. */}
+                {isPlaza(contract.unit.property.type) ? (
+                  <span className="text-muted-foreground">
+                    · {unitCode(contract.unit)}
+                    {contract.unit.name ? ` — ${contract.unit.name}` : ""}
+                  </span>
+                ) : null}
               </span>
               <span className="inline-flex items-center gap-1.5">
                 <Wallet className="size-3.5" />
                 <span className="font-medium text-foreground tabular-nums">
-                  {MXN.format(Number(contract.monthlyAmount))}
+                  {formatMXN(contract.monthlyAmount, 2)}
                 </span>
                 /mes
               </span>
               <span className="inline-flex items-center gap-1.5">
                 <CalendarRange className="size-3.5" />
                 <span className="tabular-nums">
-                  {capitalizeFirst(DATE.format(contract.startDate))}
+                  {formatDate(contract.startDate)}
                   {" → "}
-                  {capitalizeFirst(DATE.format(contract.endDate))}
+                  {formatDate(contract.endDate)}
                 </span>
               </span>
             </div>
@@ -125,6 +112,24 @@ export default async function ContractDetailPage({
               status={contract.status}
               endDate={contract.endDate}
               monthlyAmount={String(contract.monthlyAmount)}
+              editInitial={{
+                type: contract.type,
+                startDate: contract.startDate.toISOString().slice(0, 10),
+                endDate: contract.endDate.toISOString().slice(0, 10),
+                monthlyAmount: String(contract.monthlyAmount),
+                guaranteeAmount: String(contract.guaranteeAmount),
+                paymentDay: String(contract.paymentDay),
+                lateFeePercentage:
+                  contract.lateFeePercentage != null
+                    ? String(contract.lateFeePercentage)
+                    : "",
+                autoRenew: contract.autoRenew,
+                friendlyReminderEnabled: contract.friendlyReminderEnabled,
+                paidInAdvance: contract.paidInAdvance,
+                advancePaidUntil: contract.advancePaidUntil
+                  ? new Date(contract.advancePaidUntil).toISOString().slice(0, 10)
+                  : "",
+              }}
             />
           </div>
         </div>
