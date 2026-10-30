@@ -4,7 +4,7 @@ import { config as loadEnv } from "dotenv";
 loadEnv({ path: ".env.local" });
 loadEnv({ path: ".env.test.local", override: true });
 
-const port = process.env["PORT"] ?? "3000";
+const port = process.env["PORT"] ?? "3001";
 const host = "127.0.0.1";
 const baseURL =
   process.env["PLAYWRIGHT_BASE_URL"] ??
