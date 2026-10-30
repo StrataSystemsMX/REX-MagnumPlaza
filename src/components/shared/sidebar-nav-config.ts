@@ -14,7 +14,6 @@ import {
   TrendingDown,
   TrendingUp,
   UserSquare2,
-  Users,
   Users2,
   Wrench,
 } from "lucide-react";
@@ -41,7 +40,6 @@ export const NAV_GROUPS: ReadonlyArray<NavGroup> = [
     label: "Operación",
     items: [
       { href: "/plazas",      label: "Propiedades", icon: Building2 },
-      { href: "/lessees",     label: "Inquilinos",  icon: Users },
       { href: "/contracts",   label: "Contratos",   icon: FileText },
       { href: "/collections", label: "Cobranza",    icon: HandCoins },
     ],

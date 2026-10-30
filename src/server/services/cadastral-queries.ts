@@ -9,6 +9,7 @@ export type CadastralStatus =
 
 export interface CadastralListFilters {
   year?: number;
+  propertyId?: string;
   ownerEntityId?: string;
   payerEntityId?: string;
   /** Si true, sólo trae los pagados por terceros externos (JC). */
@@ -38,6 +39,7 @@ export async function getCadastralPayments(filters: CadastralListFilters = {}) {
       where: {
         tenantId,
         ...(filters.year !== undefined ? { year: filters.year } : {}),
+        ...(filters.propertyId ? { propertyId: filters.propertyId } : {}),
         ...(filters.ownerEntityId
           ? { property: { ownerEntityId: filters.ownerEntityId } }
           : {}),
