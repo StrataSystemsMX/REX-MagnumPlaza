@@ -251,3 +251,26 @@ Estamos arrancando **Fase 1**.
 - **Predial**: impuesto municipal anual sobre el inmueble. Pagable en 1, 2 o 4 parcialidades.
 - **Depósito en garantía**: 1 mes de renta que el inquilino entrega al inicio. Se devuelve al cierre menos deducciones por daños.
 - **CFE**: Comisión Federal de Electricidad (compañía de luz en México).
+
+---
+
+## 10. Vault de Obsidian (obligatorio, en cada sesión)
+
+El conocimiento vivo del proyecto está en el vault `../REX-MagnumPlaza-Vault` (fuera del repo). Es la **primera fuente de consulta para todo** y se mantiene al día en cada sesión.
+
+### Al iniciar la sesión
+- Revisa el contexto del vault que inyecta el hook de inicio (`hot.md`, última bitácora, últimos `WIKI_UPDATE` y comparación código ↔ vault). Si no apareció (otra máquina u hook desactivado), léelo tú: `hot.md`, la nota más reciente de `Bitacora/` y el final de `log.md`.
+- Si la comparación reporta desfases (commits o archivos que cambiaron desde el último sync), antes de trabajar en esas áreas revisa su página del vault y corrígela si quedó desactualizada.
+
+### Antes de responder o cambiar algo
+- Consulta el vault primero: `index.md` → página del módulo o concepto en `projects/rex-magnum-plaza/`. Aplica tanto a preguntas ("¿cómo funciona X?", "¿tenemos Y?") como a cambios de código.
+- Compara lo que dice el vault con el código real. Si no coinciden, el código manda: dilo y corrige el vault en la misma tarea.
+- Decisiones ya tomadas: `references/decisiones-de-negocio-resueltas.md`. Pendientes: `synthesis/pendientes-y-riesgos.md` y `Tareas.md`. No re-litigues lo decidido.
+
+### Al cerrar
+- Toda tarea que cambie código, tests, deploy, modelo de datos, reglas de negocio, rutas, integraciones o procedimientos operativos **termina sincronizando el vault** — no se da por cerrada sin eso.
+- `/guardar` vuelca toda la sesión al vault (bitácora, páginas, log y manifest). Úsalo al final de una sesión o cuando el usuario lo pida.
+
+Protocolo completo (checklist y protecciones):
+
+@AGENTS.md
