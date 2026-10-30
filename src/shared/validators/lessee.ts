@@ -69,6 +69,7 @@ export const createLesseeSchema = z.object({
     .optional()
     .or(z.literal("").transform(() => undefined)),
   rfc: optionalRfc,
+  fiscalAddress: optionalString(255, "Máximo 255 caracteres."),
   email: optionalEmail,
   phone: optionalMxPhone,
   whatsapp: optionalMxPhone,

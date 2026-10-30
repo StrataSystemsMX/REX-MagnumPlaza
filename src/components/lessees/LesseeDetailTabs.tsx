@@ -16,6 +16,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ContractWizard } from "@/components/contracts/ContractWizard";
 import { LesseeForm } from "@/components/forms/LesseeForm";
+import { LesseeBillingCard } from "@/components/lessees/LesseeBillingCard";
 import { LesseeStatement } from "@/components/lessees/LesseeStatement";
 import { NotificationLogTable } from "@/components/lessees/NotificationLogTable";
 import { OverdueNoticesPanel } from "@/components/lessees/OverdueNoticesPanel";
@@ -95,13 +96,21 @@ export function LesseeDetailTabs({
         ) : null}
       </div>
 
-      <TabsContent value="info" className="mt-4 rounded-md border bg-card p-6">
-        <LesseeForm
+      <TabsContent value="info" className="mt-4 space-y-6">
+        <div>
+          <h2 className="mb-3 text-sm font-semibold text-muted-foreground">
+            Ficha de facturación (Excel)
+          </h2>
+          <LesseeBillingCard contracts={lessee.contracts} />
+        </div>
+        <div className="rounded-md border bg-card p-6">
+          <LesseeForm
           initial={{
             id: lessee.id,
             legalName: lessee.legalName,
             contactName: lessee.contactName,
             rfc: lessee.rfc,
+            fiscalAddress: lessee.fiscalAddress,
             email: lessee.email,
             phone: lessee.phone,
             whatsapp: lessee.whatsapp,
@@ -109,7 +118,8 @@ export function LesseeDetailTabs({
             notes: lessee.notes,
           }}
           submitLabel="Guardar cambios"
-        />
+          />
+        </div>
       </TabsContent>
 
       <TabsContent value="contracts" className="mt-4 space-y-3">
