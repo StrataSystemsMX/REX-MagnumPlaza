@@ -39,7 +39,7 @@ El cliente opera bajo **3 razones sociales** simultáneas, parte de su estrategi
 - **Server Actions** + **API Routes** para backend
 
 ### Datos
-- **PostgreSQL 16+** (en producción: Neon)
+- **PostgreSQL 16+** (en producción: Supabase)
 - **Prisma ORM** — el schema vive en `prisma/schema.prisma`
 - **Zod** para validación (mismo schema en cliente y servidor)
 
