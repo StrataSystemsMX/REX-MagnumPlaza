@@ -52,6 +52,7 @@ export interface LesseeFormInitial {
   legalName: string;
   contactName?: string | null;
   rfc?: string | null;
+  fiscalAddress?: string | null;
   email?: string | null;
   phone?: string | null;
   whatsapp?: string | null;
@@ -75,6 +76,7 @@ export function LesseeForm({ initial, onSuccess, submitLabel = "Guardar" }: Less
       legalName: initial?.legalName ?? "",
       contactName: initial?.contactName ?? "",
       rfc: initial?.rfc ?? "",
+      fiscalAddress: initial?.fiscalAddress ?? "",
       email: initial?.email ?? "",
       phone: formatMxPhoneDisplay(initial?.phone ?? ""),
       whatsapp: formatMxPhoneDisplay(initial?.whatsapp ?? ""),
@@ -141,6 +143,20 @@ export function LesseeForm({ initial, onSuccess, submitLabel = "Guardar" }: Less
                 <FormControl>
                   <Input {...field} value={field.value ?? ""} maxLength={13} />
                 </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="fiscalAddress"
+            render={({ field }) => (
+              <FormItem className="md:col-span-2">
+                <FormLabel>Domicilio fiscal</FormLabel>
+                <FormControl>
+                  <Input {...field} value={field.value ?? ""} maxLength={255} />
+                </FormControl>
+                <CharacterCount current={(field.value ?? "").length} max={255} />
                 <FormMessage />
               </FormItem>
             )}

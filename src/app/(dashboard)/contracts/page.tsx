@@ -1,6 +1,8 @@
 import { AlertTriangle, CheckCircle2, FileText } from "lucide-react";
 import { ContractTable } from "@/components/contracts/ContractTable";
 import { MetricCard } from "@/components/shared/metric-card";
+import { MobileContracts, type ContractsSegment } from "@/components/mobile/MobileContracts";
+import { getIsMobileView } from "@/server/mobile/viewport";
 import { PropertyFilterTabs } from "@/components/shared/PropertyFilterTabs";
 import { INMUEBLES_TAB_VALUE } from "@/components/shared/property-filter-constants";
 import {
@@ -11,10 +13,16 @@ import {
 export default async function ContractsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ plaza?: string }>;
+  searchParams: Promise<{ plaza?: string; seg?: string }>;
 }) {
-  const { plaza } = await searchParams;
+  const { plaza, seg } = await searchParams;
   const activePlazaId = plaza ?? null;
+
+  if (await getIsMobileView()) {
+    const segment: ContractsSegment =
+      seg === "por-renovar" || seg === "todos" ? seg : "activos";
+    return <MobileContracts contracts={await getContracts()} segment={segment} />;
+  }
 
   const [allContracts, availableUnits] = await Promise.all([
     getContracts(),

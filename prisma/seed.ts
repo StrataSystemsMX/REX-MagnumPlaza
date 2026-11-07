@@ -55,13 +55,22 @@ interface UnitDef {
   name?: string;
   /** Si está vacante, no se crea ni Lessee ni Contract. */
   vacant?: boolean;
-  /** Renta mensual. Requerido si no es vacante. */
+  /** Renta mensual TOTAL con IVA. Requerido si no es vacante. */
   monthlyAmount?: number;
+  /** Concepto 1 del Excel: renta base sin IVA. */
+  baseRent?: number;
+  /** Concepto 2 del Excel: cuota de mantenimiento sin IVA. */
+  maintenanceFee?: number;
+  /** "Forma de pago" literal del Excel (ej. "03 Transferencia - BANAMEX"). */
+  paymentMethodNote?: string;
+  /** "Cuenta" del Excel (dígitos de referencia). */
+  bankAccount?: string;
   unitNotes?: string;
   lessee?: {
     legalName: string;
     contactName?: string;
     rfc?: string;
+    fiscalAddress?: string;
     email?: string;
     phone?: string;
     notes?: string;
@@ -487,26 +496,38 @@ async function main(): Promise<void> {
           code: "L1",
           name: "Goyoma",
           monthlyAmount: 17176.94,
+          baseRent: 14549.09, // combinado L1 (6296.52) + L2 (8252.57)
+          maintenanceFee: 258.62,
+          paymentMethodNote: "03 Transferencia",
           lessee: {
             legalName: "Goyoma S.A. de C.V.",
             contactName: "Juan Pablo Martinez",
             rfc: "GOY0401213V7",
+            fiscalAddress: "Ave. San Pedro No. 5594, Col. Magaña, Tijuana, Baja California, C.P. 22106",
             email: "arrendamientogoyoma@hotmail.com",
           },
           payments: PAID_Q1,
         },
         {
           code: "L2",
+          name: "Farmacia Goyoma",
           vacant: true,
-          unitNotes: "Local desocupado, en proceso de búsqueda de inquilino.",
+          unitNotes:
+            "Ocupado por Goyoma junto con L1 (facturación combinada en L1: renta L1 + renta L2 + mantenimiento).",
         },
         {
           code: "L3",
           name: "Comex",
           monthlyAmount: 10050.14,
+          baseRent: 8405.29,
+          maintenanceFee: 258.62,
+          paymentMethodNote: "03 Transferencia - BANAMEX",
+          bankAccount: "8407",
           lessee: {
             legalName: "Servicios de Informática y Variables Empresas Integradora S.A. de C.V.",
             rfc: "SIV960830D65",
+            fiscalAddress:
+              "Enrique C. Rébsamen No. 112-A, Col. Martínez de la Torre, Xalapa, Veracruz, C.P. 91090",
             email: "facturashermosillo@camposreyes.com",
             phone: "2504367",
           },
@@ -516,9 +537,15 @@ async function main(): Promise<void> {
           code: "L4",
           name: "Tintorería",
           monthlyAmount: 9617.78,
+          baseRent: 8032.57,
+          maintenanceFee: 258.62,
+          paymentMethodNote: "03 Transferencia - BANREGIO",
+          bankAccount: "0013",
           lessee: {
             legalName: "Maria Hortencia Galaz Ruiz",
             rfc: "RUDH431217GS9",
+            fiscalAddress:
+              "Blvd. Solidaridad No. 321 Local 11, Col. Paseo del Sol, Hermosillo, Sonora, C.P. 83000",
             email: "facturastintoreria@gmail.com",
             phone: "2120268",
           },
@@ -528,10 +555,16 @@ async function main(): Promise<void> {
           code: "L5",
           name: "Automoney",
           monthlyAmount: 10771.79,
+          baseRent: 9027.41,
+          maintenanceFee: 258.62,
+          paymentMethodNote: "03 Transferencia - BANAMEX",
+          bankAccount: "7592",
           lessee: {
             legalName: "Centro Cambiario Smart Exchange S.A. de C.V.",
             contactName: "Guadalupe Noriega",
             rfc: "CCS1907031B3",
+            fiscalAddress:
+              "Juan Bautista Escalante (Progreso) No. 220-5, Col. Alto Valle, Hermosillo, Sonora, C.P. 83120",
             email: "recursos.humanos@automoney.com.mx",
             phone: "6621244697",
           },
@@ -541,9 +574,14 @@ async function main(): Promise<void> {
           code: "L6",
           name: "Nikte",
           monthlyAmount: 9320.65,
+          baseRent: 7776.42,
+          maintenanceFee: 258.62,
+          paymentMethodNote: "03 Transferencia - BANCOMER",
+          bankAccount: "8426",
           lessee: {
             legalName: "Jorge Alberto Islas Alonso",
             rfc: "IAAJ781101TI0",
+            fiscalAddress: "Hermosillo, Sonora, C.P. 83145",
             email: "jorgeislas85@hotmail.com",
             phone: "5528978128",
           },
@@ -553,6 +591,9 @@ async function main(): Promise<void> {
           code: "L7",
           name: "Master Cash",
           monthlyAmount: 8976.64,
+          baseRent: 7479.86,
+          maintenanceFee: 258.62,
+          paymentMethodNote: "03 Transferencia",
           lessee: {
             legalName: "Master Cash",
             contactName: "Juan Flores",
@@ -566,6 +607,9 @@ async function main(): Promise<void> {
           code: "L8",
           name: "Bluecell",
           monthlyAmount: 13600.0,
+          baseRent: 11465.52,
+          maintenanceFee: 258.62,
+          paymentMethodNote: "Efectivo",
           lessee: {
             legalName: "Jose Gustavo Bojorquez Garcia",
             email: "jpcanez90@gmail.com",
@@ -579,10 +623,15 @@ async function main(): Promise<void> {
           code: "L9",
           name: "Sushi",
           monthlyAmount: 11188.25,
+          baseRent: 9385.04,
+          maintenanceFee: 260,
+          paymentMethodNote: "Efectivo",
           lessee: {
-            legalName: "Rodrigo Huerta",
+            legalName: "Juan Ramón Huerta Carrillo",
             contactName: "José Ramón Huerta",
             rfc: "HUCJ690702FD4",
+            fiscalAddress:
+              "Juan Bautista Escalante No. 2290-9, Col. Alto Valle, Hermosillo, Sonora, C.P. 83106",
             email: "Ro19980703@gmail.com",
             phone: "6621637244",
           },
@@ -596,9 +645,14 @@ async function main(): Promise<void> {
           code: "E",
           name: "ID Gráficos (espectacular)",
           monthlyAmount: 2320.0,
+          baseRent: 2000,
+          maintenanceFee: 0,
+          paymentMethodNote: "Efectivo",
           lessee: {
             legalName: "ID Gráficos Creativos",
             contactName: "Diana Impsel",
+            fiscalAddress:
+              "Juan Bautista Escalante No. 2290-9, Col. Alto Valle, Hermosillo, Sonora, C.P. 83106",
             email: "buzonid@gmail.com",
             phone: "6621508269",
           },
@@ -624,9 +678,15 @@ async function main(): Promise<void> {
           code: "LP",
           name: "Benavides",
           monthlyAmount: 38649.85,
+          baseRent: 33318.84,
+          maintenanceFee: 0, // "NO SE PONE CUOTA" (Excel)
+          paymentMethodNote: "03 Transferencia - BANCOMER",
+          bankAccount: "3746",
           lessee: {
             legalName: "Farmacias Benavides S.A.B de C.V.",
             rfc: "FBE9110215Z3",
+            fiscalAddress:
+              "Ave. Fundadores No. 935 Int. 301, Col. Valle del Mirador, Monterrey, Nuevo León",
             email: "esoto@benavides.com.mx",
           },
           payments: PAID_Q1,
@@ -635,10 +695,15 @@ async function main(): Promise<void> {
           code: "L1",
           name: "Panadería",
           monthlyAmount: 10644.02,
+          baseRent: 8995.88,
+          maintenanceFee: 180,
+          paymentMethodNote: "01 Depósito en efectivo",
           lessee: {
             legalName: "Ana Laura Cordova Mora",
             email: "panycoyotas@gmail.com",
             phone: "6621142744",
+            notes:
+              "En el Excel del cliente el RFC y la dirección aparecen copiados de Goyoma (error de captura); pendiente confirmar datos fiscales reales.",
           },
           payments: PAID_Q1,
         },
@@ -646,9 +711,13 @@ async function main(): Promise<void> {
           code: "L2",
           name: "Telcel",
           monthlyAmount: 8600.82,
+          baseRent: 7234.5,
+          maintenanceFee: 180,
+          paymentMethodNote: "Depósitos / Transferencia",
           lessee: {
             legalName: "Oscar Hugo Lopez Alvarado",
             rfc: "LOAO7507146I2",
+            fiscalAddress: "Dr. Domingo Olivares No. 393B, Col. Las Granjas, Hermosillo, Sonora",
             email: "oscarhugolopez1975@gmail.com",
             phone: "6621825035",
             notes: "Cliente con historial de pagos atrasados.",
@@ -664,9 +733,14 @@ async function main(): Promise<void> {
           name: "Interior",
           // Interio ocupa L3 + L4; se factura combinado (ver hoja RENTA MENSUAL).
           monthlyAmount: 20802.71,
+          baseRent: 17733.37, // combinado L3 (9324.85) + L4 (8408.52)
+          maintenanceFee: 200,
+          paymentMethodNote: "Depósitos / Transferencia",
           lessee: {
             legalName: "Domingo Emilio Gomez Moreno",
             rfc: "PECD8104056DA",
+            fiscalAddress:
+              "Blvd. Domingo Olivares No. 339 Esq. Av. Castellana, Local C, Col. Las Granjas, Hermosillo, Sonora, C.P. 83250",
             email: "facturas@anguloperfecto.mx",
             phone: "6628480249",
           },
@@ -693,10 +767,15 @@ async function main(): Promise<void> {
           code: "LP",
           name: "7-Eleven",
           monthlyAmount: 45197.09,
+          baseRent: 38963.01,
+          maintenanceFee: 0,
+          paymentMethodNote: "03 Transferencia TEF",
+          bankAccount: "4051",
           lessee: {
             legalName: "7-Eleven México S.A. de C.V.",
             contactName: "Francelia Saldaña",
             rfc: "SEM980701STA",
+            fiscalAddress: "Ave. Munich 195-B Sur, Col. Cuauhtémoc, Nuevo León, C.P. 66450",
             email: "francelia.saldana@7-eleven.com.mx",
             phone: "8181580711",
           },
@@ -706,6 +785,9 @@ async function main(): Promise<void> {
           code: "L.A",
           name: "Quesos Calza",
           monthlyAmount: 11512.34,
+          baseRent: 9924.43,
+          maintenanceFee: 0,
+          paymentMethodNote: "03 Transferencia",
           lessee: {
             legalName: "Quesos Calza",
             rfc: "QCA1508104W4",
@@ -717,9 +799,15 @@ async function main(): Promise<void> {
           code: "L.B",
           name: "GI Similares",
           monthlyAmount: 11536.0,
+          baseRent: 9944.83,
+          maintenanceFee: 0,
+          paymentMethodNote: "02 Cheque",
+          bankAccount: "N/A",
           lessee: {
             legalName: "Carlos Alberto Bernal Marquez",
             rfc: "BEMC8405194H8",
+            fiscalAddress:
+              "Prolongación Perimetral, Blvd. Antonio Quiroga No. 152-B, Col. Llanito, Hermosillo, Sonora",
             email: "carlosbernal.1905@gmail.com",
             phone: "6621693030",
           },
@@ -741,10 +829,15 @@ async function main(): Promise<void> {
           code: "L1",
           name: "Sucree",
           monthlyAmount: 13484.39,
+          baseRent: 11274.47,
+          maintenanceFee: 350,
+          paymentMethodNote: "03 Transferencia TEF",
+          bankAccount: "4051",
           lessee: {
             legalName: "Suqiee Repostería Fina S.A. de C.V.",
             contactName: "Vinicio Velázquez",
             rfc: "SRF080527U49",
+            fiscalAddress: "Avenida Olivares No. 46 Interior B, Col. Los Arcos, Hermosillo, Sonora",
             email: "viniciovelazquez@suqiee.com.mx",
             phone: "6623020930",
           },
@@ -754,6 +847,10 @@ async function main(): Promise<void> {
           code: "L2",
           name: "Dentista",
           monthlyAmount: 12210.72,
+          baseRent: 10176.48,
+          maintenanceFee: 350,
+          paymentMethodNote: "03 Transferencia TEF",
+          bankAccount: "4051",
           lessee: {
             legalName: "Dayana Duron Rivas",
             rfc: "DURD8507255MA",
@@ -766,9 +863,15 @@ async function main(): Promise<void> {
           code: "L3",
           name: "Semilla Hermosillo",
           monthlyAmount: 12586.0,
+          baseRent: 10500,
+          maintenanceFee: 350,
+          paymentMethodNote: "03 Transferencia TEF",
+          bankAccount: "4051",
           lessee: {
             legalName: "Semilla Hermosillo",
             contactName: "José Payán",
+            fiscalAddress:
+              "Ave. de la Cultura 28 Int. 2, Col. Proyecto Río Sonora, Hermosillo, Sonora, C.P. 83190",
           },
           contractNotes: "Local desocupado Ene–Feb 2026; contrato firmado en marzo.",
           contractStartDate: utcDate(YEAR, 2, 1), // 2026-03-01
@@ -781,8 +884,14 @@ async function main(): Promise<void> {
           code: "L4",
           name: "Maki Sushi",
           monthlyAmount: 13020.83,
+          baseRent: 10874.85,
+          maintenanceFee: 350,
+          paymentMethodNote: "03 Transferencia TEF",
+          bankAccount: "4051",
           lessee: {
             legalName: "Jesus Velazquez Garcia",
+            fiscalAddress:
+              "Cda. Villa Modena #11, Fracc. Villas del Mediterráneo, Hermosillo, Sonora, C.P. 83220",
             email: "Giarbu08@gmail.com",
             phone: "6621157091",
           },
@@ -792,6 +901,10 @@ async function main(): Promise<void> {
           code: "L5",
           name: "Frituras Kikin",
           monthlyAmount: 14449.46,
+          baseRent: 12156.43,
+          maintenanceFee: 300,
+          paymentMethodNote: "03 Transferencia TEF",
+          bankAccount: "4051",
           lessee: {
             legalName: "Flor Maria Serna Montoya",
             email: "Castrosernaf@gmail.com",
@@ -802,6 +915,10 @@ async function main(): Promise<void> {
           code: "L6",
           name: "Puro Pa' Delante",
           monthlyAmount: 13500.0,
+          baseRent: 11287.93,
+          maintenanceFee: 350,
+          paymentMethodNote: "03 Transferencia TEF",
+          bankAccount: "4051",
           lessee: { legalName: "Carlos Garibay" },
           payments: PAID_Q1,
         },
@@ -809,6 +926,10 @@ async function main(): Promise<void> {
           code: "L7",
           name: "Hitness",
           monthlyAmount: 13496.16,
+          baseRent: 11284.62,
+          maintenanceFee: 350,
+          paymentMethodNote: "03 Transferencia TEF",
+          bankAccount: "4051",
           lessee: {
             legalName: "Maria del Carmen Choix",
             email: "maricarmen_19choix@hotmail.com",
@@ -824,6 +945,10 @@ async function main(): Promise<void> {
           code: "L8",
           name: "Armando Elotes",
           monthlyAmount: 14306.28,
+          baseRent: 11983,
+          maintenanceFee: 350,
+          paymentMethodNote: "03 Transferencia TEF",
+          bankAccount: "4051",
           lessee: {
             legalName: "Luis Armando Chavez",
             contactName: "Armando Morales",
@@ -834,6 +959,9 @@ async function main(): Promise<void> {
           code: "E",
           name: "Medios Rubí (espectacular)",
           monthlyAmount: 2320.0,
+          baseRent: 2000,
+          maintenanceFee: 0,
+          paymentMethodNote: "03 Transferencia TEF",
           lessee: {
             legalName: "Medios Ruvi",
             email: "buzonmruvi@gmail.com",
@@ -856,10 +984,16 @@ async function main(): Promise<void> {
           code: "LP",
           name: "Banco Inbursa",
           monthlyAmount: 86028.56,
+          baseRent: 74162.55,
+          maintenanceFee: 0,
+          paymentMethodNote: "03 Transferencia - INBURSA",
+          bankAccount: "5989",
           lessee: {
             legalName: "Banco Inbursa S.A. Institución de Banca Múltiple",
             contactName: "Patricia Wong",
             rfc: "BII931004P61",
+            fiscalAddress:
+              "Av. Paseo de las Palmas 750, Lomas de Chapultepec, Miguel Hidalgo, CDMX, C.P. 11000",
             email: "pwongo@inbursa.com",
             phone: "2890360",
           },
@@ -881,10 +1015,15 @@ async function main(): Promise<void> {
           code: "OF",
           name: "La Chila",
           monthlyAmount: 30740.0,
+          baseRent: 26500,
+          maintenanceFee: 0,
+          paymentMethodNote: "03 Transferencia - BAJIO",
+          bankAccount: "0201",
           lessee: {
             legalName: "Representaciones Bazuca",
             contactName: "Rogelio Villaescusa",
             rfc: "RBA130326AC0",
+            fiscalAddress: "García Sánchez 30, Col. San Benito, Hermosillo, Sonora, C.P. 83190",
             email: "rovilbe@outlook.com",
             phone: "6622761757",
           },
@@ -910,6 +1049,9 @@ async function main(): Promise<void> {
           code: "LP",
           name: "Proyecta",
           monthlyAmount: 19350.12,
+          baseRent: 16681.14,
+          maintenanceFee: 0,
+          paymentMethodNote: "Cheque / Efectivo",
           lessee: {
             legalName: "Proyecta",
             contactName: "Roque Ibarra",
@@ -932,6 +1074,9 @@ async function main(): Promise<void> {
           code: "OF",
           name: "Oficina Piso 2",
           monthlyAmount: 12500.0,
+          baseRent: 10775.86,
+          maintenanceFee: 0,
+          paymentMethodNote: "Cheque / Efectivo",
           lessee: {
             legalName: "Público General (Abogados)",
             contactName: "Roque Ibarra",
@@ -955,15 +1100,24 @@ async function main(): Promise<void> {
       manager: "TSR",
       units: [
         {
-          code: "OF",
-          name: "Ferretería",
+          code: "PB",
+          name: "Planta Baja (Ferretería)",
           monthlyAmount: 18560.0,
+          baseRent: 16000,
+          maintenanceFee: 0,
+          paymentMethodNote: "Cheque / Efectivo",
           lessee: {
             legalName: "Jorge Eduardo Franco",
             contactName: "Roque Ibarra",
             phone: "6628477858",
           },
           payments: PAID_Q1,
+        },
+        {
+          code: "PA",
+          name: "Planta Alta",
+          vacant: true,
+          unitNotes: "Sin inquilino actualmente (aparece en $0 en el Excel del cliente).",
         },
       ],
     },
@@ -1080,6 +1234,7 @@ async function main(): Promise<void> {
           legalName: u.lessee.legalName,
           contactName: u.lessee.contactName,
           rfc: u.lessee.rfc,
+          fiscalAddress: u.lessee.fiscalAddress,
           email: u.lessee.email,
           phone: u.lessee.phone,
           notes: u.lessee.notes,
@@ -1100,6 +1255,10 @@ async function main(): Promise<void> {
           startDate: contractStart,
           endDate: contractEnd,
           monthlyAmount: decimal(monthlyAmt),
+          baseRent: u.baseRent !== undefined ? decimal(u.baseRent) : null,
+          maintenanceFee: u.maintenanceFee !== undefined ? decimal(u.maintenanceFee) : null,
+          paymentMethodNote: u.paymentMethodNote,
+          bankAccount: u.bankAccount,
           guaranteeAmount: decimal(monthlyAmt),
           paymentDay: 1,
           lateFeePercentage: decimal(5),

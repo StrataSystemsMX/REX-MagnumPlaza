@@ -158,6 +158,15 @@ export type DeleteMaintenanceDocumentInput = z.infer<
   typeof deleteMaintenanceDocumentSchema
 >;
 
+// Comprobantes de egreso (foto de factura/recibo/ticket desde el móvil, o PDF).
+// Mismas reglas de tipo/tamaño que los adjuntos de mantenimiento.
+export const uploadExpenseDocumentSchema = z.object({
+  expenseId: z.string().min(1, "expenseId requerido."),
+  file: maintenanceDocumentFileSchema,
+});
+
+export type UploadExpenseDocumentInput = z.infer<typeof uploadExpenseDocumentSchema>;
+
 export function extensionForMaintenanceDocumentMime(
   mime: string,
 ): "jpg" | "png" | "webp" | "pdf" {

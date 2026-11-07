@@ -2,6 +2,8 @@ import { AlertTriangle, CheckCircle2, Clock, Wrench } from "lucide-react";
 import { MaintenancesTable } from "@/components/maintenances/MaintenancesTable";
 import { NewMaintenanceDialog } from "@/components/maintenances/NewMaintenanceDialog";
 import { MetricCard } from "@/components/shared/metric-card";
+import { MobileMaintenances } from "@/components/mobile/MobileMaintenances";
+import { getIsMobileView } from "@/server/mobile/viewport";
 import { requireAuth } from "@/server/auth/get-session";
 import { hasPermission } from "@/server/auth/permissions";
 import { prisma } from "@/server/prisma/client";
@@ -19,6 +21,10 @@ interface PageProps {
 export default async function MantenimientosPage({ searchParams }: PageProps) {
   const { tenantId, dbUser } = await requireAuth();
   const params = await searchParams;
+
+  if (await getIsMobileView()) {
+    return <MobileMaintenances maintenances={await getMaintenances()} />;
+  }
 
   const requestedYear = Number(params.year);
   const year =

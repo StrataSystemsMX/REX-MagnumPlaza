@@ -1,11 +1,15 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { KpiGrid } from "@/components/reports/KpiGrid";
+import { MobileDashboard } from "@/components/mobile/MobileDashboard";
 import { getActiveLegalEntityId } from "@/server/auth/active-legal-entity";
 import { requireAuth } from "@/server/auth/get-session";
-import { getUserRoleCodes } from "@/server/auth/permissions";
+import { getUserRoleCodes, hasPermission } from "@/server/auth/permissions";
+import { getIsMobileView } from "@/server/mobile/viewport";
+import { prisma } from "@/server/prisma/client";
 import { timed } from "@/server/perf/timed";
 import { getKpiSet, type ReportScope } from "@/server/services/kpi-queries";
+import { getMobileDashboardData } from "@/server/services/mobile-queries";
 
 // ─── Constantes ──────────────────────────────────────────────────────────────
 
@@ -38,7 +42,11 @@ export default async function DashboardPage({ searchParams }: PageProps) {
     roles.includes("ACCOUNTANT") || roles.includes("OWNER");
   if (!canSeeAll) redirect("/portal");
 
-  const legalEntityParam = params.legalEntity ?? (await getActiveLegalEntityId()) ?? undefined;
+  // `legalEntity=all` (chip "Todas" del móvil) ignora la razón social activa.
+  const legalEntityParam =
+    params.legalEntity === "all"
+      ? undefined
+      : (params.legalEntity ?? (await getActiveLegalEntityId()) ?? undefined);
   const mode = (params.mode === "mensual" ? "mensual" : "anual") as Mode;
 
   const now          = new Date();
@@ -50,6 +58,34 @@ export default async function DashboardPage({ searchParams }: PageProps) {
     return !isNaN(n) && n >= 0 && n <= 11 ? n : currentMonth;
   })();
 
+  const periodLabel = mode === "anual"
+    ? `Ene – Dic ${currentYear}`
+    : `${MONTHS[selectedMonth] ?? ""} ${currentYear}`;
+
+  // ── Rex móvil ─────────────────────────────────────────────────────────────
+  if (await getIsMobileView()) {
+    const [data, tenant, canRegisterPayments] = await Promise.all([
+      timed("dashboard:mobileData", () =>
+        getMobileDashboardData({ legalEntityId: legalEntityParam, mode, selectedMonth }),
+      ),
+      prisma.tenant.findUnique({ where: { id: dbUser.tenantId }, select: { name: true } }),
+      hasPermission(dbUser.id, "payment.register"),
+    ]);
+    return (
+      <MobileDashboard
+        {...data}
+        tenantName={tenant?.name ?? ""}
+        userName={dbUser.name}
+        isOwnerView={!canRegisterPayments}
+        mode={mode}
+        selectedMonth={selectedMonth}
+        periodLabel={periodLabel}
+        monthLabel={`${MONTHS[currentMonth] ?? ""} ${currentYear}`}
+        activeLegalEntityId={legalEntityParam ?? null}
+      />
+    );
+  }
+
   // Los 10 KPIs ejecutivos usan el mismo cálculo que /reportes (cache 5 min)
   const kpiScope: ReportScope = legalEntityParam
     ? { type: "entity", id: legalEntityParam }
@@ -59,10 +95,6 @@ export default async function DashboardPage({ searchParams }: PageProps) {
   const kpiSet = await timed("dashboard:kpiSet", () =>
     getKpiSet(dbUser.tenantId, kpiScope, currentYear, kpiMonth),
   );
-
-  const periodLabel = mode === "anual"
-    ? `Ene – Dic ${currentYear}`
-    : `${MONTHS[selectedMonth] ?? ""} ${currentYear}`;
 
   return (
     <div className="space-y-8">

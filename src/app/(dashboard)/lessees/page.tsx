@@ -4,6 +4,9 @@ import { PropertyFilterTabs } from "@/components/shared/PropertyFilterTabs";
 import { INMUEBLES_TAB_VALUE } from "@/components/shared/property-filter-constants";
 import { LesseeTable } from "@/components/lessees/LesseeTable";
 import { getLessees } from "@/server/services/lessees-queries";
+import { MobileLessees } from "@/components/mobile/MobileLessees";
+import { getIsMobileView } from "@/server/mobile/viewport";
+import { getMobileLessees } from "@/server/services/mobile-queries";
 
 export default async function LesseesPage({
   searchParams,
@@ -12,6 +15,10 @@ export default async function LesseesPage({
 }) {
   const { plaza } = await searchParams;
   const activePlazaId = plaza ?? null;
+
+  if (await getIsMobileView()) {
+    return <MobileLessees lessees={await getMobileLessees()} />;
+  }
 
   const allLessees = await getLessees({ status: "all" });
   const active = allLessees.filter((l) => l.isActive);

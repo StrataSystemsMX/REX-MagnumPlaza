@@ -1,4 +1,7 @@
 import { EgresosYearlyView } from "@/components/egresos/EgresosYearlyView";
+import { MobileExpenses } from "@/components/mobile/MobileExpenses";
+import { getIsMobileView } from "@/server/mobile/viewport";
+import { getMobileMonthExpenses } from "@/server/services/mobile-queries";
 import { requireAuth } from "@/server/auth/get-session";
 import { hasPermission } from "@/server/auth/permissions";
 import { prisma } from "@/server/prisma/client";
@@ -18,6 +21,10 @@ interface PageProps {
 export default async function EgresosPage({ searchParams }: PageProps) {
   const { tenantId, dbUser } = await requireAuth();
   const params = await searchParams;
+
+  if (await getIsMobileView()) {
+    return <MobileExpenses expenses={await getMobileMonthExpenses()} />;
+  }
 
   const requestedYear = Number(params.year);
   const year =

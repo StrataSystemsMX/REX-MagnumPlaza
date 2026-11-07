@@ -172,3 +172,13 @@ export function r2KeyForMaintenanceDocument(
   const id = crypto.randomUUID().replace(/-/g, "");
   return `tenants/${tenantId}/maintenances/${maintenanceId}/documents/${id}.${ext}`;
 }
+
+/** Punto único de generación de keys para comprobantes de Expense (foto/PDF). */
+export function r2KeyForExpenseDocument(
+  tenantId: string,
+  expenseId: string,
+  ext: string,
+): string {
+  const id = crypto.randomUUID().replace(/-/g, "");
+  return `tenants/${tenantId}/expenses/${expenseId}/documents/${id}.${ext}`;
+}
