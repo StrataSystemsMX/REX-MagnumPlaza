@@ -1,12 +1,26 @@
 /**
- * Catálogo de permisos y su asignación por rol. Fuente única de verdad,
- * compartida entre `prisma/seed.ts` y `prisma/sync-permissions.ts` (este
- * último aplica el catálogo sobre una base existente sin re-correr el seed
- * completo, que recrea el tenant).
+ * Catálogo de roles, permisos y su asignación por rol. Fuente única de verdad,
+ * aplicada por `prisma/catalog-sync.ts` desde el seed, `sync-permissions.ts`
+ * y `bootstrap-production.ts` (los dos últimos sobre una base existente sin
+ * re-correr el seed completo, que recrea el tenant).
  *
  * Los códigos deben coincidir con los usados en requirePermission(...) en
  * src/server/services. MASTER hace bypass en hasPermission, no necesita filas.
  */
+import type { RoleCode } from "../src/generated/prisma/enums";
+
+export const ROLES: { code: RoleCode; name: string; description: string }[] = [
+  { code: "MASTER", name: "Master", description: "Acceso total. Autoriza decisiones críticas." },
+  { code: "ADMIN", name: "Administrador", description: "Operación completa con permisos granulares." },
+  {
+    code: "ACCOUNTANT",
+    name: "Contador",
+    description: "Solo lectura financiera, exporta para despacho contable.",
+  },
+  { code: "OWNER", name: "Dueño", description: "Solo consulta (read-only) de vistas operativas." },
+  { code: "PROMOTER", name: "Promotor", description: "Externo, ve solo inmuebles asignados." },
+  { code: "LESSEE", name: "Inquilino", description: "Inquilino, ve su estado de cuenta." },
+];
 
 export const PERMISSIONS: { code: string; name: string }[] = [
   { code: "property.create", name: "Crear inmuebles" },
