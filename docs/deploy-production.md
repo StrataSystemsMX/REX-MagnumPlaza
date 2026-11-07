@@ -1,6 +1,6 @@
 # Deploy de produccion
 
-Guia corta para desplegar REX Magnum Plaza en Vercel con Postgres/Neon, Clerk,
+Guia corta para desplegar REX Magnum Plaza en Vercel con Postgres (Supabase), Clerk,
 Cloudflare R2, Resend, WhatsApp Cloud API y cron de morosidad.
 
 ## 1. Gates locales
@@ -30,7 +30,12 @@ pnpm db:seed
 pnpm test:e2e
 ```
 
-## 2. Variables obligatorias en Vercel
+## 2. Variables en Vercel
+
+`pnpm check:env:production` falla si falta una obligatoria y solo advierte
+por las opcionales.
+
+### Obligatorias
 
 Aplicacion:
 
@@ -50,7 +55,6 @@ Clerk:
 - `NEXT_PUBLIC_CLERK_SIGN_UP_URL`
 - `NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL`
 - `NEXT_PUBLIC_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL`
-- `CLERK_WEBHOOK_SECRET`
 
 Cloudflare R2:
 
@@ -60,12 +64,25 @@ Cloudflare R2:
 - `R2_BUCKET_NAME`
 - `R2_PUBLIC_URL`
 
-Correo:
+Cron:
+
+- `CRON_SECRET`
+
+Sin R2, subir fotos o recibos falla en Vercel: el respaldo local escribe en
+disco y el filesystem de Vercel es de solo lectura.
+
+### Opcionales
+
+Sin ellas la app arranca, pero la integracion queda apagada.
+
+Correo (avisos y leads; sin llave, el envio queda en `NotificationLog` como
+FAILED):
 
 - `RESEND_API_KEY`
 - `RESEND_FROM_EMAIL`
 
-WhatsApp:
+WhatsApp (sin token, en desarrollo se simula el envio; en produccion queda
+FAILED con `NOT_CONFIGURED`):
 
 - `WHATSAPP_PHONE_NUMBER_ID`
 - `WHATSAPP_ACCESS_TOKEN`
@@ -73,14 +90,9 @@ WhatsApp:
 - `WHATSAPP_APP_SECRET`
 - `WHATSAPP_BUSINESS_ACCOUNT_ID`
 
-Mapas:
+Mapas (mapa de vacantes en ligas publicas de promotores):
 
-- `NEXT_PUBLIC_MAPBOX_TOKEN`
 - `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY`
-
-Cron:
-
-- `CRON_SECRET`
 
 ## 3. Base de datos
 
@@ -93,7 +105,19 @@ Para aplicar schema:
 pnpm db:migrate:deploy
 ```
 
-Para sincronizar catalogo de permisos en una base existente:
+Arranque de una base nueva (roles y permisos, tenant, razones sociales,
+categorias de egreso y usuarios; sin datos operativos):
+
+```bash
+pnpm db:bootstrap --user "correo@dominio.com:MASTER:Nombre Apellido" \
+  --user "otro@dominio.com:ADMIN:Nombre Apellido"
+```
+
+Es idempotente y nunca borra: se vuelve a correr para dar de alta usuarios
+nuevos. Roles validos: `MASTER`, `ADMIN`, `ACCOUNTANT`, `OWNER`, `PROMOTER`,
+`LESSEE`.
+
+Para sincronizar el catalogo de roles y permisos en una base existente:
 
 ```bash
 pnpm db:sync-permissions
@@ -103,10 +127,11 @@ Este comando es idempotente y no toca datos operativos.
 
 ## 4. Clerk
 
-En produccion no hay auto-provisionamiento de usuarios. Los usuarios deben
-existir en la base con email compatible o venir de un flujo explicito de alta.
-Si un usuario autenticado no existe en la DB, la app redirige a
-`/cuenta-no-autorizada`.
+En produccion no hay auto-provisionamiento de usuarios. Cada usuario necesita
+dos cosas: estar invitado en Clerk (la app es Invite-only) y existir en la base
+con el mismo correo (`pnpm db:bootstrap --user ...`). En su primer inicio de
+sesion la app lo vincula por correo. Si un usuario autenticado no existe en la
+DB, la app redirige a `/cuenta-no-autorizada`.
 
 Checklist:
 
@@ -177,7 +202,7 @@ Si falla build, no promover el deployment.
 Si falla migracion:
 
 - No correr seed sobre produccion.
-- Revisar migracion fallida en Neon/Postgres.
+- Revisar migracion fallida en Supabase/Postgres.
 - Corregir con migracion nueva; no editar migraciones ya aplicadas.
 
 Si falla cron/notificaciones:

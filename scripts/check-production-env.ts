@@ -7,6 +7,8 @@ loadEnv({ path: ".env", override: false });
 type Check = {
   name: string;
   required: boolean;
+  /** Para opcionales: qué deja de funcionar si falta. */
+  feature?: string;
   validate?: (value: string) => string | null;
 };
 
@@ -24,22 +26,30 @@ const requiredChecks: Check[] = [
   { name: "NEXT_PUBLIC_CLERK_SIGN_UP_URL", required: true },
   { name: "NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL", required: true },
   { name: "NEXT_PUBLIC_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL", required: true },
-  { name: "CLERK_WEBHOOK_SECRET", required: true },
   { name: "R2_ACCOUNT_ID", required: true },
   { name: "R2_ACCESS_KEY_ID", required: true },
   { name: "R2_SECRET_ACCESS_KEY", required: true },
   { name: "R2_BUCKET_NAME", required: true },
   { name: "R2_PUBLIC_URL", required: true, validate: mustBeHttpsUrl },
-  { name: "RESEND_API_KEY", required: true },
-  { name: "RESEND_FROM_EMAIL", required: true, validate: mustLookLikeEmail },
-  { name: "WHATSAPP_PHONE_NUMBER_ID", required: true },
-  { name: "WHATSAPP_ACCESS_TOKEN", required: true },
-  { name: "WHATSAPP_VERIFY_TOKEN", required: true },
-  { name: "WHATSAPP_APP_SECRET", required: true },
-  { name: "WHATSAPP_BUSINESS_ACCOUNT_ID", required: true },
-  { name: "NEXT_PUBLIC_MAPBOX_TOKEN", required: true },
-  { name: "NEXT_PUBLIC_GOOGLE_MAPS_API_KEY", required: true },
   { name: "CRON_SECRET", required: true, validate: mustBeLongSecret },
+  // Opcionales: sin ellos la app arranca, pero esa integración queda apagada.
+  { name: "RESEND_API_KEY", required: false, feature: "correos (avisos y leads)" },
+  {
+    name: "RESEND_FROM_EMAIL",
+    required: false,
+    feature: "correos (avisos y leads)",
+    validate: mustLookLikeEmail,
+  },
+  { name: "WHATSAPP_PHONE_NUMBER_ID", required: false, feature: "WhatsApp" },
+  { name: "WHATSAPP_ACCESS_TOKEN", required: false, feature: "WhatsApp" },
+  { name: "WHATSAPP_VERIFY_TOKEN", required: false, feature: "WhatsApp" },
+  { name: "WHATSAPP_APP_SECRET", required: false, feature: "WhatsApp" },
+  { name: "WHATSAPP_BUSINESS_ACCOUNT_ID", required: false, feature: "WhatsApp" },
+  {
+    name: "NEXT_PUBLIC_GOOGLE_MAPS_API_KEY",
+    required: false,
+    feature: "mapa de vacantes en ligas públicas",
+  },
 ];
 
 const warnings: string[] = [];
@@ -47,8 +57,9 @@ const failures: string[] = [];
 
 for (const check of requiredChecks) {
   const value = process.env[check.name]?.trim() ?? "";
-  if (check.required && !value) {
-    failures.push(`${check.name} is required.`);
+  if (!value) {
+    if (check.required) failures.push(`${check.name} is required.`);
+    else warnings.push(`${check.name} is not set: ${check.feature ?? "feature"} disabled.`);
     continue;
   }
   if (value && check.validate) {
