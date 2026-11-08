@@ -1,7 +1,7 @@
 # Deploy de produccion
 
-Guia corta para desplegar REX Magnum Plaza en Vercel con Postgres (Supabase), Clerk,
-Cloudflare R2, Resend, WhatsApp Cloud API y cron de morosidad.
+Guia corta para desplegar REX Magnum Plaza en Vercel con Postgres y Storage
+(Supabase), Clerk, Resend, WhatsApp Cloud API y cron de morosidad.
 
 ## 1. Gates locales
 
@@ -56,19 +56,25 @@ Clerk:
 - `NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL`
 - `NEXT_PUBLIC_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL`
 
-Cloudflare R2:
+Storage S3-compatible (Supabase Storage del proyecto de produccion, bucket
+publico; llaves en Storage -> Settings -> S3 Configuration):
 
-- `R2_ACCOUNT_ID`
-- `R2_ACCESS_KEY_ID`
-- `R2_SECRET_ACCESS_KEY`
-- `R2_BUCKET_NAME`
-- `R2_PUBLIC_URL`
+- `STORAGE_ENDPOINT` (`https://<ref>.storage.supabase.co/storage/v1/s3`)
+- `STORAGE_REGION` (region del proyecto, ej. `us-east-1`)
+- `STORAGE_ACCESS_KEY_ID`
+- `STORAGE_SECRET_ACCESS_KEY`
+- `STORAGE_BUCKET`
+- `STORAGE_PUBLIC_URL` (`https://<ref>.supabase.co/storage/v1/object/public/<bucket>`)
+
+Cloudflare R2 tambien funciona con las mismas variables (endpoint
+`https://<account>.r2.cloudflarestorage.com`, region `auto`). Las variables
+`R2_*` viejas se aceptan como respaldo en desarrollo.
 
 Cron:
 
 - `CRON_SECRET`
 
-Sin R2, subir fotos o recibos falla en Vercel: el respaldo local escribe en
+Sin storage, subir fotos o recibos falla en Vercel: el respaldo local escribe en
 disco y el filesystem de Vercel es de solo lectura.
 
 ### Opcionales
@@ -166,7 +172,7 @@ curl -H "Authorization: Bearer $CRON_SECRET" \
 
 ## 6. Integraciones
 
-R2:
+Storage:
 
 - Subir y leer una foto de inmueble.
 - Subir y eliminar un recibo de predial.

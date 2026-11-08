@@ -26,11 +26,13 @@ const requiredChecks: Check[] = [
   { name: "NEXT_PUBLIC_CLERK_SIGN_UP_URL", required: true },
   { name: "NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL", required: true },
   { name: "NEXT_PUBLIC_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL", required: true },
-  { name: "R2_ACCOUNT_ID", required: true },
-  { name: "R2_ACCESS_KEY_ID", required: true },
-  { name: "R2_SECRET_ACCESS_KEY", required: true },
-  { name: "R2_BUCKET_NAME", required: true },
-  { name: "R2_PUBLIC_URL", required: true, validate: mustBeHttpsUrl },
+  // Storage S3-compatible (Supabase Storage en producción).
+  { name: "STORAGE_ENDPOINT", required: true, validate: mustBeHttpsUrl },
+  { name: "STORAGE_REGION", required: true },
+  { name: "STORAGE_ACCESS_KEY_ID", required: true },
+  { name: "STORAGE_SECRET_ACCESS_KEY", required: true },
+  { name: "STORAGE_BUCKET", required: true },
+  { name: "STORAGE_PUBLIC_URL", required: true, validate: mustBeHttpsUrl },
   { name: "CRON_SECRET", required: true, validate: mustBeLongSecret },
   // Opcionales: sin ellos la app arranca, pero esa integración queda apagada.
   { name: "RESEND_API_KEY", required: false, feature: "correos (avisos y leads)" },
