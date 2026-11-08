@@ -60,7 +60,7 @@ Servicios externos (se agregan en fases siguientes): Clerk, Cloudflare R2, Resen
    pnpm dev
    ```
 
-   App disponible en [http://localhost:3000](http://localhost:3000).
+   App disponible en [http://localhost:3001](http://localhost:3001).
 
 ## Scripts disponibles
 
@@ -139,7 +139,7 @@ Tres opciones, equivalentes en lo que hacen:
 - `pnpm dev:cron` — script tsx que corre el job sin pasar por HTTP.
 - `POST /api/dev/run-cron` — endpoint sólo-dev (404 en producción).
 - Botón **Correr cron de morosidad ahora** en
-  [`/configuracion/sistema`](http://localhost:3000/configuracion/sistema)
+  [`/configuracion/sistema`](http://localhost:3001/configuracion/sistema)
   (visible sólo para usuarios con rol MASTER).
 
 ## WhatsApp / Notificaciones
@@ -226,7 +226,7 @@ status events llegarán al webhook local. Para testear sin Meta puedes hacer
 `curl` directo:
 
 ```bash
-curl -X POST http://localhost:3000/api/webhooks/whatsapp \
+curl -X POST http://localhost:3001/api/webhooks/whatsapp \
   -H "Content-Type: application/json" \
   -d '{
     "object": "whatsapp_business_account",

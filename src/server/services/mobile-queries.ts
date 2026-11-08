@@ -564,3 +564,288 @@ export async function getMobileMoreCounts(): Promise<{
     monthExpensesTotal: Number(expenses._sum.amount ?? 0),
   };
 }
+
+// ─── Dashboard ───────────────────────────────────────────────────────────────
+
+export interface MobileDashboardData {
+  legalEntities: Array<{ id: string; code: string }>;
+  pending: { porCobrar: number; avisosSinEnviar: number; mantenimientosAtrasados: number };
+  kpis: { ventas: number; egresos: number; utilidad: number; rentabilidad: number };
+  cobranza: {
+    pct: number;
+    collected: number;
+    expected: number;
+    paid: number;
+    partial: number;
+    pending: number;
+    overdue: number;
+  };
+  alerts: Array<{ level: "warning" | "critical"; message: string }>;
+  topOverdue: Array<{
+    lesseeId: string;
+    legalName: string;
+    unitLabel: string;
+    total: number;
+    count: number;
+    worstStatus: RentStatus;
+  }>;
+  byLegalEntity: Array<{ id: string; code: string; income: number; profit: number; rent: number }>;
+  ranking: Array<{
+    id: string;
+    name: string;
+    expectedMonthly: number;
+    totalUnits: number;
+    rentedUnits: number;
+  }>;
+}
+
+/**
+ * Datos del dashboard móvil. El de escritorio solo muestra los 10 KPIs
+ * (getKpiSet); el móvil conserva ventas/egresos, cobranza del mes, alertas,
+ * top adeudos, resumen por razón social y ranking de plazas.
+ */
+export async function getMobileDashboardData(params: {
+  legalEntityId: string | undefined;
+  mode: "anual" | "mensual";
+  selectedMonth: number;
+}): Promise<MobileDashboardData> {
+  const { tenantId } = await requireAuth();
+  const { legalEntityId, mode, selectedMonth } = params;
+
+  const now          = new Date();
+  const currentYear  = now.getUTCFullYear();
+  const currentMonth = now.getUTCMonth();
+
+  const periodStart = mode === "anual"
+    ? new Date(Date.UTC(currentYear, 0, 1))
+    : new Date(Date.UTC(currentYear, selectedMonth, 1));
+  const periodEnd = mode === "anual"
+    ? new Date(Date.UTC(currentYear + 1, 0, 1))
+    : new Date(Date.UTC(currentYear, selectedMonth + 1, 1));
+
+  // El semáforo siempre refleja el mes en curso
+  const currentMonthStart = new Date(Date.UTC(currentYear, currentMonth, 1));
+
+  const leFilter        = legalEntityId ? { legalEntityId } : {};
+  const paymentLeFilter = legalEntityId ? { rent: { legalEntityId } } : {};
+  const propLeFilter    = legalEntityId ? { managerEntityId: legalEntityId } : {};
+
+  const [
+    ventas,
+    egresos,
+    propertiesWithUnits,
+    overdueRentsRaw,
+    paymentsDetail,
+    expensesDetail,
+    legalEntities,
+    cobranzaMonthRents,
+    morosity,
+    overdueMaintenances,
+  ] = await Promise.all([
+    prisma.payment.aggregate({
+      where: { tenantId, paymentDate: { gte: periodStart, lt: periodEnd }, ...paymentLeFilter },
+      _sum: { amount: true },
+    }),
+    // Sólo egresos ya pagados, para comparar contra dinero efectivamente cobrado.
+    prisma.expense.aggregate({
+      where: { tenantId, expenseDate: { gte: periodStart, lt: periodEnd }, isPaid: true, ...leFilter },
+      _sum: { amount: true },
+    }),
+    prisma.property.findMany({
+      where: { tenantId, isActive: true, ...propLeFilter },
+      select: {
+        id: true,
+        name: true,
+        units: {
+          where: { isActive: true },
+          select: {
+            status: true,
+            contracts: {
+              where: { status: "ACTIVE" },
+              take: 1,
+              select: {
+                monthlyAmount: true,
+                rents: {
+                  where: { period: currentMonthStart },
+                  take: 1,
+                  select: { status: true },
+                },
+              },
+            },
+          },
+        },
+      },
+      orderBy: { name: "asc" },
+    }),
+    prisma.rent.findMany({
+      where: { tenantId, status: { in: [...OUTSTANDING_STATUSES] }, ...leFilter },
+      select: {
+        amountDue: true,
+        amountPaid: true,
+        amountWaived: true,
+        lateFeeAccrued: true,
+        status: true,
+        contract: {
+          select: {
+            lessee: { select: { id: true, legalName: true } },
+            unit: { select: { code: true, property: { select: { name: true } } } },
+          },
+        },
+      },
+    }),
+    // Resumen por razón social y ranking de plazas: sin filtro de LE
+    prisma.payment.findMany({
+      where: { tenantId, paymentDate: { gte: periodStart, lt: periodEnd } },
+      select: {
+        amount: true,
+        rent: {
+          select: {
+            legalEntityId: true,
+            contract: { select: { unit: { select: { propertyId: true } } } },
+          },
+        },
+      },
+    }),
+    prisma.expense.findMany({
+      where: { tenantId, expenseDate: { gte: periodStart, lt: periodEnd }, isPaid: true },
+      select: { amount: true, legalEntityId: true },
+    }),
+    prisma.legalEntity.findMany({
+      where: { tenantId, isActive: true },
+      select: { id: true, code: true },
+      orderBy: { code: "asc" },
+    }),
+    // Cobranza del mes en curso (independiente del periodo del dashboard)
+    prisma.rent.findMany({
+      where: { tenantId, period: currentMonthStart, ...leFilter },
+      select: { status: true, amountDue: true, amountPaid: true },
+    }),
+    getMobileMorosity(),
+    getMobileOverdueMaintenanceCount(),
+  ]);
+
+  // ── Cobranza mes en curso ──
+  const cobranzaExpected  = cobranzaMonthRents.reduce((s, r) => s + Number(r.amountDue), 0);
+  const cobranzaCollected = cobranzaMonthRents.reduce((s, r) => s + Number(r.amountPaid), 0);
+  let paid = 0, partial = 0, pending = 0, overdue = 0;
+  for (const r of cobranzaMonthRents) {
+    if (r.status === "PAID") paid++;
+    else if (r.status === "PARTIAL") partial++;
+    else if (r.status === "PENDING" || r.status === "DUE") pending++;
+    else if (isOverdueStatus(r.status)) overdue++;
+  }
+
+  // ── KPIs ──
+  const ventasTotal  = Number(ventas._sum.amount ?? 0);
+  const egresosTotal = Number(egresos._sum.amount ?? 0);
+  const utilidad     = ventasTotal - egresosTotal;
+
+  // ── Resumen por razón social ──
+  const incomeByLE   = new Map<string, number>();
+  const expensesByLE = new Map<string, number>();
+  for (const p of paymentsDetail)
+    incomeByLE.set(p.rent.legalEntityId, (incomeByLE.get(p.rent.legalEntityId) ?? 0) + Number(p.amount));
+  for (const e of expensesDetail)
+    expensesByLE.set(e.legalEntityId, (expensesByLE.get(e.legalEntityId) ?? 0) + Number(e.amount));
+  const byLegalEntity = legalEntities.map((le) => {
+    const income = incomeByLE.get(le.id) ?? 0;
+    const profit = income - (expensesByLE.get(le.id) ?? 0);
+    return { id: le.id, code: le.code, income, profit, rent: income > 0 ? profit / income : 0 };
+  });
+
+  // ── Ranking de plazas ──
+  const collectedByProp = new Map<string, number>();
+  for (const p of paymentsDetail) {
+    const propId = p.rent.contract.unit.propertyId;
+    collectedByProp.set(propId, (collectedByProp.get(propId) ?? 0) + Number(p.amount));
+  }
+  const ranking = propertiesWithUnits
+    .map((p) => ({
+      id: p.id,
+      name: p.name,
+      expectedMonthly: p.units.reduce(
+        (s, u) => s + (u.contracts[0] ? Number(u.contracts[0].monthlyAmount) : 0),
+        0,
+      ),
+      totalUnits: p.units.length,
+      rentedUnits: p.units.filter((u) => u.status === "RENTADA").length,
+    }))
+    .filter((p) => p.expectedMonthly > 0)
+    .sort((a, b) => b.expectedMonthly - a.expectedMonthly);
+
+  // ── Alertas ──
+  const alerts: MobileDashboardData["alerts"] = [];
+  const totalSinRenta = propertiesWithUnits.reduce(
+    (s, p) => s + p.units.filter((u) => u.status !== "RENTADA").length, 0,
+  );
+  if (totalSinRenta > 0)
+    alerts.push({ level: "warning", message: `${totalSinRenta} local${totalSinRenta > 1 ? "es" : ""} sin renta activa.` });
+  const totalNoPago = propertiesWithUnits.reduce((s, p) =>
+    s + p.units.filter((u) => {
+      if (u.status !== "RENTADA" || !u.contracts[0]) return false;
+      const st = u.contracts[0].rents[0]?.status;
+      return st && st !== "PAID" && st !== "PENDING";
+    }).length, 0,
+  );
+  if (totalNoPago > 0)
+    alerts.push({
+      level: totalNoPago > 3 ? "critical" : "warning",
+      message: `${totalNoPago} local${totalNoPago > 1 ? "es" : ""} con renta pendiente de cobro.`,
+    });
+  const overdue3M = overdueRentsRaw.filter((r) => r.status === "OVERDUE_3M").length;
+  if (overdue3M > 0)
+    alerts.push({ level: "critical", message: `${overdue3M} renta${overdue3M > 1 ? "s" : ""} con 3+ meses vencidos. Requieren acción.` });
+
+  // ── Top adeudos (agrupado por inquilino, peor estatus) ──
+  const overdueMap = new Map<string, MobileDashboardData["topOverdue"][number]>();
+  for (const r of overdueRentsRaw) {
+    const l   = r.contract.lessee;
+    const bal = computeBalance(r.amountDue, r.amountPaid, r.amountWaived, r.lateFeeAccrued).toNumber();
+    const cur = overdueMap.get(l.id);
+    if (cur) {
+      cur.total += bal;
+      cur.count += 1;
+      // rentSeverity: menor = más grave
+      if (rentSeverity(r.status) < rentSeverity(cur.worstStatus)) cur.worstStatus = r.status;
+    } else {
+      overdueMap.set(l.id, {
+        lesseeId: l.id,
+        legalName: l.legalName,
+        unitLabel: `${r.contract.unit.code} · ${shortPropertyName(r.contract.unit.property.name)}`,
+        total: bal,
+        count: 1,
+        worstStatus: r.status,
+      });
+    }
+  }
+
+  return {
+    legalEntities,
+    pending: {
+      porCobrar: cobranzaMonthRents.filter(
+        (r) => r.status === "PENDING" || r.status === "DUE" || r.status === "PARTIAL",
+      ).length,
+      avisosSinEnviar: morosity.filter((m) => !m.lastNoticeAt).length,
+      mantenimientosAtrasados: overdueMaintenances,
+    },
+    kpis: {
+      ventas: ventasTotal,
+      egresos: egresosTotal,
+      utilidad,
+      rentabilidad: ventasTotal > 0 ? utilidad / ventasTotal : 0,
+    },
+    cobranza: {
+      pct: cobranzaExpected > 0 ? Math.round((cobranzaCollected / cobranzaExpected) * 100) : 0,
+      collected: cobranzaCollected,
+      expected: cobranzaExpected,
+      paid,
+      partial,
+      pending,
+      overdue,
+    },
+    alerts,
+    topOverdue: Array.from(overdueMap.values()).sort((a, b) => b.total - a.total).slice(0, 5),
+    byLegalEntity,
+    ranking,
+  };
+}

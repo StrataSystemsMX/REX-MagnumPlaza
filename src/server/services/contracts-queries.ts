@@ -135,6 +135,7 @@ export async function getContractById(id: string) {
         amountDue: r.amountDue.toNumber(),
         amountPaid: r.amountPaid.toNumber(),
         amountWaived: r.amountWaived.toNumber(),
+        lateFeeAccrued: r.lateFeeAccrued.toNumber(),
         payments: r.payments.map((p) => ({
           ...p,
           amount: p.amount.toNumber(),

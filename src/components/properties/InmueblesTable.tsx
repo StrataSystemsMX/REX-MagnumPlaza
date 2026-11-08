@@ -1,34 +1,20 @@
 "use client";
 
 import {
-  Camera,
   CircleDot,
   FileText,
   ImageOff,
   LayoutGrid,
   List,
-  Pencil,
   Plus,
-  Receipt,
   Search,
   Sparkles,
-  Trash2,
 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 import { toast } from "sonner";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -42,14 +28,9 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { PropertyForm } from "@/components/forms/PropertyForm";
-import { PropertyPhotoGallery } from "@/components/properties/PropertyPhotoGallery";
 import { usePropertiesViewMode } from "@/hooks/use-properties-view-mode";
 import { propertyTypeLabel } from "@/shared/i18n/enums";
 import type { PropertiesViewMode } from "@/shared/properties-view-mode";
-import { actionDeleteProperty } from "@/server/services/properties";
-import { actionCountSubjectDependents } from "@/server/services/audit-actions";
-import { DependentsWarning } from "@/components/historial/DangerConfirmDialog";
-import type { DependentCounts } from "@/server/services/audit-undo";
 import { actionEnsureInmuebleUnit } from "@/server/services/units";
 import type {
   LegalEntityOption,
@@ -70,46 +51,28 @@ export function InmueblesTable({
 }: InmueblesTableProps) {
   const router = useRouter();
   const [createOpen, setCreateOpen] = useState(false);
-  const [detailTarget, setDetailTarget] = useState<PropertyListItem | null>(null);
-  const [editTarget, setEditTarget] = useState<PropertyListItem | null>(null);
-  const [photosTarget, setPhotosTarget] = useState<PropertyListItem | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<PropertyListItem | null>(null);
-  const [deleteDeps, setDeleteDeps] = useState<DependentCounts | null>(null);
   const [showBlocked, setShowBlocked] = useState(false);
   const [view, setView] = usePropertiesViewMode(initialView);
-  const [pending, startTransition] = useTransition();
+  const [, startDetailTransition] = useTransition();
 
-  // Re-sincronizar los targets abiertos cuando llega data fresca del servidor
-  // (ej. tras reordenar fotos). Sin esto, el snapshot guardado queda atrás.
-  useEffect(() => {
-    if (photosTarget) {
-      const fresh = inmuebles.find((p) => p.id === photosTarget.id);
-      if (fresh && fresh !== photosTarget) setPhotosTarget(fresh);
-    }
-    if (detailTarget) {
-      const fresh = inmuebles.find((p) => p.id === detailTarget.id);
-      if (fresh && fresh !== detailTarget) setDetailTarget(fresh);
-    }
-  }, [inmuebles, photosTarget, detailTarget]);
-
-  // Al abrir el diálogo de borrado, cuenta los dependientes para el aviso.
-  useEffect(() => {
-    if (!deleteTarget) {
-      setDeleteDeps(null);
+  // El detalle (y editar/fotos/eliminar) viven en /properties/[unitId] — si
+  // el inmueble aún no tiene una unit (nunca se le asignó contrato), se crea
+  // sobre la marcha, igual que ya hace "Asignar contrato".
+  function handleDetail(p: PropertyListItem) {
+    const snap = inmuebleSnapshot(p);
+    if (snap.unitId) {
+      router.push(`/properties/${snap.unitId}`);
       return;
     }
-    let active = true;
-    actionCountSubjectDependents("Property", deleteTarget.id)
-      .then((d) => {
-        if (active) setDeleteDeps(d);
-      })
-      .catch(() => {
-        if (active) setDeleteDeps(null);
-      });
-    return () => {
-      active = false;
-    };
-  }, [deleteTarget]);
+    startDetailTransition(async () => {
+      try {
+        const unitId = await actionEnsureInmuebleUnit(p.id);
+        router.push(`/properties/${unitId}`);
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "Error al abrir el detalle.");
+      }
+    });
+  }
 
   const [search, setSearch] = useState("");
 
@@ -128,22 +91,6 @@ export function InmueblesTable({
         const hay = `${p.name} ${p.address ?? ""} ${unitFields}`;
         return hay.toLowerCase().includes(searchQ);
       });
-
-  function confirmDelete() {
-    if (!deleteTarget) return;
-    const target = deleteTarget;
-    startTransition(async () => {
-      try {
-        await actionDeleteProperty(target.id);
-        toast.success(`Inmueble "${target.name}" eliminado.`);
-        setDeleteTarget(null);
-        router.refresh();
-      } catch (error) {
-        const msg = error instanceof Error ? error.message : "Error al eliminar.";
-        toast.error(msg);
-      }
-    });
-  }
 
   return (
     <>
@@ -227,148 +174,17 @@ export function InmueblesTable({
             <InmuebleCard
               key={p.id}
               inmueble={p}
-              onDetail={() => setDetailTarget(p)}
+              onDetail={() => handleDetail(p)}
             />
           ))}
         </div>
       ) : (
         <InmueblesTableView
           inmuebles={filtered}
-          onDetail={(p) => setDetailTarget(p)}
+          onDetail={handleDetail}
         />
       )}
 
-      <InmuebleDetailDialog
-        inmueble={detailTarget}
-        onOpenChange={(open) => !open && setDetailTarget(null)}
-        onEditClick={() => {
-          const target = detailTarget;
-          setDetailTarget(null);
-          setEditTarget(target);
-        }}
-        onPhotosClick={() => {
-          const target = detailTarget;
-          setDetailTarget(null);
-          setPhotosTarget(target);
-        }}
-      />
-
-      <Dialog
-        open={editTarget !== null}
-        onOpenChange={(open) => {
-          if (!open) {
-            const target = editTarget;
-            setEditTarget(null);
-            setDetailTarget(target);
-          }
-        }}
-      >
-        <DialogContent className="max-w-2xl">
-          {editTarget ? (
-            <>
-              <DialogHeader>
-                <DialogTitle>Editar inmueble</DialogTitle>
-                <DialogDescription>
-                  Modifica la información de {editTarget.name}.
-                </DialogDescription>
-              </DialogHeader>
-              <PropertyForm
-                legalEntities={legalEntities}
-                excludedTypes={["PLAZA_COMERCIAL"]}
-                initial={{
-                  id: editTarget.id,
-                  name: editTarget.name,
-                  type: editTarget.type,
-                  status: editTarget.status,
-                  address: editTarget.address,
-                  ownerEntityId: editTarget.ownerEntity.id,
-                  managerEntityId: editTarget.managerEntity.id,
-                  cadastralKey: editTarget.cadastralKey,
-                  latitude: editTarget.latitude,
-                  longitude: editTarget.longitude,
-                  totalArea: editTarget.totalArea,
-                  notes: editTarget.notes,
-                  insuranceProvider: editTarget.insuranceProvider,
-                  insurancePolicyNumber: editTarget.insurancePolicyNumber,
-                  insuranceExpiresAt: editTarget.insuranceExpiresAt,
-                }}
-                onSuccess={() => {
-                  const target = editTarget;
-                  setEditTarget(null);
-                  setDetailTarget(target);
-                  router.refresh();
-                }}
-                submitLabel="Guardar cambios"
-                secondaryAction={
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => {
-                      const target = editTarget;
-                      setEditTarget(null);
-                      setDeleteTarget(target);
-                    }}
-                    className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-                  >
-                    <Trash2 className="size-4" />
-                    Eliminar inmueble
-                  </Button>
-                }
-              />
-            </>
-          ) : null}
-        </DialogContent>
-      </Dialog>
-
-      <Dialog
-        open={photosTarget !== null}
-        onOpenChange={(open) => !open && setPhotosTarget(null)}
-      >
-        <DialogContent className="max-w-5xl">
-          <DialogHeader>
-            <DialogTitle>Fotos de {photosTarget?.name}</DialogTitle>
-            <DialogDescription>
-              Sube imágenes para el inmueble. La más reciente aparecerá como portada.
-            </DialogDescription>
-          </DialogHeader>
-          {photosTarget ? (
-            <PropertyPhotoGallery
-              propertyId={photosTarget.id}
-              photos={photosTarget.photos ?? []}
-              canEdit
-            />
-          ) : null}
-        </DialogContent>
-      </Dialog>
-
-      <AlertDialog
-        open={deleteTarget !== null}
-        onOpenChange={(open) => !open && setDeleteTarget(null)}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>¿Eliminar inmueble?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Se marcará como inactivo &quot;{deleteTarget?.name}&quot;. Sus contratos y datos
-              históricos se conservan; podrás restaurarlo después.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          {deleteDeps && <DependentsWarning dependents={deleteDeps} />}
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={pending}>Cancelar</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={(e) => {
-                e.preventDefault();
-                confirmDelete();
-              }}
-              disabled={pending}
-            >
-              {pending ? "Eliminando..." : "Eliminar"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </>
   );
 }
@@ -706,250 +522,3 @@ function InmueblesTableView({
   );
 }
 
-function InmuebleDetailDialog({
-  inmueble,
-  onOpenChange,
-  onEditClick,
-  onPhotosClick,
-}: {
-  inmueble: PropertyListItem | null;
-  onOpenChange: (open: boolean) => void;
-  onEditClick: () => void;
-  onPhotosClick: () => void;
-}) {
-  const snap = inmueble ? inmuebleSnapshot(inmueble) : null;
-  const totalArea =
-    inmueble && inmueble.totalArea !== null && inmueble.totalArea !== undefined
-      ? Number(inmueble.totalArea)
-      : null;
-  const isBlocked = inmueble?.status === "BLOQUEADO";
-  const isAvailable =
-    inmueble && !isBlocked && snap !== null && snap.lesseeName === null;
-
-  function handlePhotos() {
-    onOpenChange(false);
-    onPhotosClick();
-  }
-
-  function handleEdit() {
-    onOpenChange(false);
-    onEditClick();
-  }
-
-  return (
-    <Dialog open={inmueble !== null} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl overflow-hidden p-0">
-        {inmueble && snap ? (
-          <>
-            <div className="relative aspect-[16/9] w-full overflow-hidden bg-muted">
-              {inmueble.coverPhotoUrl ? (
-                <>
-                  <Image
-                    src={inmueble.coverPhotoUrl}
-                    alt=""
-                    aria-hidden
-                    fill
-                    sizes="(max-width: 768px) 100vw, 640px"
-                    className="scale-110 object-cover blur-xl"
-                  />
-                  <div className="absolute inset-0 bg-background/40" />
-                  <Image
-                    src={inmueble.coverPhotoUrl}
-                    alt={inmueble.name}
-                    fill
-                    sizes="(max-width: 768px) 100vw, 640px"
-                    className="object-contain"
-                  />
-                </>
-              ) : (
-                <div className="flex h-full flex-col items-center justify-center gap-2 text-muted-foreground/60">
-                  <ImageOff className="size-12" />
-                  <span className="text-xs uppercase tracking-wider">
-                    Sin foto
-                  </span>
-                </div>
-              )}
-              <div className="absolute left-3 top-3 flex flex-wrap gap-1.5">
-                <Badge variant="secondary" className="shadow-sm">
-                  {propertyTypeLabel(inmueble.type)}
-                </Badge>
-                {isAvailable ? (
-                  <Badge className="border-transparent bg-emerald-500 text-white shadow-sm hover:bg-emerald-500 dark:bg-emerald-600">
-                    <CircleDot className="size-3" />
-                    Disponible
-                  </Badge>
-                ) : null}
-              </div>
-              <span className="absolute bottom-3 left-3 max-w-[70%] truncate rounded-md bg-black/70 px-2.5 py-1 text-sm font-semibold text-white shadow-sm backdrop-blur-sm">
-                {inmueble.name}
-              </span>
-              <Button
-                type="button"
-                size="icon-sm"
-                variant="secondary"
-                onClick={handlePhotos}
-                aria-label="Editar fotos del inmueble"
-                className="absolute bottom-3 right-3 size-9 rounded-full shadow-md"
-              >
-                <Camera className="size-4" />
-              </Button>
-            </div>
-
-            <div className="max-h-[60vh] space-y-5 overflow-y-auto p-6">
-              <DialogHeader className="space-y-1">
-                <DialogTitle className="text-xl">{inmueble.name}</DialogTitle>
-                <DialogDescription>
-                  Información detallada del inmueble.
-                </DialogDescription>
-              </DialogHeader>
-
-              <div className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
-                <InmuebleDetailField
-                  label="Tipo"
-                  value={propertyTypeLabel(inmueble.type)}
-                />
-                <InmuebleDetailField
-                  label="Dueña"
-                  value={inmueble.ownerEntity.code}
-                />
-                <InmuebleDetailField
-                  label="Administra"
-                  value={inmueble.managerEntity.code}
-                />
-                {totalArea !== null ? (
-                  <InmuebleDetailField
-                    label="Área total"
-                    value={`${totalArea} m²`}
-                  />
-                ) : null}
-                {inmueble.cadastralKey ? (
-                  <InmuebleDetailField
-                    label="Clave catastral"
-                    value={inmueble.cadastralKey}
-                    mono
-                  />
-                ) : null}
-                {!isBlocked && snap.monthly !== null ? (
-                  <InmuebleDetailField
-                    label="Renta mensual"
-                    value={formatMXN(snap.monthly)}
-                    emphasis
-                  />
-                ) : !isBlocked && snap.estimatedRent !== null ? (
-                  <InmuebleDetailField
-                    label="Renta estimada"
-                    value={formatMXN(snap.estimatedRent)}
-                  />
-                ) : null}
-              </div>
-
-              {!isBlocked && (snap.lesseeName || snap.contractId) ? (
-                <div className="rounded-md border bg-muted/30 p-4">
-                  <p className="mb-2 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-                    Inquilino activo
-                  </p>
-                  <div className="space-y-2 text-sm">
-                    {snap.lesseeName ? (
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-muted-foreground">Nombre</span>
-                        {snap.contractId ? (
-                          <Link
-                            href={`/contracts/${snap.contractId}`}
-                            className="font-medium hover:underline"
-                          >
-                            {snap.lesseeName}
-                          </Link>
-                        ) : (
-                          <span className="font-medium">{snap.lesseeName}</span>
-                        )}
-                      </div>
-                    ) : null}
-                  </div>
-                </div>
-              ) : null}
-
-              {inmueble.address ? (
-                <div>
-                  <p className="mb-1.5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-                    Dirección
-                  </p>
-                  <p className="text-sm text-foreground/90">{inmueble.address}</p>
-                </div>
-              ) : null}
-
-              {inmueble.notes ? (
-                <div>
-                  <p className="mb-1.5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-                    Notas
-                  </p>
-                  <p className="whitespace-pre-wrap text-sm text-foreground/90">
-                    {inmueble.notes}
-                  </p>
-                </div>
-              ) : null}
-
-              <div className="grid grid-cols-2 gap-2 border-t pt-4">
-                <Button onClick={handleEdit} size="sm" className="w-full">
-                  <Pencil className="size-4" />
-                  Editar
-                </Button>
-                {snap.contractId ? (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="w-full"
-                    render={<Link href={`/contracts/${snap.contractId}`} />}
-                  >
-                    <FileText className="size-4" />
-                    Ver contrato
-                  </Button>
-                ) : null}
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="w-full"
-                  render={<Link href="/prediales" />}
-                >
-                  <Receipt className="size-4" />
-                  Ver predial
-                </Button>
-              </div>
-            </div>
-          </>
-        ) : null}
-      </DialogContent>
-
-    </Dialog>
-  );
-}
-
-function InmuebleDetailField({
-  label,
-  value,
-  mono,
-  emphasis,
-}: {
-  label: string;
-  value: string;
-  mono?: boolean;
-  emphasis?: boolean;
-}) {
-  return (
-    <div className="space-y-0.5">
-      <p className="text-[11px] uppercase tracking-wider text-muted-foreground">
-        {label}
-      </p>
-      <p
-        className={[
-          mono ? "font-mono" : "",
-          emphasis ? "font-bold text-foreground" : "font-medium",
-          "text-sm",
-        ]
-          .filter(Boolean)
-          .join(" ")}
-      >
-        {value}
-      </p>
-    </div>
-  );
-}

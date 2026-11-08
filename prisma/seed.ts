@@ -5,7 +5,6 @@ import {
   ContractStatus,
   ContractType,
   DocumentType,
-  ExpenseType,
   GuaranteeStatus,
   InvestmentProjectStatus,
   LoanStatus,
@@ -18,7 +17,14 @@ import {
   RoleCode,
   UnitStatus,
 } from "../src/generated/prisma/enums";
-import { PERMISSIONS, ROLE_PERMISSION_CODES } from "./permissions-data";
+import { syncRolesAndPermissions } from "./catalog-sync";
+import {
+  EXPENSE_CATEGORIES,
+  LEGAL_ENTITIES,
+  TENANT_NAME,
+  TENANT_SLUG,
+  type EntityCode,
+} from "./tenant-catalog-data";
 
 const connectionString = process.env["DATABASE_URL"];
 if (!connectionString) {
@@ -34,7 +40,6 @@ const prisma = new PrismaClient({ adapter });
 // CONFIG
 // ============================================================================
 
-const TENANT_SLUG = "plazas-magnum";
 const YEAR = 2026;
 const TODAY = new Date();
 TODAY.setUTCHours(0, 0, 0, 0);
@@ -42,8 +47,6 @@ TODAY.setUTCHours(0, 0, 0, 0);
 const CONTRACT_START = utcDate(YEAR, 0, 1); // 2026-01-01
 const CONTRACT_END = utcDate(YEAR, 11, 31); // 2026-12-31
 const SIGNED = utcDate(2025, 11, 15); // diciembre 2025
-
-type EntityCode = "CRT" | "TSR" | "QHS" | "JCL" | "CLICK";
 
 type PaymentEntry =
   | { kind: "paid"; amount?: number }
@@ -220,86 +223,14 @@ async function main(): Promise<void> {
     await prisma.tenant.delete({ where: { id: existing.id } });
   }
 
-  // -- 2. Roles globales (upsert) -------------------------------------------
-  const rolesData = [
-    {
-      code: RoleCode.MASTER,
-      name: "Master",
-      description: "Acceso total. Autoriza decisiones críticas.",
-    },
-    {
-      code: RoleCode.ADMIN,
-      name: "Administrador",
-      description: "Operación completa con permisos granulares.",
-    },
-    {
-      code: RoleCode.ACCOUNTANT,
-      name: "Contador",
-      description: "Solo lectura financiera, exporta para despacho contable.",
-    },
-    {
-      code: RoleCode.OWNER,
-      name: "Dueño",
-      description: "Solo consulta (read-only) de vistas operativas.",
-    },
-    {
-      code: RoleCode.PROMOTER,
-      name: "Promotor",
-      description: "Externo, ve solo inmuebles asignados.",
-    },
-    {
-      code: RoleCode.LESSEE,
-      name: "Inquilino",
-      description: "Inquilino, ve su estado de cuenta.",
-    },
-  ];
-  for (const r of rolesData) {
-    await prisma.role.upsert({
-      where: { code: r.code },
-      update: { name: r.name, description: r.description },
-      create: r,
-    });
-  }
-
-  // -- 2b. Permisos globales + asignación por rol ---------------------------
-  // Sin esto, solo MASTER pasa hasPermission (MASTER hace bypass por definición)
-  // y cualquier ADMIN/ACCOUNTANT/OWNER falla toda acción protegida. El catálogo
-  // vive en prisma/permissions-data.ts (compartido con sync-permissions.ts,
-  // que lo aplica a una base existente sin re-correr este seed).
-  for (const p of PERMISSIONS) {
-    await prisma.permission.upsert({
-      where: { code: p.code },
-      update: { name: p.name },
-      create: p,
-    });
-  }
-
-  // MASTER hace bypass en hasPermission, así que no necesita filas.
-  for (const [roleCode, permCodes] of Object.entries(ROLE_PERMISSION_CODES)) {
-    const role = await prisma.role.findUnique({
-      where: { code: roleCode as RoleCode },
-    });
-    if (!role) continue;
-    for (const permCode of permCodes) {
-      const perm = await prisma.permission.findUnique({
-        where: { code: permCode },
-      });
-      if (!perm) continue;
-      await prisma.rolePermission.upsert({
-        where: {
-          roleId_permissionId: { roleId: role.id, permissionId: perm.id },
-        },
-        update: {},
-        create: { roleId: role.id, permissionId: perm.id },
-      });
-    }
-  }
+  // -- 2. Roles, permisos y asignación por rol (catálogo compartido) ------
+  await syncRolesAndPermissions(prisma);
 
   // -- 3. Tenant ------------------------------------------------------------
   const tenant = await prisma.tenant.create({
     data: {
       slug: TENANT_SLUG,
-      name: "Plazas Magnum",
+      name: TENANT_NAME,
       plan: Plan.STARTER,
       timezone: "America/Hermosillo",
       currency: "MXN",
@@ -307,177 +238,15 @@ async function main(): Promise<void> {
   });
 
   // -- 4. LegalEntities (CRT / TSR / QHS / JCL / CLICK) ---------------------
-  const crt = await prisma.legalEntity.create({
-    data: {
-      tenantId: tenant.id,
-      code: "CRT",
-      legalName: "CRT Desarrollo y Proyectos S.A. de C.V.",
-      isOperator: true,
-    },
-  });
-  const tsr = await prisma.legalEntity.create({
-    data: {
-      tenantId: tenant.id,
-      code: "TSR",
-      legalName: "TSR Inmobiliaria S.A. de C.V.",
-      isOperator: true,
-    },
-  });
-  const qhs = await prisma.legalEntity.create({
-    data: {
-      tenantId: tenant.id,
-      code: "QHS",
-      legalName: "QHS S.A. de C.V.",
-      isOperator: false,
-    },
-  });
-  // JCL = Juan Carlos L (persona física). Razón social registrada por
-  // completitud; sus propiedades personales no se administran en Rex.
-  const jcl = await prisma.legalEntity.create({
-    data: {
-      tenantId: tenant.id,
-      code: "JCL",
-      legalName: "Juan Carlos L",
-      isOperator: false,
-    },
-  });
-  // CLICK: razón social satélite usada en el bloque de nóminas del Excel.
-  // Factura servicios administrativos (OSC) y paga "Nómina Vinculación".
-  const click = await prisma.legalEntity.create({
-    data: {
-      tenantId: tenant.id,
-      code: "CLICK",
-      legalName: "Click S.A. de C.V.",
-      isOperator: true,
-    },
-  });
-  const entities: Record<EntityCode, { id: string }> = {
-    CRT: crt,
-    TSR: tsr,
-    QHS: qhs,
-    JCL: jcl,
-    CLICK: click,
-  };
+  const entities = {} as Record<EntityCode, { id: string }>;
+  for (const le of LEGAL_ENTITIES) {
+    entities[le.code] = await prisma.legalEntity.create({
+      data: { ...le, tenantId: tenant.id },
+    });
+  }
 
   // -- 5. ExpenseCategories -------------------------------------------------
-  const categoriesData: Array<{
-    code: string;
-    name: string;
-    type: (typeof ExpenseType)[keyof typeof ExpenseType];
-    isRecurring: boolean;
-  }> = [
-    // Nóminas
-    {
-      code: "NOMINA_DIRECCION",
-      name: "Nómina Dirección",
-      type: ExpenseType.PAYROLL,
-      isRecurring: true,
-    },
-    {
-      code: "NOMINA_GENERAL",
-      name: "Nómina General",
-      type: ExpenseType.PAYROLL,
-      isRecurring: true,
-    },
-    { code: "HONORARIOS", name: "Honorarios", type: ExpenseType.PAYROLL, isRecurring: true },
-    // Impuestos
-    { code: "PREDIAL", name: "Predial", type: ExpenseType.TAX, isRecurring: true },
-    { code: "SAT", name: "SAT", type: ExpenseType.TAX, isRecurring: true },
-    { code: "IMSS_INFONAVIT", name: "IMSS / Infonavit", type: ExpenseType.TAX, isRecurring: true },
-    {
-      code: "ISRTP",
-      name: "ISR sobre Producto del Trabajo",
-      type: ExpenseType.TAX,
-      isRecurring: true,
-    },
-    { code: "PLACAS", name: "Placas vehiculares", type: ExpenseType.TAX, isRecurring: true },
-    // Servicios
-    {
-      code: "CFE",
-      name: "Comisión Federal de Electricidad",
-      type: ExpenseType.UTILITY,
-      isRecurring: true,
-    },
-    { code: "AGUA", name: "Agua", type: ExpenseType.UTILITY, isRecurring: true },
-    { code: "TELMEX", name: "Telmex", type: ExpenseType.UTILITY, isRecurring: true },
-    { code: "TELCEL", name: "Telcel", type: ExpenseType.UTILITY, isRecurring: true },
-    {
-      code: "SANISO_BASURA",
-      name: "Saniso / Recolección de basura",
-      type: ExpenseType.UTILITY,
-      isRecurring: true,
-    },
-    { code: "ALARMA", name: "Alarma / monitoreo", type: ExpenseType.UTILITY, isRecurring: true },
-    // Mantenimiento
-    {
-      code: "MANTENIMIENTO_PLAZAS",
-      name: "Mantenimiento de plazas",
-      type: ExpenseType.MAINTENANCE,
-      isRecurring: false,
-    },
-    { code: "LIMPIEZA", name: "Limpieza", type: ExpenseType.MAINTENANCE, isRecurring: true },
-    // Vehículos
-    {
-      code: "FINANCIAMIENTO_TOYOTA",
-      name: "Financiamiento Toyota",
-      type: ExpenseType.VEHICLE,
-      isRecurring: true,
-    },
-    {
-      code: "FINANCIAMIENTO_EXPEDITION",
-      name: "Financiamiento Expedition",
-      type: ExpenseType.VEHICLE,
-      isRecurring: true,
-    },
-    {
-      code: "FINANCIAMIENTO_BMW",
-      name: "Financiamiento BMW",
-      type: ExpenseType.VEHICLE,
-      isRecurring: true,
-    },
-    { code: "GASOLINA", name: "Gasolina", type: ExpenseType.VEHICLE, isRecurring: true },
-    {
-      code: "SERVICIOS_AUTOS",
-      name: "Servicios de autos",
-      type: ExpenseType.VEHICLE,
-      isRecurring: false,
-    },
-    // Otros
-    {
-      code: "SEGUROS_INMUEBLES",
-      name: "Seguros de inmuebles",
-      type: ExpenseType.INSURANCE,
-      isRecurring: true,
-    },
-    {
-      code: "SEGURO_AUTOMOTRIZ",
-      name: "Seguro automotriz",
-      type: ExpenseType.INSURANCE,
-      isRecurring: true,
-    },
-    {
-      code: "COMISIONES_BANCARIAS",
-      name: "Comisiones bancarias",
-      type: ExpenseType.BANK_FEE,
-      isRecurring: true,
-    },
-    { code: "PAPELERIA", name: "Papelería", type: ExpenseType.OFFICE, isRecurring: false },
-    {
-      code: "CONSUMO_OFICINA",
-      name: "Consumo de oficina (bebidas, botanas, limpieza)",
-      type: ExpenseType.OFFICE,
-      isRecurring: true,
-    },
-    { code: "CAJA_CHICA", name: "Caja chica", type: ExpenseType.OFFICE, isRecurring: true },
-    {
-      code: "LICENCIAS_PERMISOS",
-      name: "Licencias, permisos y comisiones",
-      type: ExpenseType.OTHER,
-      isRecurring: false,
-    },
-    { code: "OTROS", name: "Otros", type: ExpenseType.OTHER, isRecurring: false },
-  ];
-  for (const c of categoriesData) {
+  for (const c of EXPENSE_CATEGORIES) {
     await prisma.expenseCategory.create({ data: { ...c, tenantId: tenant.id } });
   }
 
@@ -2161,7 +1930,7 @@ async function main(): Promise<void> {
   // Espectaculares: Progreso E y Quiroga 2 E, 2 320 / mes cada uno.
   // Egresos, nómina estratégica y deuda: tomados del Excel 2026.
   const crtBudget = await prisma.budget.create({
-    data: { tenantId: tenant.id, legalEntityId: crt.id, year: YEAR },
+    data: { tenantId: tenant.id, legalEntityId: entities.CRT.id, year: YEAR },
   });
   await seedBudgetLines(crtBudget.id, [
     // INGRESOS
@@ -2300,7 +2069,7 @@ async function main(): Promise<void> {
   // Ingresos: Inbursa Kino, La Chila, Capilla del Carmen, Elias (desde mar),
   //           Nayarit 52.
   const tsrBudget = await prisma.budget.create({
-    data: { tenantId: tenant.id, legalEntityId: tsr.id, year: YEAR },
+    data: { tenantId: tenant.id, legalEntityId: entities.TSR.id, year: YEAR },
   });
   await seedBudgetLines(tsrBudget.id, [
     // INGRESOS
@@ -2402,7 +2171,7 @@ async function main(): Promise<void> {
   // QHS solo registra sus costos administrativos.
   // Los ingresos de Quiroga 2 fluyen a CRT (que administra).
   const qhsBudget = await prisma.budget.create({
-    data: { tenantId: tenant.id, legalEntityId: qhs.id, year: YEAR },
+    data: { tenantId: tenant.id, legalEntityId: entities.QHS.id, year: YEAR },
   });
   await seedBudgetLines(qhsBudget.id, [
     { type: EX, label: "Honorarios contabilidad", m: s12(1300) },

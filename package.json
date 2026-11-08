@@ -3,9 +3,11 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev --turbopack --port 3000",
-    "build": "next build --turbopack",
+    "dev": "next dev --turbopack --port 3001",
+    "build": "next build",
     "start": "next start",
+    "check:env:production": "tsx scripts/check-production-env.ts",
+    "deploy:check": "pnpm check:env:production && pnpm typecheck && pnpm lint && pnpm test && pnpm build",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "format": "prettier --write .",
@@ -13,9 +15,13 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
+    "test:e2e:install": "playwright install chromium",
     "db:push": "prisma db push",
     "db:migrate": "prisma migrate dev",
+    "db:migrate:deploy": "prisma migrate deploy",
     "db:seed": "prisma db seed",
+    "db:sync-permissions": "tsx prisma/sync-permissions.ts",
+    "db:bootstrap": "tsx prisma/bootstrap-production.ts",
     "db:studio": "prisma studio",
     "dev:cron": "tsx --env-file=.env.local scripts/dev-cron.ts",
     "postinstall": "prisma generate"
@@ -72,15 +78,5 @@
     "tsx": "^4.21.0",
     "typescript": "^5",
     "vitest": "^4.1.5"
-  },
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "@prisma/client",
-      "@prisma/engines",
-      "esbuild",
-      "prisma",
-      "sharp",
-      "unrs-resolver"
-    ]
   }
 }

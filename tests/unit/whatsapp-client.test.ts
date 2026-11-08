@@ -52,6 +52,26 @@ describe("sendTemplate (dev mode, sin token)", () => {
   });
 });
 
+describe("producción sin token", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("sendTemplate no simula: lanza NOT_CONFIGURED", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    const { sendTemplate, WhatsAppError } = await import("@/server/whatsapp/client");
+    const err = await sendTemplate("6621234567", "rent_reminder_1m", []).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(WhatsAppError);
+    expect((err as InstanceType<typeof WhatsAppError>).code).toBe("NOT_CONFIGURED");
+  });
+
+  it("sendTextMessage no simula: lanza NOT_CONFIGURED", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    const { sendTextMessage, WhatsAppError } = await import("@/server/whatsapp/client");
+    await expect(sendTextMessage("6621234567", "hola")).rejects.toBeInstanceOf(WhatsAppError);
+  });
+});
+
 describe("sendTemplate (prod mode, con token)", () => {
   beforeEach(() => {
     process.env[ENV_TOKEN] = "test-token";
