@@ -2,29 +2,70 @@ import { existsSync, mkdirSync, unlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 export interface UploadResult {
-  /** URL pública (R2) o path relativo servible por Next (/generated-pdfs/...). */
+  /** URL pública (bucket S3) o path relativo servible por Next (/generated-pdfs/...). */
   url: string;
   /** Storage backend que terminó atendiendo el upload. */
-  backend: "r2" | "local";
+  backend: "s3" | "local";
 }
 
-function isR2Configured(): boolean {
-  return Boolean(
-    process.env["R2_ACCOUNT_ID"] &&
-      process.env["R2_ACCESS_KEY_ID"] &&
-      process.env["R2_SECRET_ACCESS_KEY"] &&
-      process.env["R2_BUCKET_NAME"],
-  );
+/**
+ * Almacenamiento S3-compatible: Supabase Storage en producción, Cloudflare R2
+ * en desarrollo. Variables STORAGE_*; las R2_* se aceptan como respaldo para
+ * los .env.local existentes (el endpoint se deriva de R2_ACCOUNT_ID).
+ */
+interface StorageConfig {
+  endpoint: string;
+  region: string;
+  accessKeyId: string;
+  secretAccessKey: string;
+  bucket: string;
+  publicUrl: string | null;
+}
+
+export function getStorageConfig(): StorageConfig | null {
+  const env = process.env;
+  const r2AccountId = env["R2_ACCOUNT_ID"];
+  const endpoint =
+    env["STORAGE_ENDPOINT"] ||
+    (r2AccountId ? `https://${r2AccountId}.r2.cloudflarestorage.com` : undefined);
+  const accessKeyId = env["STORAGE_ACCESS_KEY_ID"] || env["R2_ACCESS_KEY_ID"];
+  const secretAccessKey = env["STORAGE_SECRET_ACCESS_KEY"] || env["R2_SECRET_ACCESS_KEY"];
+  const bucket = env["STORAGE_BUCKET"] || env["R2_BUCKET_NAME"];
+  if (!endpoint || !accessKeyId || !secretAccessKey || !bucket) return null;
+  const publicUrl = env["STORAGE_PUBLIC_URL"] || env["R2_PUBLIC_URL"];
+  return {
+    endpoint: endpoint.replace(/\/$/, ""),
+    region: env["STORAGE_REGION"] || "auto",
+    accessKeyId,
+    secretAccessKey,
+    bucket,
+    publicUrl: publicUrl ? publicUrl.replace(/\/$/, "") : null,
+  };
+}
+
+async function createS3Client(config: StorageConfig) {
+  // Lazy import: el SDK pesa y solo lo necesitamos cuando hay storage configurado.
+  const { S3Client } = await import("@aws-sdk/client-s3");
+  return new S3Client({
+    region: config.region,
+    endpoint: config.endpoint,
+    credentials: {
+      accessKeyId: config.accessKeyId,
+      secretAccessKey: config.secretAccessKey,
+    },
+    // Supabase Storage solo acepta path-style; R2 acepta ambos.
+    forcePathStyle: true,
+  });
 }
 
 /**
  * Sube un archivo y devuelve su URL.
  *
- *   - Si las variables R2_* están configuradas → Cloudflare R2 (S3-compatible).
+ *   - Con storage configurado (STORAGE_* o R2_*) → bucket S3-compatible.
  *   - Si no → guarda en `public/generated-pdfs/<key>` y devuelve un path
  *     servible por Next. Esto es OK en dev (filesystem escribible), pero
  *     en prod (Vercel) no — por eso el cron y la generación oficial deben
- *     correr siempre con R2 configurado.
+ *     correr siempre con storage configurado.
  *
  * `key` debe incluir extensión (ej. "estados-de-cuenta/2026-04-29-abc.pdf").
  */
@@ -33,48 +74,35 @@ export async function uploadFile(
   buffer: Buffer,
   mimeType: string,
 ): Promise<UploadResult> {
-  if (isR2Configured()) {
-    const url = await uploadToR2(key, buffer, mimeType);
-    return { url, backend: "r2" };
+  const config = getStorageConfig();
+  if (config) {
+    const url = await uploadToBucket(config, key, buffer, mimeType);
+    return { url, backend: "s3" };
   }
   const url = uploadToLocalPublic(key, buffer);
   return { url, backend: "local" };
 }
 
-async function uploadToR2(
+async function uploadToBucket(
+  config: StorageConfig,
   key: string,
   buffer: Buffer,
   mimeType: string,
 ): Promise<string> {
-  const accountId = process.env["R2_ACCOUNT_ID"]!;
-  const accessKeyId = process.env["R2_ACCESS_KEY_ID"]!;
-  const secretAccessKey = process.env["R2_SECRET_ACCESS_KEY"]!;
-  const bucket = process.env["R2_BUCKET_NAME"]!;
-  const publicUrlBase = process.env["R2_PUBLIC_URL"];
-
-  // Lazy import: el SDK pesa y solo lo necesitamos cuando R2 está configurado.
-  const { S3Client, PutObjectCommand } = await import("@aws-sdk/client-s3");
-
-  const client = new S3Client({
-    region: "auto",
-    endpoint: `https://${accountId}.r2.cloudflarestorage.com`,
-    credentials: { accessKeyId, secretAccessKey },
-  });
-
+  const { PutObjectCommand } = await import("@aws-sdk/client-s3");
+  const client = await createS3Client(config);
   await client.send(
     new PutObjectCommand({
-      Bucket: bucket,
+      Bucket: config.bucket,
       Key: key,
       Body: buffer,
       ContentType: mimeType,
     }),
   );
 
-  if (publicUrlBase) {
-    return `${publicUrlBase.replace(/\/$/, "")}/${key}`;
-  }
+  if (config.publicUrl) return `${config.publicUrl}/${key}`;
   // Fallback: URL del endpoint privado (requiere firma para acceder).
-  return `https://${bucket}.${accountId}.r2.cloudflarestorage.com/${key}`;
+  return `${config.endpoint}/${config.bucket}/${key}`;
 }
 
 function uploadToLocalPublic(key: string, buffer: Buffer): string {
@@ -89,24 +117,16 @@ function uploadToLocalPublic(key: string, buffer: Buffer): string {
 }
 
 /**
- * Borra un archivo previamente subido. Best-effort: si R2 falla, lanza para
- * que el caller lo loggee y siga (no bloqueamos al usuario por una falla
- * de red en R2 — un huérfano es tolerable).
+ * Borra un archivo previamente subido. Best-effort: si el bucket falla, lanza
+ * para que el caller lo loggee y siga (no bloqueamos al usuario por una falla
+ * de red — un huérfano es tolerable).
  */
 export async function deleteFile(key: string): Promise<void> {
-  if (isR2Configured()) {
-    const accountId = process.env["R2_ACCOUNT_ID"]!;
-    const accessKeyId = process.env["R2_ACCESS_KEY_ID"]!;
-    const secretAccessKey = process.env["R2_SECRET_ACCESS_KEY"]!;
-    const bucket = process.env["R2_BUCKET_NAME"]!;
-
-    const { S3Client, DeleteObjectCommand } = await import("@aws-sdk/client-s3");
-    const client = new S3Client({
-      region: "auto",
-      endpoint: `https://${accountId}.r2.cloudflarestorage.com`,
-      credentials: { accessKeyId, secretAccessKey },
-    });
-    await client.send(new DeleteObjectCommand({ Bucket: bucket, Key: key }));
+  const config = getStorageConfig();
+  if (config) {
+    const { DeleteObjectCommand } = await import("@aws-sdk/client-s3");
+    const client = await createS3Client(config);
+    await client.send(new DeleteObjectCommand({ Bucket: config.bucket, Key: key }));
     return;
   }
   const fullPath = join(process.cwd(), "public", "generated-pdfs", key);
@@ -119,14 +139,19 @@ export async function deleteFile(key: string): Promise<void> {
  * con una configuración distinta).
  */
 export function extractKeyFromUrl(url: string): string {
-  const publicBase = process.env["R2_PUBLIC_URL"]?.replace(/\/$/, "");
-  if (publicBase && url.startsWith(publicBase + "/")) {
-    return url.slice(publicBase.length + 1);
+  const config = getStorageConfig();
+  if (config?.publicUrl && url.startsWith(config.publicUrl + "/")) {
+    return url.slice(config.publicUrl.length + 1);
   }
-  const privateMatch = url.match(
+  const privateBase = config ? `${config.endpoint}/${config.bucket}/` : null;
+  if (privateBase && url.startsWith(privateBase)) {
+    return url.slice(privateBase.length);
+  }
+  // URLs privadas de R2 en formato virtual-host (subidas antes de path-style).
+  const r2VirtualHost = url.match(
     /^https:\/\/[^.]+\.[^.]+\.r2\.cloudflarestorage\.com\/(.+)$/,
   );
-  if (privateMatch) return privateMatch[1]!;
+  if (r2VirtualHost) return r2VirtualHost[1]!;
   if (url.startsWith("/generated-pdfs/")) {
     return url.slice("/generated-pdfs/".length);
   }

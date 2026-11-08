@@ -97,11 +97,15 @@ export function PropertyForm({
   const isEdit = Boolean(initial?.id);
   const [pending, startTransition] = useTransition();
 
-  const availableTypes = lockedType
-    ? [lockedType]
-    : excludedTypes && excludedTypes.length > 0
-      ? PROPERTY_TYPES.filter((t) => !excludedTypes.includes(t))
-      : PROPERTY_TYPES;
+  const availableTypes = useMemo<ReadonlyArray<PropertyType>>(
+    () =>
+      lockedType
+        ? [lockedType]
+        : excludedTypes && excludedTypes.length > 0
+          ? PROPERTY_TYPES.filter((t) => !excludedTypes.includes(t))
+          : PROPERTY_TYPES,
+    [excludedTypes, lockedType],
+  );
 
   const initialType: PropertyType =
     lockedType ?? initial?.type ?? availableTypes[0] ?? "PLAZA_COMERCIAL";

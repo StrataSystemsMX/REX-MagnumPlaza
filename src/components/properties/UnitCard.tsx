@@ -1,13 +1,6 @@
 "use client";
 
-import {
-  Camera,
-  FileText,
-  ImageOff,
-  Pencil,
-  Trash2,
-  User,
-} from "lucide-react";
+import { ImageOff, Trash2 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -42,15 +35,6 @@ import { DependentsWarning } from "@/components/historial/DangerConfirmDialog";
 import type { DependentCounts } from "@/server/services/audit-undo";
 import type { UnitStatus } from "@/generated/prisma/enums";
 import { formatMXN } from "@/shared/format-currency";
-import { formatDate } from "@/shared/format-date";
-
-function formatContractDate(d: string | Date | null | undefined): string | null {
-  if (!d) return null;
-  const date = d instanceof Date ? d : new Date(d);
-  if (Number.isNaN(date.getTime())) return null;
-  return formatDate(date);
-}
-
 export interface UnitCardData {
   id: string;
   code: string;
@@ -85,7 +69,6 @@ export interface SiblingUnit {
 
 function useUnitDialogControls(unit: UnitCardData) {
   const router = useRouter();
-  const [detailOpen, setDetailOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [photosOpen, setPhotosOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -112,7 +95,7 @@ function useUnitDialogControls(unit: UnitCardData) {
   }, [deleteOpen, unit.id]);
 
   function openDetail() {
-    setDetailOpen(true);
+    router.push(`/properties/${unit.id}`);
   }
 
   function confirmDelete() {
@@ -121,7 +104,6 @@ function useUnitDialogControls(unit: UnitCardData) {
         await actionDeleteUnit(unit.id);
         toast.success(`Local ${unit.code} eliminado.`);
         setDeleteOpen(false);
-        setDetailOpen(false);
         router.refresh();
       } catch (error) {
         const msg = error instanceof Error ? error.message : "Error al eliminar.";
@@ -130,34 +112,14 @@ function useUnitDialogControls(unit: UnitCardData) {
     });
   }
 
-  function handleEditOpenChange(open: boolean) {
-    setEditOpen(open);
-    if (!open) setDetailOpen(true);
-  }
-
-  function handlePhotosOpenChange(open: boolean) {
-    setPhotosOpen(open);
-    if (!open) setDetailOpen(true);
-  }
-
-  function handleDeleteOpenChange(open: boolean) {
-    setDeleteOpen(open);
-    if (!open) setDetailOpen(true);
-  }
-
   return {
     router,
-    detailOpen,
-    setDetailOpen,
     editOpen,
     setEditOpen,
-    handleEditOpenChange,
     photosOpen,
     setPhotosOpen,
-    handlePhotosOpenChange,
     deleteOpen,
     setDeleteOpen,
-    handleDeleteOpenChange,
     deleteDeps,
     pending,
     openDetail,
@@ -180,15 +142,7 @@ function UnitDialogs({
 }) {
   return (
     <>
-      <UnitDetailDialog
-        open={controls.detailOpen}
-        onOpenChange={controls.setDetailOpen}
-        unit={unit}
-        onEditClick={() => controls.setEditOpen(true)}
-        onPhotosClick={() => controls.setPhotosOpen(true)}
-      />
-
-      <Dialog open={controls.editOpen} onOpenChange={controls.handleEditOpenChange}>
+      <Dialog open={controls.editOpen} onOpenChange={controls.setEditOpen}>
         <DialogContent className="max-w-xl">
           <DialogHeader>
             <DialogTitle>Editar local {unit.code}</DialogTitle>
@@ -227,7 +181,6 @@ function UnitDialogs({
             }))}
             onSuccess={() => {
               controls.setEditOpen(false);
-              controls.setDetailOpen(true);
               controls.router.refresh();
             }}
             submitLabel="Guardar cambios"
@@ -250,10 +203,7 @@ function UnitDialogs({
         </DialogContent>
       </Dialog>
 
-      <Dialog
-        open={controls.photosOpen}
-        onOpenChange={controls.handlePhotosOpenChange}
-      >
+      <Dialog open={controls.photosOpen} onOpenChange={controls.setPhotosOpen}>
         <DialogContent className="max-w-5xl">
           <DialogHeader>
             <DialogTitle>
@@ -268,10 +218,7 @@ function UnitDialogs({
         </DialogContent>
       </Dialog>
 
-      <AlertDialog
-        open={controls.deleteOpen}
-        onOpenChange={controls.handleDeleteOpenChange}
-      >
+      <AlertDialog open={controls.deleteOpen} onOpenChange={controls.setDeleteOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>¿Eliminar local {unit.code}?</AlertDialogTitle>
@@ -533,222 +480,5 @@ export function UnitRow({ unit, propertyId, siblings }: UnitRowProps) {
 
       <UnitDialogs unit={unit} propertyId={propertyId} controls={controls} siblings={siblings} />
     </>
-  );
-}
-
-function UnitDetailDialog({
-  open,
-  onOpenChange,
-  unit,
-  onEditClick,
-  onPhotosClick,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  unit: UnitCardData;
-  onEditClick: () => void;
-  onPhotosClick: () => void;
-}) {
-  const contract = unit.contracts[0] ?? null;
-  const lessee = contract?.lessee ?? null;
-  const monthly = contract
-    ? Number(contract.monthlyAmount)
-    : unit.estimatedRent !== null
-      ? Number(unit.estimatedRent)
-      : null;
-
-  const area = unit.area !== null && unit.area !== undefined ? Number(unit.area) : null;
-  const startDate = formatContractDate(contract?.startDate);
-  const endDate = formatContractDate(contract?.endDate);
-
-  function handlePhotos() {
-    onOpenChange(false);
-    onPhotosClick();
-  }
-
-  function handleEdit() {
-    onOpenChange(false);
-    onEditClick();
-  }
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl overflow-hidden p-0">
-        <div className="relative aspect-[16/9] w-full overflow-hidden bg-muted">
-          {unit.coverPhotoUrl ? (
-            <>
-              <Image
-                src={unit.coverPhotoUrl}
-                alt=""
-                aria-hidden
-                fill
-                sizes="(max-width: 768px) 100vw, 640px"
-                className="scale-110 object-cover blur-xl"
-              />
-              <div className="absolute inset-0 bg-background/40" />
-              <Image
-                src={unit.coverPhotoUrl}
-                alt={unit.code}
-                fill
-                sizes="(max-width: 768px) 100vw, 640px"
-                className="object-contain"
-              />
-            </>
-          ) : (
-            <div className="flex h-full flex-col items-center justify-center gap-2 text-muted-foreground/60">
-              <ImageOff className="size-12" />
-              <span className="text-xs uppercase tracking-wider">Sin foto</span>
-            </div>
-          )}
-          <Badge
-            variant={unitStatusVariant(unit.status)}
-            className="absolute left-3 top-3 shadow-sm"
-          >
-            {unitStatusLabel(unit.status)}
-          </Badge>
-          <span className="absolute bottom-3 left-3 rounded-md bg-black/70 px-2.5 py-1 font-mono text-sm font-semibold text-white shadow-sm backdrop-blur-sm">
-            {unit.code}
-          </span>
-          <Button
-            type="button"
-            size="icon-sm"
-            variant="secondary"
-            onClick={handlePhotos}
-            aria-label="Editar fotos del local"
-            className="absolute bottom-3 right-3 size-9 rounded-full shadow-md"
-          >
-            <Camera className="size-4" />
-          </Button>
-        </div>
-
-        <div className="space-y-5 p-6">
-          <DialogHeader className="space-y-1">
-            <DialogTitle className="text-xl">
-              {unit.name ?? `Local ${unit.code}`}
-            </DialogTitle>
-            <DialogDescription>
-              Información detallada del local.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
-            <DetailField label="Código" value={unit.code} mono />
-            <DetailField label="Estado" value={unitStatusLabel(unit.status)} />
-            {area !== null ? (
-              <DetailField label="Área" value={`${area} m²`} />
-            ) : null}
-            {monthly !== null ? (
-              <DetailField
-                label={contract ? "Renta mensual" : "Renta estimada"}
-                value={formatMXN(monthly)}
-                emphasis={!!contract}
-              />
-            ) : null}
-          </div>
-
-          {lessee || contract ? (
-            <div className="rounded-md border bg-muted/30 p-4">
-              <p className="mb-2 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-                Contrato activo
-              </p>
-              <div className="space-y-2 text-sm">
-                {lessee ? (
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-muted-foreground">Inquilino</span>
-                    <Link
-                      href={`/lessees/${lessee.id}`}
-                      className="font-medium hover:underline"
-                    >
-                      {lessee.legalName}
-                    </Link>
-                  </div>
-                ) : null}
-                {startDate ? (
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-muted-foreground">Inicio</span>
-                    <span className="tabular-nums">{startDate}</span>
-                  </div>
-                ) : null}
-                {endDate ? (
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-muted-foreground">Vence</span>
-                    <span className="tabular-nums">{endDate}</span>
-                  </div>
-                ) : null}
-              </div>
-            </div>
-          ) : null}
-
-          {unit.notes ? (
-            <div>
-              <p className="mb-1.5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-                Notas
-              </p>
-              <p className="whitespace-pre-wrap text-sm text-foreground/90">
-                {unit.notes}
-              </p>
-            </div>
-          ) : null}
-
-          <div className="flex flex-wrap items-center gap-2 border-t pt-4">
-            <Button onClick={handleEdit} size="sm">
-              <Pencil className="size-4" />
-              Editar
-            </Button>
-            {contract ? (
-              <Button
-                variant="outline"
-                size="sm"
-                render={<Link href={`/contracts/${contract.id}`} />}
-              >
-                <FileText className="size-4" />
-                Ver contrato
-              </Button>
-            ) : null}
-            {lessee ? (
-              <Button
-                variant="outline"
-                size="sm"
-                render={<Link href={`/lessees/${lessee.id}`} />}
-              >
-                <User className="size-4" />
-                Ver inquilino
-              </Button>
-            ) : null}
-          </div>
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-function DetailField({
-  label,
-  value,
-  mono,
-  emphasis,
-}: {
-  label: string;
-  value: string;
-  mono?: boolean;
-  emphasis?: boolean;
-}) {
-  return (
-    <div className="space-y-0.5">
-      <p className="text-[11px] uppercase tracking-wider text-muted-foreground">
-        {label}
-      </p>
-      <p
-        className={[
-          mono ? "font-mono" : "",
-          emphasis ? "font-bold text-foreground" : "font-medium",
-          "text-sm",
-        ]
-          .filter(Boolean)
-          .join(" ")}
-      >
-        {value}
-      </p>
-    </div>
   );
 }

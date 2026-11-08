@@ -15,7 +15,7 @@ instancia de **desarrollo** de Clerk.
    Users → Create user, con email y password (p.ej. `e2e@rex.test`). No hace
    falta crearlo en Postgres: en dev, `requireAuth` lo auto-provisiona con rol
    MASTER en su primer login.
-3. **`.env.test.local`** (o exporta en tu shell) con:
+3. **`.env.test.local`**: copia `.env.test.local.example` y completa:
    ```bash
    DATABASE_URL="postgresql://postgres:rex@localhost:5432/postgres"
    DIRECT_URL="postgresql://postgres:rex@localhost:5432/postgres"
@@ -28,11 +28,18 @@ instancia de **desarrollo** de Clerk.
 ## Correr
 
 ```bash
+# una vez, si el navegador no existe en la máquina:
+pnpm test:e2e:install
+
 # con las vars anteriores cargadas en el entorno:
 pnpm prisma migrate deploy   # aplica el schema a la DB local
 pnpm db:seed                 # datos del piloto (Plazas Magnum)
 pnpm test:e2e                # levanta `pnpm dev` solo y corre los specs
 ```
+
+Playwright espera el servidor con `/api/health`, que es publico y no pasa por
+Clerk middleware. Las pruebas autenticadas fallan de forma explicita si faltan
+`E2E_CLERK_USER_EMAIL` o `E2E_CLERK_USER_PASSWORD`.
 
 ## Estado de los specs
 

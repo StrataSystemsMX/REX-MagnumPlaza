@@ -74,6 +74,20 @@ export function isWhatsAppConfigured(): boolean {
 }
 
 /**
+ * El modo simulado es solo para desarrollo. En producción, un aviso marcado
+ * como enviado que nunca llegó al inquilino engaña a quien opera la cobranza:
+ * mejor que quede FAILED con la razón.
+ */
+function assertSimulationAllowed(): void {
+  if (process.env["NODE_ENV"] === "production") {
+    throw new WhatsAppError(
+      "NOT_CONFIGURED",
+      "WhatsApp no está configurado (faltan WHATSAPP_ACCESS_TOKEN y WHATSAPP_PHONE_NUMBER_ID).",
+    );
+  }
+}
+
+/**
  * Normaliza un número a formato E.164 sin signos. Acepta "+52 662 ..." o
  * "662-...-..." o ya formateado. Rechaza si no quedan al menos 10 dígitos.
  */
@@ -95,7 +109,8 @@ export function normalizePhone(input: string): string {
  * Las variables se pasan como array ordenado: parameters[0] reemplaza {1},
  * parameters[1] reemplaza {2}, etc.
  *
- * En modo dev (sin token) loguea y devuelve un messageId simulado.
+ * En modo dev (sin token) loguea y devuelve un messageId simulado; en
+ * producción sin token lanza NOT_CONFIGURED.
  */
 export async function sendTemplate(
   to: string,
@@ -107,6 +122,7 @@ export async function sendTemplate(
   const languageCode = options.languageCode ?? "es_MX";
 
   if (!isWhatsAppConfigured()) {
+    assertSimulationAllowed();
     const fakeId = `fake-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     console.info(
       `[FAKE WHATSAPP] sería enviado a +${phone} con plantilla ${templateName} (${languageCode}) y params ${JSON.stringify(parameters)} → messageId ${fakeId}`,
@@ -173,6 +189,7 @@ export async function sendTextMessage(
   const phone = normalizePhone(to);
 
   if (!isWhatsAppConfigured()) {
+    assertSimulationAllowed();
     const fakeId = `fake-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     console.info(`[FAKE WHATSAPP] texto a +${phone}: "${text}" → ${fakeId}`);
     return { messageId: fakeId, status: "SIMULATED" };

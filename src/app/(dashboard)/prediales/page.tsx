@@ -10,6 +10,7 @@ import { getLegalEntities } from "@/server/services/properties-queries";
 
 interface SearchParams {
   year?: string;
+  propertyId?: string;
 }
 
 export default async function PredialesPage({
@@ -29,7 +30,7 @@ export default async function PredialesPage({
 
   const [payments, properties, legalEntities, canCreate, canUpdate, canDelete] =
     await Promise.all([
-      getCadastralPayments({ year: selectedYear }),
+      getCadastralPayments({ year: selectedYear, propertyId: sp.propertyId }),
       getPropertiesForCadastralForm(),
       getLegalEntities(),
       hasPermission(dbUser.id, "expense.create"),

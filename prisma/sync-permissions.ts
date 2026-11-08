@@ -1,15 +1,14 @@
 /**
- * Aplica el catálogo de permisos (prisma/permissions-data.ts) sobre una base
- * EXISTENTE de forma idempotente: upsert de Permission y RolePermission.
- * No toca tenants ni datos operativos — a diferencia del seed completo, es
- * seguro correrlo contra producción tras agregar códigos nuevos.
+ * Aplica el catálogo de roles y permisos (prisma/permissions-data.ts) sobre
+ * una base EXISTENTE de forma idempotente: upsert de Role, Permission y
+ * RolePermission. No toca tenants ni datos operativos — a diferencia del seed
+ * completo, es seguro correrlo contra producción tras agregar códigos nuevos.
  *
- * Uso: pnpm tsx prisma/sync-permissions.ts
+ * Uso: pnpm db:sync-permissions
  */
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "../src/generated/prisma/client";
-import type { RoleCode } from "../src/generated/prisma/enums";
-import { PERMISSIONS, ROLE_PERMISSION_CODES } from "./permissions-data";
+import { syncRolesAndPermissions } from "./catalog-sync";
 
 const connectionString = process.env["DATABASE_URL"];
 if (!connectionString) {
@@ -22,36 +21,9 @@ const adapter = new PrismaPg({ connectionString });
 const prisma = new PrismaClient({ adapter });
 
 async function main(): Promise<void> {
-  for (const p of PERMISSIONS) {
-    await prisma.permission.upsert({
-      where: { code: p.code },
-      update: { name: p.name },
-      create: p,
-    });
-  }
-
-  let assigned = 0;
-  for (const [roleCode, permCodes] of Object.entries(ROLE_PERMISSION_CODES)) {
-    const role = await prisma.role.findUnique({
-      where: { code: roleCode as RoleCode },
-    });
-    if (!role) continue;
-    for (const permCode of permCodes) {
-      const perm = await prisma.permission.findUnique({ where: { code: permCode } });
-      if (!perm) continue;
-      await prisma.rolePermission.upsert({
-        where: {
-          roleId_permissionId: { roleId: role.id, permissionId: perm.id },
-        },
-        update: {},
-        create: { roleId: role.id, permissionId: perm.id },
-      });
-      assigned += 1;
-    }
-  }
-
+  const { roles, permissions, assignments } = await syncRolesAndPermissions(prisma);
   console.log(
-    `[sync-permissions] ${PERMISSIONS.length} permisos upserted, ${assigned} asignaciones de rol verificadas.`,
+    `[sync-permissions] ${roles} roles y ${permissions} permisos upserted, ${assignments} asignaciones de rol verificadas.`,
   );
 }
 

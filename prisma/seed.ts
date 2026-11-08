@@ -5,7 +5,6 @@ import {
   ContractStatus,
   ContractType,
   DocumentType,
-  ExpenseType,
   GuaranteeStatus,
   InvestmentProjectStatus,
   LoanStatus,
@@ -18,7 +17,14 @@ import {
   RoleCode,
   UnitStatus,
 } from "../src/generated/prisma/enums";
-import { PERMISSIONS, ROLE_PERMISSION_CODES } from "./permissions-data";
+import { syncRolesAndPermissions } from "./catalog-sync";
+import {
+  EXPENSE_CATEGORIES,
+  LEGAL_ENTITIES,
+  TENANT_NAME,
+  TENANT_SLUG,
+  type EntityCode,
+} from "./tenant-catalog-data";
 
 const connectionString = process.env["DATABASE_URL"];
 if (!connectionString) {
@@ -34,7 +40,6 @@ const prisma = new PrismaClient({ adapter });
 // CONFIG
 // ============================================================================
 
-const TENANT_SLUG = "plazas-magnum";
 const YEAR = 2026;
 const TODAY = new Date();
 TODAY.setUTCHours(0, 0, 0, 0);
@@ -42,8 +47,6 @@ TODAY.setUTCHours(0, 0, 0, 0);
 const CONTRACT_START = utcDate(YEAR, 0, 1); // 2026-01-01
 const CONTRACT_END = utcDate(YEAR, 11, 31); // 2026-12-31
 const SIGNED = utcDate(2025, 11, 15); // diciembre 2025
-
-type EntityCode = "CRT" | "TSR" | "QHS" | "JCL" | "CLICK";
 
 type PaymentEntry =
   | { kind: "paid"; amount?: number }
@@ -55,13 +58,22 @@ interface UnitDef {
   name?: string;
   /** Si está vacante, no se crea ni Lessee ni Contract. */
   vacant?: boolean;
-  /** Renta mensual. Requerido si no es vacante. */
+  /** Renta mensual TOTAL con IVA. Requerido si no es vacante. */
   monthlyAmount?: number;
+  /** Concepto 1 del Excel: renta base sin IVA. */
+  baseRent?: number;
+  /** Concepto 2 del Excel: cuota de mantenimiento sin IVA. */
+  maintenanceFee?: number;
+  /** "Forma de pago" literal del Excel (ej. "03 Transferencia - BANAMEX"). */
+  paymentMethodNote?: string;
+  /** "Cuenta" del Excel (dígitos de referencia). */
+  bankAccount?: string;
   unitNotes?: string;
   lessee?: {
     legalName: string;
     contactName?: string;
     rfc?: string;
+    fiscalAddress?: string;
     email?: string;
     phone?: string;
     notes?: string;
@@ -211,86 +223,14 @@ async function main(): Promise<void> {
     await prisma.tenant.delete({ where: { id: existing.id } });
   }
 
-  // -- 2. Roles globales (upsert) -------------------------------------------
-  const rolesData = [
-    {
-      code: RoleCode.MASTER,
-      name: "Master",
-      description: "Acceso total. Autoriza decisiones críticas.",
-    },
-    {
-      code: RoleCode.ADMIN,
-      name: "Administrador",
-      description: "Operación completa con permisos granulares.",
-    },
-    {
-      code: RoleCode.ACCOUNTANT,
-      name: "Contador",
-      description: "Solo lectura financiera, exporta para despacho contable.",
-    },
-    {
-      code: RoleCode.OWNER,
-      name: "Dueño",
-      description: "Solo consulta (read-only) de vistas operativas.",
-    },
-    {
-      code: RoleCode.PROMOTER,
-      name: "Promotor",
-      description: "Externo, ve solo inmuebles asignados.",
-    },
-    {
-      code: RoleCode.LESSEE,
-      name: "Inquilino",
-      description: "Inquilino, ve su estado de cuenta.",
-    },
-  ];
-  for (const r of rolesData) {
-    await prisma.role.upsert({
-      where: { code: r.code },
-      update: { name: r.name, description: r.description },
-      create: r,
-    });
-  }
-
-  // -- 2b. Permisos globales + asignación por rol ---------------------------
-  // Sin esto, solo MASTER pasa hasPermission (MASTER hace bypass por definición)
-  // y cualquier ADMIN/ACCOUNTANT/OWNER falla toda acción protegida. El catálogo
-  // vive en prisma/permissions-data.ts (compartido con sync-permissions.ts,
-  // que lo aplica a una base existente sin re-correr este seed).
-  for (const p of PERMISSIONS) {
-    await prisma.permission.upsert({
-      where: { code: p.code },
-      update: { name: p.name },
-      create: p,
-    });
-  }
-
-  // MASTER hace bypass en hasPermission, así que no necesita filas.
-  for (const [roleCode, permCodes] of Object.entries(ROLE_PERMISSION_CODES)) {
-    const role = await prisma.role.findUnique({
-      where: { code: roleCode as RoleCode },
-    });
-    if (!role) continue;
-    for (const permCode of permCodes) {
-      const perm = await prisma.permission.findUnique({
-        where: { code: permCode },
-      });
-      if (!perm) continue;
-      await prisma.rolePermission.upsert({
-        where: {
-          roleId_permissionId: { roleId: role.id, permissionId: perm.id },
-        },
-        update: {},
-        create: { roleId: role.id, permissionId: perm.id },
-      });
-    }
-  }
+  // -- 2. Roles, permisos y asignación por rol (catálogo compartido) ------
+  await syncRolesAndPermissions(prisma);
 
   // -- 3. Tenant ------------------------------------------------------------
   const tenant = await prisma.tenant.create({
     data: {
       slug: TENANT_SLUG,
-      name: "Plazas Magnum",
+      name: TENANT_NAME,
       plan: Plan.STARTER,
       timezone: "America/Hermosillo",
       currency: "MXN",
@@ -298,177 +238,15 @@ async function main(): Promise<void> {
   });
 
   // -- 4. LegalEntities (CRT / TSR / QHS / JCL / CLICK) ---------------------
-  const crt = await prisma.legalEntity.create({
-    data: {
-      tenantId: tenant.id,
-      code: "CRT",
-      legalName: "CRT Desarrollo y Proyectos S.A. de C.V.",
-      isOperator: true,
-    },
-  });
-  const tsr = await prisma.legalEntity.create({
-    data: {
-      tenantId: tenant.id,
-      code: "TSR",
-      legalName: "TSR Inmobiliaria S.A. de C.V.",
-      isOperator: true,
-    },
-  });
-  const qhs = await prisma.legalEntity.create({
-    data: {
-      tenantId: tenant.id,
-      code: "QHS",
-      legalName: "QHS S.A. de C.V.",
-      isOperator: false,
-    },
-  });
-  // JCL = Juan Carlos L (persona física). Razón social registrada por
-  // completitud; sus propiedades personales no se administran en Rex.
-  const jcl = await prisma.legalEntity.create({
-    data: {
-      tenantId: tenant.id,
-      code: "JCL",
-      legalName: "Juan Carlos L",
-      isOperator: false,
-    },
-  });
-  // CLICK: razón social satélite usada en el bloque de nóminas del Excel.
-  // Factura servicios administrativos (OSC) y paga "Nómina Vinculación".
-  const click = await prisma.legalEntity.create({
-    data: {
-      tenantId: tenant.id,
-      code: "CLICK",
-      legalName: "Click S.A. de C.V.",
-      isOperator: true,
-    },
-  });
-  const entities: Record<EntityCode, { id: string }> = {
-    CRT: crt,
-    TSR: tsr,
-    QHS: qhs,
-    JCL: jcl,
-    CLICK: click,
-  };
+  const entities = {} as Record<EntityCode, { id: string }>;
+  for (const le of LEGAL_ENTITIES) {
+    entities[le.code] = await prisma.legalEntity.create({
+      data: { ...le, tenantId: tenant.id },
+    });
+  }
 
   // -- 5. ExpenseCategories -------------------------------------------------
-  const categoriesData: Array<{
-    code: string;
-    name: string;
-    type: (typeof ExpenseType)[keyof typeof ExpenseType];
-    isRecurring: boolean;
-  }> = [
-    // Nóminas
-    {
-      code: "NOMINA_DIRECCION",
-      name: "Nómina Dirección",
-      type: ExpenseType.PAYROLL,
-      isRecurring: true,
-    },
-    {
-      code: "NOMINA_GENERAL",
-      name: "Nómina General",
-      type: ExpenseType.PAYROLL,
-      isRecurring: true,
-    },
-    { code: "HONORARIOS", name: "Honorarios", type: ExpenseType.PAYROLL, isRecurring: true },
-    // Impuestos
-    { code: "PREDIAL", name: "Predial", type: ExpenseType.TAX, isRecurring: true },
-    { code: "SAT", name: "SAT", type: ExpenseType.TAX, isRecurring: true },
-    { code: "IMSS_INFONAVIT", name: "IMSS / Infonavit", type: ExpenseType.TAX, isRecurring: true },
-    {
-      code: "ISRTP",
-      name: "ISR sobre Producto del Trabajo",
-      type: ExpenseType.TAX,
-      isRecurring: true,
-    },
-    { code: "PLACAS", name: "Placas vehiculares", type: ExpenseType.TAX, isRecurring: true },
-    // Servicios
-    {
-      code: "CFE",
-      name: "Comisión Federal de Electricidad",
-      type: ExpenseType.UTILITY,
-      isRecurring: true,
-    },
-    { code: "AGUA", name: "Agua", type: ExpenseType.UTILITY, isRecurring: true },
-    { code: "TELMEX", name: "Telmex", type: ExpenseType.UTILITY, isRecurring: true },
-    { code: "TELCEL", name: "Telcel", type: ExpenseType.UTILITY, isRecurring: true },
-    {
-      code: "SANISO_BASURA",
-      name: "Saniso / Recolección de basura",
-      type: ExpenseType.UTILITY,
-      isRecurring: true,
-    },
-    { code: "ALARMA", name: "Alarma / monitoreo", type: ExpenseType.UTILITY, isRecurring: true },
-    // Mantenimiento
-    {
-      code: "MANTENIMIENTO_PLAZAS",
-      name: "Mantenimiento de plazas",
-      type: ExpenseType.MAINTENANCE,
-      isRecurring: false,
-    },
-    { code: "LIMPIEZA", name: "Limpieza", type: ExpenseType.MAINTENANCE, isRecurring: true },
-    // Vehículos
-    {
-      code: "FINANCIAMIENTO_TOYOTA",
-      name: "Financiamiento Toyota",
-      type: ExpenseType.VEHICLE,
-      isRecurring: true,
-    },
-    {
-      code: "FINANCIAMIENTO_EXPEDITION",
-      name: "Financiamiento Expedition",
-      type: ExpenseType.VEHICLE,
-      isRecurring: true,
-    },
-    {
-      code: "FINANCIAMIENTO_BMW",
-      name: "Financiamiento BMW",
-      type: ExpenseType.VEHICLE,
-      isRecurring: true,
-    },
-    { code: "GASOLINA", name: "Gasolina", type: ExpenseType.VEHICLE, isRecurring: true },
-    {
-      code: "SERVICIOS_AUTOS",
-      name: "Servicios de autos",
-      type: ExpenseType.VEHICLE,
-      isRecurring: false,
-    },
-    // Otros
-    {
-      code: "SEGUROS_INMUEBLES",
-      name: "Seguros de inmuebles",
-      type: ExpenseType.INSURANCE,
-      isRecurring: true,
-    },
-    {
-      code: "SEGURO_AUTOMOTRIZ",
-      name: "Seguro automotriz",
-      type: ExpenseType.INSURANCE,
-      isRecurring: true,
-    },
-    {
-      code: "COMISIONES_BANCARIAS",
-      name: "Comisiones bancarias",
-      type: ExpenseType.BANK_FEE,
-      isRecurring: true,
-    },
-    { code: "PAPELERIA", name: "Papelería", type: ExpenseType.OFFICE, isRecurring: false },
-    {
-      code: "CONSUMO_OFICINA",
-      name: "Consumo de oficina (bebidas, botanas, limpieza)",
-      type: ExpenseType.OFFICE,
-      isRecurring: true,
-    },
-    { code: "CAJA_CHICA", name: "Caja chica", type: ExpenseType.OFFICE, isRecurring: true },
-    {
-      code: "LICENCIAS_PERMISOS",
-      name: "Licencias, permisos y comisiones",
-      type: ExpenseType.OTHER,
-      isRecurring: false,
-    },
-    { code: "OTROS", name: "Otros", type: ExpenseType.OTHER, isRecurring: false },
-  ];
-  for (const c of categoriesData) {
+  for (const c of EXPENSE_CATEGORIES) {
     await prisma.expenseCategory.create({ data: { ...c, tenantId: tenant.id } });
   }
 
@@ -487,26 +265,38 @@ async function main(): Promise<void> {
           code: "L1",
           name: "Goyoma",
           monthlyAmount: 17176.94,
+          baseRent: 14549.09, // combinado L1 (6296.52) + L2 (8252.57)
+          maintenanceFee: 258.62,
+          paymentMethodNote: "03 Transferencia",
           lessee: {
             legalName: "Goyoma S.A. de C.V.",
             contactName: "Juan Pablo Martinez",
             rfc: "GOY0401213V7",
+            fiscalAddress: "Ave. San Pedro No. 5594, Col. Magaña, Tijuana, Baja California, C.P. 22106",
             email: "arrendamientogoyoma@hotmail.com",
           },
           payments: PAID_Q1,
         },
         {
           code: "L2",
+          name: "Farmacia Goyoma",
           vacant: true,
-          unitNotes: "Local desocupado, en proceso de búsqueda de inquilino.",
+          unitNotes:
+            "Ocupado por Goyoma junto con L1 (facturación combinada en L1: renta L1 + renta L2 + mantenimiento).",
         },
         {
           code: "L3",
           name: "Comex",
           monthlyAmount: 10050.14,
+          baseRent: 8405.29,
+          maintenanceFee: 258.62,
+          paymentMethodNote: "03 Transferencia - BANAMEX",
+          bankAccount: "8407",
           lessee: {
             legalName: "Servicios de Informática y Variables Empresas Integradora S.A. de C.V.",
             rfc: "SIV960830D65",
+            fiscalAddress:
+              "Enrique C. Rébsamen No. 112-A, Col. Martínez de la Torre, Xalapa, Veracruz, C.P. 91090",
             email: "facturashermosillo@camposreyes.com",
             phone: "2504367",
           },
@@ -516,9 +306,15 @@ async function main(): Promise<void> {
           code: "L4",
           name: "Tintorería",
           monthlyAmount: 9617.78,
+          baseRent: 8032.57,
+          maintenanceFee: 258.62,
+          paymentMethodNote: "03 Transferencia - BANREGIO",
+          bankAccount: "0013",
           lessee: {
             legalName: "Maria Hortencia Galaz Ruiz",
             rfc: "RUDH431217GS9",
+            fiscalAddress:
+              "Blvd. Solidaridad No. 321 Local 11, Col. Paseo del Sol, Hermosillo, Sonora, C.P. 83000",
             email: "facturastintoreria@gmail.com",
             phone: "2120268",
           },
@@ -528,10 +324,16 @@ async function main(): Promise<void> {
           code: "L5",
           name: "Automoney",
           monthlyAmount: 10771.79,
+          baseRent: 9027.41,
+          maintenanceFee: 258.62,
+          paymentMethodNote: "03 Transferencia - BANAMEX",
+          bankAccount: "7592",
           lessee: {
             legalName: "Centro Cambiario Smart Exchange S.A. de C.V.",
             contactName: "Guadalupe Noriega",
             rfc: "CCS1907031B3",
+            fiscalAddress:
+              "Juan Bautista Escalante (Progreso) No. 220-5, Col. Alto Valle, Hermosillo, Sonora, C.P. 83120",
             email: "recursos.humanos@automoney.com.mx",
             phone: "6621244697",
           },
@@ -541,9 +343,14 @@ async function main(): Promise<void> {
           code: "L6",
           name: "Nikte",
           monthlyAmount: 9320.65,
+          baseRent: 7776.42,
+          maintenanceFee: 258.62,
+          paymentMethodNote: "03 Transferencia - BANCOMER",
+          bankAccount: "8426",
           lessee: {
             legalName: "Jorge Alberto Islas Alonso",
             rfc: "IAAJ781101TI0",
+            fiscalAddress: "Hermosillo, Sonora, C.P. 83145",
             email: "jorgeislas85@hotmail.com",
             phone: "5528978128",
           },
@@ -553,6 +360,9 @@ async function main(): Promise<void> {
           code: "L7",
           name: "Master Cash",
           monthlyAmount: 8976.64,
+          baseRent: 7479.86,
+          maintenanceFee: 258.62,
+          paymentMethodNote: "03 Transferencia",
           lessee: {
             legalName: "Master Cash",
             contactName: "Juan Flores",
@@ -566,6 +376,9 @@ async function main(): Promise<void> {
           code: "L8",
           name: "Bluecell",
           monthlyAmount: 13600.0,
+          baseRent: 11465.52,
+          maintenanceFee: 258.62,
+          paymentMethodNote: "Efectivo",
           lessee: {
             legalName: "Jose Gustavo Bojorquez Garcia",
             email: "jpcanez90@gmail.com",
@@ -579,10 +392,15 @@ async function main(): Promise<void> {
           code: "L9",
           name: "Sushi",
           monthlyAmount: 11188.25,
+          baseRent: 9385.04,
+          maintenanceFee: 260,
+          paymentMethodNote: "Efectivo",
           lessee: {
-            legalName: "Rodrigo Huerta",
+            legalName: "Juan Ramón Huerta Carrillo",
             contactName: "José Ramón Huerta",
             rfc: "HUCJ690702FD4",
+            fiscalAddress:
+              "Juan Bautista Escalante No. 2290-9, Col. Alto Valle, Hermosillo, Sonora, C.P. 83106",
             email: "Ro19980703@gmail.com",
             phone: "6621637244",
           },
@@ -596,9 +414,14 @@ async function main(): Promise<void> {
           code: "E",
           name: "ID Gráficos (espectacular)",
           monthlyAmount: 2320.0,
+          baseRent: 2000,
+          maintenanceFee: 0,
+          paymentMethodNote: "Efectivo",
           lessee: {
             legalName: "ID Gráficos Creativos",
             contactName: "Diana Impsel",
+            fiscalAddress:
+              "Juan Bautista Escalante No. 2290-9, Col. Alto Valle, Hermosillo, Sonora, C.P. 83106",
             email: "buzonid@gmail.com",
             phone: "6621508269",
           },
@@ -624,9 +447,15 @@ async function main(): Promise<void> {
           code: "LP",
           name: "Benavides",
           monthlyAmount: 38649.85,
+          baseRent: 33318.84,
+          maintenanceFee: 0, // "NO SE PONE CUOTA" (Excel)
+          paymentMethodNote: "03 Transferencia - BANCOMER",
+          bankAccount: "3746",
           lessee: {
             legalName: "Farmacias Benavides S.A.B de C.V.",
             rfc: "FBE9110215Z3",
+            fiscalAddress:
+              "Ave. Fundadores No. 935 Int. 301, Col. Valle del Mirador, Monterrey, Nuevo León",
             email: "esoto@benavides.com.mx",
           },
           payments: PAID_Q1,
@@ -635,10 +464,15 @@ async function main(): Promise<void> {
           code: "L1",
           name: "Panadería",
           monthlyAmount: 10644.02,
+          baseRent: 8995.88,
+          maintenanceFee: 180,
+          paymentMethodNote: "01 Depósito en efectivo",
           lessee: {
             legalName: "Ana Laura Cordova Mora",
             email: "panycoyotas@gmail.com",
             phone: "6621142744",
+            notes:
+              "En el Excel del cliente el RFC y la dirección aparecen copiados de Goyoma (error de captura); pendiente confirmar datos fiscales reales.",
           },
           payments: PAID_Q1,
         },
@@ -646,9 +480,13 @@ async function main(): Promise<void> {
           code: "L2",
           name: "Telcel",
           monthlyAmount: 8600.82,
+          baseRent: 7234.5,
+          maintenanceFee: 180,
+          paymentMethodNote: "Depósitos / Transferencia",
           lessee: {
             legalName: "Oscar Hugo Lopez Alvarado",
             rfc: "LOAO7507146I2",
+            fiscalAddress: "Dr. Domingo Olivares No. 393B, Col. Las Granjas, Hermosillo, Sonora",
             email: "oscarhugolopez1975@gmail.com",
             phone: "6621825035",
             notes: "Cliente con historial de pagos atrasados.",
@@ -664,9 +502,14 @@ async function main(): Promise<void> {
           name: "Interior",
           // Interio ocupa L3 + L4; se factura combinado (ver hoja RENTA MENSUAL).
           monthlyAmount: 20802.71,
+          baseRent: 17733.37, // combinado L3 (9324.85) + L4 (8408.52)
+          maintenanceFee: 200,
+          paymentMethodNote: "Depósitos / Transferencia",
           lessee: {
             legalName: "Domingo Emilio Gomez Moreno",
             rfc: "PECD8104056DA",
+            fiscalAddress:
+              "Blvd. Domingo Olivares No. 339 Esq. Av. Castellana, Local C, Col. Las Granjas, Hermosillo, Sonora, C.P. 83250",
             email: "facturas@anguloperfecto.mx",
             phone: "6628480249",
           },
@@ -693,10 +536,15 @@ async function main(): Promise<void> {
           code: "LP",
           name: "7-Eleven",
           monthlyAmount: 45197.09,
+          baseRent: 38963.01,
+          maintenanceFee: 0,
+          paymentMethodNote: "03 Transferencia TEF",
+          bankAccount: "4051",
           lessee: {
             legalName: "7-Eleven México S.A. de C.V.",
             contactName: "Francelia Saldaña",
             rfc: "SEM980701STA",
+            fiscalAddress: "Ave. Munich 195-B Sur, Col. Cuauhtémoc, Nuevo León, C.P. 66450",
             email: "francelia.saldana@7-eleven.com.mx",
             phone: "8181580711",
           },
@@ -706,6 +554,9 @@ async function main(): Promise<void> {
           code: "L.A",
           name: "Quesos Calza",
           monthlyAmount: 11512.34,
+          baseRent: 9924.43,
+          maintenanceFee: 0,
+          paymentMethodNote: "03 Transferencia",
           lessee: {
             legalName: "Quesos Calza",
             rfc: "QCA1508104W4",
@@ -717,9 +568,15 @@ async function main(): Promise<void> {
           code: "L.B",
           name: "GI Similares",
           monthlyAmount: 11536.0,
+          baseRent: 9944.83,
+          maintenanceFee: 0,
+          paymentMethodNote: "02 Cheque",
+          bankAccount: "N/A",
           lessee: {
             legalName: "Carlos Alberto Bernal Marquez",
             rfc: "BEMC8405194H8",
+            fiscalAddress:
+              "Prolongación Perimetral, Blvd. Antonio Quiroga No. 152-B, Col. Llanito, Hermosillo, Sonora",
             email: "carlosbernal.1905@gmail.com",
             phone: "6621693030",
           },
@@ -741,10 +598,15 @@ async function main(): Promise<void> {
           code: "L1",
           name: "Sucree",
           monthlyAmount: 13484.39,
+          baseRent: 11274.47,
+          maintenanceFee: 350,
+          paymentMethodNote: "03 Transferencia TEF",
+          bankAccount: "4051",
           lessee: {
             legalName: "Suqiee Repostería Fina S.A. de C.V.",
             contactName: "Vinicio Velázquez",
             rfc: "SRF080527U49",
+            fiscalAddress: "Avenida Olivares No. 46 Interior B, Col. Los Arcos, Hermosillo, Sonora",
             email: "viniciovelazquez@suqiee.com.mx",
             phone: "6623020930",
           },
@@ -754,6 +616,10 @@ async function main(): Promise<void> {
           code: "L2",
           name: "Dentista",
           monthlyAmount: 12210.72,
+          baseRent: 10176.48,
+          maintenanceFee: 350,
+          paymentMethodNote: "03 Transferencia TEF",
+          bankAccount: "4051",
           lessee: {
             legalName: "Dayana Duron Rivas",
             rfc: "DURD8507255MA",
@@ -766,9 +632,15 @@ async function main(): Promise<void> {
           code: "L3",
           name: "Semilla Hermosillo",
           monthlyAmount: 12586.0,
+          baseRent: 10500,
+          maintenanceFee: 350,
+          paymentMethodNote: "03 Transferencia TEF",
+          bankAccount: "4051",
           lessee: {
             legalName: "Semilla Hermosillo",
             contactName: "José Payán",
+            fiscalAddress:
+              "Ave. de la Cultura 28 Int. 2, Col. Proyecto Río Sonora, Hermosillo, Sonora, C.P. 83190",
           },
           contractNotes: "Local desocupado Ene–Feb 2026; contrato firmado en marzo.",
           contractStartDate: utcDate(YEAR, 2, 1), // 2026-03-01
@@ -781,8 +653,14 @@ async function main(): Promise<void> {
           code: "L4",
           name: "Maki Sushi",
           monthlyAmount: 13020.83,
+          baseRent: 10874.85,
+          maintenanceFee: 350,
+          paymentMethodNote: "03 Transferencia TEF",
+          bankAccount: "4051",
           lessee: {
             legalName: "Jesus Velazquez Garcia",
+            fiscalAddress:
+              "Cda. Villa Modena #11, Fracc. Villas del Mediterráneo, Hermosillo, Sonora, C.P. 83220",
             email: "Giarbu08@gmail.com",
             phone: "6621157091",
           },
@@ -792,6 +670,10 @@ async function main(): Promise<void> {
           code: "L5",
           name: "Frituras Kikin",
           monthlyAmount: 14449.46,
+          baseRent: 12156.43,
+          maintenanceFee: 300,
+          paymentMethodNote: "03 Transferencia TEF",
+          bankAccount: "4051",
           lessee: {
             legalName: "Flor Maria Serna Montoya",
             email: "Castrosernaf@gmail.com",
@@ -802,6 +684,10 @@ async function main(): Promise<void> {
           code: "L6",
           name: "Puro Pa' Delante",
           monthlyAmount: 13500.0,
+          baseRent: 11287.93,
+          maintenanceFee: 350,
+          paymentMethodNote: "03 Transferencia TEF",
+          bankAccount: "4051",
           lessee: { legalName: "Carlos Garibay" },
           payments: PAID_Q1,
         },
@@ -809,6 +695,10 @@ async function main(): Promise<void> {
           code: "L7",
           name: "Hitness",
           monthlyAmount: 13496.16,
+          baseRent: 11284.62,
+          maintenanceFee: 350,
+          paymentMethodNote: "03 Transferencia TEF",
+          bankAccount: "4051",
           lessee: {
             legalName: "Maria del Carmen Choix",
             email: "maricarmen_19choix@hotmail.com",
@@ -824,6 +714,10 @@ async function main(): Promise<void> {
           code: "L8",
           name: "Armando Elotes",
           monthlyAmount: 14306.28,
+          baseRent: 11983,
+          maintenanceFee: 350,
+          paymentMethodNote: "03 Transferencia TEF",
+          bankAccount: "4051",
           lessee: {
             legalName: "Luis Armando Chavez",
             contactName: "Armando Morales",
@@ -834,6 +728,9 @@ async function main(): Promise<void> {
           code: "E",
           name: "Medios Rubí (espectacular)",
           monthlyAmount: 2320.0,
+          baseRent: 2000,
+          maintenanceFee: 0,
+          paymentMethodNote: "03 Transferencia TEF",
           lessee: {
             legalName: "Medios Ruvi",
             email: "buzonmruvi@gmail.com",
@@ -856,10 +753,16 @@ async function main(): Promise<void> {
           code: "LP",
           name: "Banco Inbursa",
           monthlyAmount: 86028.56,
+          baseRent: 74162.55,
+          maintenanceFee: 0,
+          paymentMethodNote: "03 Transferencia - INBURSA",
+          bankAccount: "5989",
           lessee: {
             legalName: "Banco Inbursa S.A. Institución de Banca Múltiple",
             contactName: "Patricia Wong",
             rfc: "BII931004P61",
+            fiscalAddress:
+              "Av. Paseo de las Palmas 750, Lomas de Chapultepec, Miguel Hidalgo, CDMX, C.P. 11000",
             email: "pwongo@inbursa.com",
             phone: "2890360",
           },
@@ -881,10 +784,15 @@ async function main(): Promise<void> {
           code: "OF",
           name: "La Chila",
           monthlyAmount: 30740.0,
+          baseRent: 26500,
+          maintenanceFee: 0,
+          paymentMethodNote: "03 Transferencia - BAJIO",
+          bankAccount: "0201",
           lessee: {
             legalName: "Representaciones Bazuca",
             contactName: "Rogelio Villaescusa",
             rfc: "RBA130326AC0",
+            fiscalAddress: "García Sánchez 30, Col. San Benito, Hermosillo, Sonora, C.P. 83190",
             email: "rovilbe@outlook.com",
             phone: "6622761757",
           },
@@ -910,6 +818,9 @@ async function main(): Promise<void> {
           code: "LP",
           name: "Proyecta",
           monthlyAmount: 19350.12,
+          baseRent: 16681.14,
+          maintenanceFee: 0,
+          paymentMethodNote: "Cheque / Efectivo",
           lessee: {
             legalName: "Proyecta",
             contactName: "Roque Ibarra",
@@ -932,6 +843,9 @@ async function main(): Promise<void> {
           code: "OF",
           name: "Oficina Piso 2",
           monthlyAmount: 12500.0,
+          baseRent: 10775.86,
+          maintenanceFee: 0,
+          paymentMethodNote: "Cheque / Efectivo",
           lessee: {
             legalName: "Público General (Abogados)",
             contactName: "Roque Ibarra",
@@ -955,15 +869,24 @@ async function main(): Promise<void> {
       manager: "TSR",
       units: [
         {
-          code: "OF",
-          name: "Ferretería",
+          code: "PB",
+          name: "Planta Baja (Ferretería)",
           monthlyAmount: 18560.0,
+          baseRent: 16000,
+          maintenanceFee: 0,
+          paymentMethodNote: "Cheque / Efectivo",
           lessee: {
             legalName: "Jorge Eduardo Franco",
             contactName: "Roque Ibarra",
             phone: "6628477858",
           },
           payments: PAID_Q1,
+        },
+        {
+          code: "PA",
+          name: "Planta Alta",
+          vacant: true,
+          unitNotes: "Sin inquilino actualmente (aparece en $0 en el Excel del cliente).",
         },
       ],
     },
@@ -1080,6 +1003,7 @@ async function main(): Promise<void> {
           legalName: u.lessee.legalName,
           contactName: u.lessee.contactName,
           rfc: u.lessee.rfc,
+          fiscalAddress: u.lessee.fiscalAddress,
           email: u.lessee.email,
           phone: u.lessee.phone,
           notes: u.lessee.notes,
@@ -1100,6 +1024,10 @@ async function main(): Promise<void> {
           startDate: contractStart,
           endDate: contractEnd,
           monthlyAmount: decimal(monthlyAmt),
+          baseRent: u.baseRent !== undefined ? decimal(u.baseRent) : null,
+          maintenanceFee: u.maintenanceFee !== undefined ? decimal(u.maintenanceFee) : null,
+          paymentMethodNote: u.paymentMethodNote,
+          bankAccount: u.bankAccount,
           guaranteeAmount: decimal(monthlyAmt),
           paymentDay: 1,
           lateFeePercentage: decimal(5),
@@ -2002,7 +1930,7 @@ async function main(): Promise<void> {
   // Espectaculares: Progreso E y Quiroga 2 E, 2 320 / mes cada uno.
   // Egresos, nómina estratégica y deuda: tomados del Excel 2026.
   const crtBudget = await prisma.budget.create({
-    data: { tenantId: tenant.id, legalEntityId: crt.id, year: YEAR },
+    data: { tenantId: tenant.id, legalEntityId: entities.CRT.id, year: YEAR },
   });
   await seedBudgetLines(crtBudget.id, [
     // INGRESOS
@@ -2141,7 +2069,7 @@ async function main(): Promise<void> {
   // Ingresos: Inbursa Kino, La Chila, Capilla del Carmen, Elias (desde mar),
   //           Nayarit 52.
   const tsrBudget = await prisma.budget.create({
-    data: { tenantId: tenant.id, legalEntityId: tsr.id, year: YEAR },
+    data: { tenantId: tenant.id, legalEntityId: entities.TSR.id, year: YEAR },
   });
   await seedBudgetLines(tsrBudget.id, [
     // INGRESOS
@@ -2243,7 +2171,7 @@ async function main(): Promise<void> {
   // QHS solo registra sus costos administrativos.
   // Los ingresos de Quiroga 2 fluyen a CRT (que administra).
   const qhsBudget = await prisma.budget.create({
-    data: { tenantId: tenant.id, legalEntityId: qhs.id, year: YEAR },
+    data: { tenantId: tenant.id, legalEntityId: entities.QHS.id, year: YEAR },
   });
   await seedBudgetLines(qhsBudget.id, [
     { type: EX, label: "Honorarios contabilidad", m: s12(1300) },
